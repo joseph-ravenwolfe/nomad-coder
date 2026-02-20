@@ -3,9 +3,9 @@
 Initiate a chat loop using the available Telegram MCP tools.
 
 First, check which Telegram MCP tools are available to you.
+Call `get_agent_guide` to load the agent behavior guide — this tells you how to communicate with the user, which tools to use, and all behavioral conventions. The same content is also available as the `telegram-mcp://agent-guide` resource.
 Read the `formatting-guide` MCP resource so you know how to correctly format messages.
-Read `BEHAVIOR.md` for agent behavior rules (tool conventions, formatting, reactions, etc.).
-If `HANDOFF.md` exists, read it for current session state. If it doesn't exist, write one.
+`HANDOFF.md` is a local session state file (gitignored). Read it if it exists for current session context; write/update it at the end of each session.
 Then call `get_updates` once to drain any stale messages from previous sessions — discard everything returned.
 Then proceed with the loop:
 
