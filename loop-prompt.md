@@ -3,6 +3,7 @@
 Initiate a chat loop using the available Telegram MCP tools.
 
 First, check which Telegram MCP tools are available to you.
+Read the `formatting-guide` MCP resource so you know how to correctly format messages.
 Then call `get_updates` once to drain any stale messages from previous sessions — discard everything returned.
 Then proceed with the loop:
 
