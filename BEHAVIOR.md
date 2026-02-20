@@ -2,6 +2,19 @@
 
 Rules and conventions for the agent operating this Telegram MCP server.
 
+## Proactive silent notifications
+
+Before any significant action — editing files, running commands, committing, restarting the server, or making multiple changes in sequence — send a **silent** `notify` (`disable_notification: true`) describing what you are about to do. This lets the user glance at activity without being buzzed.
+
+Do this proactively, not just for actions that block or require confirmation.
+
+Format: title = short action label, body = brief description of what and why. Keep it concise.
+
+Examples:
+- "Editing src/tools/choose.ts — adding button label length validation"  
+- "Running pnpm test — verifying changes"
+- "Committing — fix: normalize \\n in markdownToV2"
+
 ---
 
 ## Tool usage: always use `choose` for confirmations
