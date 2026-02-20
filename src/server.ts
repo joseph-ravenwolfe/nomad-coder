@@ -26,6 +26,7 @@ import { register as registerNotify } from "./tools/notify.js";
 import { register as registerAsk } from "./tools/ask.js";
 import { register as registerChoose } from "./tools/choose.js";
 import { register as registerUpdateStatus } from "./tools/update_status.js";
+import { register as registerGetAgentGuide } from "./tools/get_agent_guide.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -35,8 +36,7 @@ export function createServer(): McpServer {
     version: "1.0.0",
   });
 
-  // ── High-level agent tools (use these 99% of the time) ─────────────────
-  registerNotify(server);
+  // ── High-level agent tools (use these 99% of the time) ─────────────────  registerGetAgentGuide(server);  registerNotify(server);
   registerAsk(server);
   registerChoose(server);
   registerUpdateStatus(server);
@@ -68,6 +68,10 @@ export function createServer(): McpServer {
   registerGetUpdates(server);
 
   // ── Resources ────────────────────────────────────────────────────────────
+  const agentGuideContent = readFileSync(
+    join(__dirname, "..", "BEHAVIOR.md"),
+    "utf-8"
+  );
   const setupContent = readFileSync(
     join(__dirname, "..", "SETUP.md"),
     "utf-8"
@@ -75,6 +79,21 @@ export function createServer(): McpServer {
   const formattingContent = readFileSync(
     join(__dirname, "..", "FORMATTING.md"),
     "utf-8"
+  );
+
+  server.resource(
+    "agent-guide",
+    "telegram-mcp://agent-guide",
+    { mimeType: "text/markdown", description: "Agent behavior guide for this MCP server. Read this at session start to understand how to communicate with the user and which tools to use." },
+    async () => ({
+      contents: [
+        {
+          uri: "telegram-mcp://agent-guide",
+          mimeType: "text/markdown",
+          text: agentGuideContent,
+        },
+      ],
+    })
   );
 
   server.resource(

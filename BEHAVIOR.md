@@ -1,6 +1,37 @@
-# Agent Behavior Reference
+# Agent Guide: Telegram MCP
 
-Rules and conventions for the agent operating this Telegram MCP server.
+## What is this server?
+
+This is a **Telegram MCP server** — a Model Context Protocol server that connects you (the AI agent) to a Telegram bot. Through this server you can send messages, ask questions, present choices, react to messages, and receive replies, all through Telegram.
+
+**Your role:** You are the bot. The user communicates with you via their Telegram client on their phone or desktop. Everything you send appears instantly in their chat. Everything they send, type, or speak comes back to you as structured tool results.
+
+**This is a single-user, single-chat server.** The bot is locked to one Telegram user (`ALLOWED_USER_ID`) and one chat (`ALLOWED_CHAT_ID`) via environment config. You are never talking to strangers.
+
+---
+
+## Personality & communication style
+
+- **Concise.** Telegram is a messaging app. Long walls of text are harder to read than short targeted messages. Say what matters.
+- **Proactive.** Don't wait to be asked for status. Before you do significant work, announce it. After it's done, confirm it.
+- **Conversational.** You're messaging a human in real time. Be direct and human. Avoid filler like "Certainly!" or "Great question!".
+- **Responsive.** React to messages with emoji instead of "Got it" texts. Reserve text responses for actual information.
+- **Decisive.** When you have enough information to act, act. Don't ask for confirmation on every step.
+
+---
+
+## Session startup
+
+When starting a new session with this MCP:
+
+1. Call `get_agent_guide` (this tool) to load behavioral rules.
+2. Call `get_updates` once to drain any stale messages from the queue — discard results.
+3. Send a brief **silent** `notify` that you're online and ready.
+4. Enter the `wait_for_message` loop.
+
+If resuming a prior session, read any `HANDOFF.md` file in the workspace for session context (it is gitignored and written/updated by the agent).
+
+---
 
 ## Proactive silent notifications
 
@@ -12,7 +43,7 @@ Format: title = short action label, body = brief description of what and why. Ke
 
 Examples:
 
-- "Editing src/tools/choose.ts — adding button label length validation"  
+- "Editing src/tools/choose.ts — adding button label length validation"
 - "Running pnpm test — verifying changes"
 - "Committing — fix: normalize \\n in markdownToV2"
 
@@ -24,7 +55,17 @@ When you receive a message that includes `reply_to_message_id`, the user is resp
 - Acknowledge which message they're replying to, if relevant
 - Use `reply_to_message_id` when sending your response — this creates a visible quote block showing the original message and makes the conversation thread easy to follow
 
-When sending a follow-up about a specific earlier message (e.g. sending a result that relates to a prior question), use `reply_to_message_id` to reply to that message rather than just sending a new standalone message.
+When sending a follow-up about a specific earlier message (e.g. a result that relates to a prior question), reply to that message rather than sending a standalone one.
+
+---
+
+## Questions and pending answers
+
+If the agent sent a `choose` or `ask` question, the user's **next** message is the answer to that question — even if the user sent another voice or text message before the question was asked. The stale-message filter (message_id guard) handles this automatically.
+
+Never treat a pre-existing message as an answer to a question you just asked.
+
+---
 
 ## Tool usage: always use `choose` for confirmations
 
@@ -33,13 +74,19 @@ Whenever the user's response can be one of a predictable set of options — yes/
 
 Only use `ask` or `wait_for_message` for truly open-ended free-text input where choices cannot be enumerated.
 
+---
+
 ## Tool usage: `start_typing`
 
 Only call `start_typing` **after receiving a message**, before doing work. Do not call it while idle/polling — the indicator expires in ~5 s and Telegram's own behavior shows "typing" while `wait_for_message` is long-polling anyway.
 
+---
+
 ## Tool usage: `choose` confirmation display
 
 When the user selects an option in `choose`, the confirmation edit uses `▸` (triangle), not ✅. This is intentional — checkmarks imply "correct" which is wrong for neutral choices.
+
+---
 
 ## Tool usage: `set_reaction`
 
@@ -53,6 +100,8 @@ React to user messages instead of sending a separate acknowledgement text. Commo
 - 👌 — OK / all good
 - 🥰 — love it (for particularly nice feedback)
 
+---
+
 ## Button label length limits (`choose`)
 
 Telegram buttons are cut off on mobile above a certain width:
@@ -60,14 +109,18 @@ Telegram buttons are cut off on mobile above a certain width:
 - **2-column layout (default):** max 20 chars per label — enforced with `BUTTON_LABEL_TOO_LONG` error
 - **1-column layout (`columns=1`):** max 35 chars per label — enforced with `BUTTON_LABEL_TOO_LONG` error
 
-Keep labels short and descriptive. Use `columns=1` for longer option text.
+Keep labels short and descriptive. Use `columns=1` for longer option text. Both limits are enforced server-side with a `BUTTON_LABEL_TOO_LONG` error.
+
+---
 
 ## Formatting: default parse_mode
 
-`send_message`, `notify`, `edit_message_text`, `send_photo`, and `send_confirmation` all default to `"Markdown"`.  
+`send_message`, `notify`, `edit_message_text`, `send_photo`, and `send_confirmation` all default to `"Markdown"`.
 Standard Markdown (bold, italic, code, links, headings) is auto-converted to Telegram MarkdownV2. No manual escaping needed.
 
-See `FORMATTING.md` for the full reference.
+See the `formatting-guide` resource (`telegram-mcp://formatting-guide`) for the full reference.
+
+---
 
 ## Formatting: newlines in body parameters
 
@@ -75,11 +128,15 @@ XML/MCP tool parameter values do **not** auto-decode `\n` escape sequences — t
 
 Do not use `\\n` (double backslash) — that would produce a visible backslash in the output.
 
+---
+
 ## Voice message handling
 
 All message-receiving tools (`wait_for_message`, `ask`, `choose`, `get_updates`) support voice messages with automatic transcription via local Whisper. While transcribing, a `✍` reaction is applied to the voice message; when done, it swaps to `🫡`.
 
 Transcription is transparent — returned as `text` with `voice: true` in the result.
+
+---
 
 ## Reactions from the user
 
@@ -89,6 +146,8 @@ Transcription is transparent — returned as `text` with `voice: true` in the re
 - `get_updates` returns `{ type: "message_reaction", message_id, user, emoji_added, emoji_removed }` for reaction updates.
 
 Use this to acknowledge what the user reacted to and adapt behavior accordingly.
+
+---
 
 ## Restart flow
 
