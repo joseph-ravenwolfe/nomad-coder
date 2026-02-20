@@ -15,7 +15,7 @@ export function register(server: McpServer) {
         .max(100)
         .default(10)
         .describe("Max number of updates to return (1–100)"),
-      timeout: z
+      timeout_seconds: z
         .number()
         .int()
         .min(0)
@@ -35,14 +35,14 @@ export function register(server: McpServer) {
         .optional()
         .describe("If true, resets the stored offset to 0 before fetching"),
     },
-    async ({ limit, timeout, allowed_updates, reset_offset }) => {
+    async ({ limit, timeout_seconds, allowed_updates, reset_offset }) => {
       try {
         if (reset_offset) resetOffset();
 
         const updates = await getApi().getUpdates({
           offset: getOffset(),
           limit,
-          timeout,
+          timeout: timeout_seconds,
           allowed_updates: (allowed_updates ?? DEFAULT_ALLOWED_UPDATES) as any,
         });
 

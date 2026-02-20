@@ -1,11 +1,11 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getApi, toResult, toError, resolveChat, validateTargetChat } from "../telegram.js";
+import { getApi, toResult, toError, resolveChat } from "../telegram.js";
 
 export function register(server: McpServer) {
   server.tool(
     "send_chat_action",
-    'Sends a chat action indicator to the user (e.g. "typing…"). The indicator displays for ~5 s. Call once when you start processing a message to signal you are working.',
+    'Sends a one-shot chat action indicator (e.g. "typing…") that lasts ~5 s. For sustained typing, use start_typing instead.',
     {
       action: z
         .enum([
@@ -27,8 +27,6 @@ export function register(server: McpServer) {
     async ({ action }) => {
       const chatId = resolveChat();
       if (typeof chatId !== "string") return toError(chatId);
-      const authErr = validateTargetChat(chatId);
-      if (authErr) return toError(authErr);
       try {
         await getApi().sendChatAction(chatId, action);
         return toResult({ ok: true });

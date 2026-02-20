@@ -47,13 +47,13 @@ describe("get_updates tool", () => {
 
   it("calls resetOffset when reset_offset is true", async () => {
     mocks.getUpdates.mockResolvedValue([]);
-    await call({ limit: 10, timeout: 0, reset_offset: true });
+    await call({ limit: 10, timeout_seconds: 0, reset_offset: true });
     expect(offsetMocks.reset).toHaveBeenCalled();
   });
 
   it("passes limit and timeout to API", async () => {
     mocks.getUpdates.mockResolvedValue([]);
-    await call({ limit: 5, timeout: 10 });
+    await call({ limit: 5, timeout_seconds: 10 });
     const [opts] = mocks.getUpdates.mock.calls[0];
     expect(opts.limit).toBe(5);
     expect(opts.timeout).toBe(10);
@@ -61,7 +61,7 @@ describe("get_updates tool", () => {
 
   it("filters by allowed_updates when provided", async () => {
     mocks.getUpdates.mockResolvedValue([]);
-    await call({ limit: 10, timeout: 0, allowed_updates: ["message"] });
+    await call({ limit: 10, timeout_seconds: 0, allowed_updates: ["message"] });
     const [opts] = mocks.getUpdates.mock.calls[0];
     expect(opts.allowed_updates).toEqual(["message"]);
   });

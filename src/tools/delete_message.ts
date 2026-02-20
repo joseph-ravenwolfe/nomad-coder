@@ -5,7 +5,7 @@ import { getApi, toResult, toError, resolveChat } from "../telegram.js";
 export function register(server: McpServer) {
   server.tool(
     "delete_message",
-    "Deletes a message. The bot can only delete messages it sent, or any message if it is an admin.",
+    "Deletes a message. The bot can delete its own messages anytime, or other users' messages within 48 hours if admin.",
     {
       message_id: z.number().int().describe("ID of the message to delete"),
     },

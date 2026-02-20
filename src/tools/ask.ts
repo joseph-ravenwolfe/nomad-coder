@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { getApi, resolveChat, toResult, toError, validateText, pollUntil } from "../telegram.js";
 import { markdownToV2 } from "../markdown.js";
+import { transcribeWithIndicator } from "../transcribe.js";
 
 /**
  * Sends a question and blocks until the user types a reply.
@@ -32,11 +33,11 @@ export function register(server: McpServer) {
         // Send the question
         await getApi().sendMessage(chatId, markdownToV2(question), { parse_mode: "MarkdownV2" });
 
-        // Poll with 1 s ticks for the reply
+        // Poll with 1 s ticks for the reply (text or voice)
         const { match } = await pollUntil(
           (updates) => {
             const msg = updates.find(
-              (u) => u.message?.text && String(u.message.chat.id) === chatId
+              (u) => (u.message?.text || u.message?.voice) && String(u.message.chat.id) === chatId
             );
             return msg?.message;
           },
@@ -45,6 +46,11 @@ export function register(server: McpServer) {
 
         if (!match) {
           return toResult({ timed_out: true });
+        }
+
+        if (match.voice) {
+          const text = await transcribeWithIndicator(match.voice.file_id).catch((e) => `[transcription failed: ${e.message}]`);
+          return toResult({ timed_out: false, text, message_id: match.message_id, voice: true });
         }
 
         return toResult({

@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { getApi, toResult, toError, validateCaption, resolveChat } from "../telegram.js";
+import { resolveParseMode } from "../markdown.js";
 
 export function register(server: McpServer) {
   server.tool(
@@ -12,9 +13,9 @@ export function register(server: McpServer) {
         .describe("Public HTTPS URL of the image, or a Telegram file_id"),
       caption: z.string().optional().describe("Optional caption (up to 1024 chars)"),
       parse_mode: z
-        .enum(["HTML", "MarkdownV2"])
-        .optional()
-        .describe("Caption formatting mode"),
+        .enum(["Markdown", "HTML", "MarkdownV2"])
+        .default("Markdown")
+        .describe("Markdown = standard Markdown auto-converted (default); MarkdownV2 = raw; HTML = HTML tags"),
       disable_notification: z
         .boolean()
         .optional()
@@ -27,10 +28,11 @@ export function register(server: McpServer) {
         const capErr = validateCaption(caption);
         if (capErr) return toError(capErr);
       }
+      const resolved = caption ? resolveParseMode(caption, parse_mode) : { text: undefined, parse_mode: undefined };
       try {
         const msg = await getApi().sendPhoto(chatId, photo, {
-          caption,
-          parse_mode,
+          caption: resolved.text,
+          parse_mode: resolved.parse_mode,
           disable_notification,
         });
         return toResult({

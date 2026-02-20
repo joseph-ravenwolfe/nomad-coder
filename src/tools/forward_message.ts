@@ -5,7 +5,7 @@ import { getApi, toResult, toError, resolveChat } from "../telegram.js";
 export function register(server: McpServer) {
   server.tool(
     "forward_message",
-    "Forwards a message from one chat to another.",
+    "Forwards a message from a source chat to the bot's configured chat.",
     {
       from_chat_id: z.string().describe("Source chat ID or @username"),
       message_id: z.number().int().describe("ID of the message to forward"),

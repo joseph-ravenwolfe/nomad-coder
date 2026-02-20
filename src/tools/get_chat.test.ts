@@ -21,7 +21,7 @@ describe("get_chat tool", () => {
   });
 
   it("returns chat info", async () => {
-    const chat = { type: "group", title: "Dev Chat", description: undefined };
+    const chat = { id: 99, type: "group", title: "Dev Chat", username: undefined, first_name: undefined, last_name: undefined, description: undefined };
     mocks.getChat.mockResolvedValue({ id: 99, type: "group", title: "Dev Chat" });
     const result = await call({});
     expect(isError(result)).toBe(false);

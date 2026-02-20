@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getApi, toResult, toError, resolveChat } from "../telegram.js";
+import { getApi, toResult, toError, resolveChat, validateText } from "../telegram.js";
+import { resolveParseMode } from "../markdown.js";
 
 /**
  * Convenience tool for agent→human confirmation flows.
@@ -39,12 +40,20 @@ export function register(server: McpServer) {
         .string()
         .default("confirm_no")
         .describe("Callback data sent when No is pressed"),
+      parse_mode: z
+        .enum(["Markdown", "HTML", "MarkdownV2"])
+        .default("Markdown")
+        .describe("Markdown = standard Markdown auto-converted (default); MarkdownV2 = raw; HTML = HTML tags"),
     },
-    async ({ text, yes_text, no_text, yes_data, no_data }) => {
+    async ({ text, yes_text, no_text, yes_data, no_data, parse_mode }) => {
       const chatId = resolveChat();
       if (typeof chatId !== "string") return toError(chatId);
+      const resolved = resolveParseMode(text, parse_mode);
+      const textErr = validateText(resolved.text);
+      if (textErr) return toError(textErr);
       try {
-        const msg = await getApi().sendMessage(chatId, text, {
+        const msg = await getApi().sendMessage(chatId, resolved.text, {
+          parse_mode: resolved.parse_mode,
           reply_markup: {
             inline_keyboard: [
               [

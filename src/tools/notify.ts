@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { getApi, toResult, toError, validateText, resolveChat } from "../telegram.js";
-import { markdownToV2 } from "../markdown.js";
+import { markdownToV2, escapeV2, escapeHtml } from "../markdown.js";
 
 const SEVERITY_PREFIX: Record<string, string> = {
   info: "ℹ️",
@@ -9,12 +9,6 @@ const SEVERITY_PREFIX: Record<string, string> = {
   warning: "⚠️",
   error: "❌",
 };
-
-const MD_SPECIAL = /[_*[\]()~`>#+\-=|{}.!\\]/g;
-function escapeMd(s: string) { return s.replace(MD_SPECIAL, "\\$&"); }
-function escapeHtml(s: string) {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
 
 /**
  * Fire-and-forget styled notification. Handles formatting automatically so the
@@ -47,7 +41,7 @@ export function register(server: McpServer) {
         const prefix = SEVERITY_PREFIX[severity];
         const useV2 = parse_mode === "Markdown" || parse_mode === "MarkdownV2";
         const titleFormatted = useV2
-          ? `*${escapeMd(title)}*`
+          ? `*${escapeV2(title)}*`
           : `<b>${escapeHtml(title)}</b>`;
         const lines = [`${prefix} ${titleFormatted}`];
         if (body?.trim()) {

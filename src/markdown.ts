@@ -17,8 +17,26 @@
 
 const V2_SPECIAL = /[_*[\]()~`>#+\-=|{}.!\\]/g;
 
-function escapeV2(s: string): string {
+export function escapeV2(s: string): string {
   return s.replace(V2_SPECIAL, "\\$&");
+}
+
+export function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/**
+ * Resolves Markdown auto-convert: if parse_mode is "Markdown", converts text
+ * to MarkdownV2 and returns the adjusted mode. Otherwise passes through.
+ */
+export function resolveParseMode(
+  text: string,
+  parseMode?: string,
+): { text: string; parse_mode: "HTML" | "MarkdownV2" | undefined } {
+  if (parseMode === "Markdown") {
+    return { text: markdownToV2(text), parse_mode: "MarkdownV2" };
+  }
+  return { text, parse_mode: parseMode as "HTML" | "MarkdownV2" | undefined };
 }
 
 export function markdownToV2(input: string): string {

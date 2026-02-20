@@ -7,6 +7,7 @@ import {
   pollUntil,
 } from "../telegram.js";
 import { markdownToV2 } from "../markdown.js";
+import { transcribeWithIndicator } from "../transcribe.js";
 
 /**
  * Sends a question with labeled option buttons and blocks until one is pressed.
@@ -81,10 +82,11 @@ export function register(server: McpServer) {
         });
 
         // Poll with 1 s ticks until EITHER a callback_query for this message
-        // OR a text message arrives — whichever comes first.
+        // OR a text/voice message arrives — whichever comes first.
         const { match } = await pollUntil<
           | { kind: "button"; cq: NonNullable<Update["callback_query"]> }
           | { kind: "text"; message_id: number; text: string }
+          | { kind: "voice"; message_id: number; fileId: string }
         >(
           (updates) => {
             // Check for a callback_query on our message first
@@ -99,6 +101,10 @@ export function register(server: McpServer) {
             // Check for a text message (user typed instead of pressing a button)
             const tm = updates.find((u) => u.message?.text);
             if (tm?.message) return { kind: "text", message_id: tm.message.message_id, text: tm.message.text! };
+
+            // Check for a voice message (user spoke instead of pressing a button)
+            const vm = updates.find((u) => u.message?.voice);
+            if (vm?.message?.voice) return { kind: "voice", message_id: vm.message.message_id, fileId: vm.message.voice.file_id };
 
             return undefined;
           },
@@ -128,6 +134,25 @@ export function register(server: McpServer) {
             text_response: match.text,
             text_message_id: match.message_id,
             message_id: sent.message_id,
+          });
+        }
+
+        if (match.kind === "voice") {
+          // User sent a voice message instead of pressing a button — transcribe and treat as text skip
+          const text = await transcribeWithIndicator(match.fileId).catch((e) => `[transcription failed: ${e.message}]`);
+          await getApi()
+            .editMessageText(chatId, sent.message_id, markdownToV2(`${question}\n\n⏭ _Skipped_`), {
+              parse_mode: "MarkdownV2",
+              reply_markup: { inline_keyboard: [] },
+            })
+            .catch((e) => { console.error("[choose] editMessageText (skipped/voice) failed:", e); });
+
+          return toResult({
+            skipped: true,
+            text_response: text,
+            text_message_id: match.message_id,
+            message_id: sent.message_id,
+            voice: true,
           });
         }
 

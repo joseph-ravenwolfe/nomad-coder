@@ -14,7 +14,7 @@ import { getApi, toResult, toError, resolveChat } from "../telegram.js";
 export function register(server: McpServer) {
   server.tool(
     "start_typing",
-    "Starts a background typing indicator that keeps refreshing (~every 4 s) until the timeout expires or a message is sent. Call this before any long-running work so the user sees the bot is active. Returns immediately — fire and forget.",
+    "Starts a sustained background typing indicator (~every 4 s) until the timeout expires. Use this instead of send_chat_action when you need typing for >5 seconds. Returns immediately — fire and forget.",
     {
       timeout_seconds: z
         .number()
@@ -47,9 +47,11 @@ export function register(server: McpServer) {
             clearInterval(timer);
           }
         }, interval);
+        if (typeof timer === "object" && "unref" in timer) timer.unref();
 
         // Safety: always stop at deadline even if no message is sent
-        setTimeout(() => clearInterval(timer), timeout_seconds * 1000);
+        const safety = setTimeout(() => clearInterval(timer), timeout_seconds * 1000);
+        if (typeof safety === "object" && "unref" in safety) safety.unref();
 
         return toResult({ started: true, timeout_seconds });
       } catch (err) {

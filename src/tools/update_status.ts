@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getApi, toResult, toError, resolveChat } from "../telegram.js";
+import { getApi, toResult, toError, resolveChat, validateText } from "../telegram.js";
+import { escapeHtml } from "../markdown.js";
 
 const STATUS_ICON: Record<string, string> = {
   pending:  "⬜",
@@ -14,11 +15,11 @@ function renderStatus(
   title: string,
   steps: { label: string; status: string; detail?: string }[]
 ): string {
-  const lines: string[] = [`<b>${title}</b>`, ""];
+  const lines: string[] = [`<b>${escapeHtml(title)}</b>`, ""];
   for (const step of steps) {
     const icon = STATUS_ICON[step.status] ?? "⬜";
-    const detail = step.detail ? ` — <i>${step.detail}</i>` : "";
-    lines.push(`${icon} ${step.label}${detail}`);
+    const detail = step.detail ? ` — <i>${escapeHtml(step.detail)}</i>` : "";
+    lines.push(`${icon} ${escapeHtml(step.label)}${detail}`);
   }
   return lines.join("\n");
 }
@@ -58,6 +59,8 @@ export function register(server: McpServer) {
       if (typeof chatId !== "string") return toError(chatId);
       try {
         const text = renderStatus(title, steps);
+        const textErr = validateText(text);
+        if (textErr) return toError(textErr);
 
         if (message_id !== undefined) {
           const result = await getApi().editMessageText(
