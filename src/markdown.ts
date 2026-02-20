@@ -52,7 +52,9 @@ export function markdownToV2(input: string): string {
     if (text[i] === "`") {
       const end = text.indexOf("`", i + 1);
       if (end !== -1) {
-        out.push(text.slice(i, end + 1));
+        // Inside code spans, only \ and ` need escaping in MarkdownV2
+        const inner = text.slice(i + 1, end).replace(/[\\`]/g, "\\$&");
+        out.push("`" + inner + "`");
         i = end + 1;
         continue;
       }

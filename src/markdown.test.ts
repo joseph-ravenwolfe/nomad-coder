@@ -22,8 +22,9 @@ describe("markdownToV2", () => {
     expect(markdownToV2("*hi*")).toBe("*hi*");
   });
 
-  it("preserves inline code verbatim", () => {
+  it("preserves inline code escaping backslashes", () => {
     expect(markdownToV2("`foo.bar()`")).toBe("`foo.bar()`");
+    expect(markdownToV2("`back\\slash`")).toBe("`back\\\\slash`");
   });
 
   it("preserves fenced code blocks verbatim", () => {
