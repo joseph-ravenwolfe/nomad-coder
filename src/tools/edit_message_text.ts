@@ -1,13 +1,12 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getApi, toResult, toError, validateTargetChat } from "../telegram.js";
+import { getApi, toResult, toError, resolveChat } from "../telegram.js";
 
 export function register(server: McpServer) {
   server.tool(
     "edit_message_text",
     "Edits the text of a previously sent message. Useful for updating inline keyboards or changing content after a user interacts with buttons.",
     {
-      chat_id: z.string().describe("Chat ID of the message to edit"),
       message_id: z.number().int().describe("ID of the message to edit"),
       text: z.string().describe("New text content"),
       parse_mode: z
@@ -19,12 +18,12 @@ export function register(server: McpServer) {
         .optional()
         .describe("Updated InlineKeyboardMarkup, or omit to remove keyboard"),
     },
-    async ({ chat_id, message_id, text, parse_mode, reply_markup }) => {
-      const chatErr = validateTargetChat(chat_id);
-      if (chatErr) return toError(chatErr);
+    async ({ message_id, text, parse_mode, reply_markup }) => {
+      const chatId = resolveChat();
+      if (typeof chatId !== "string") return toError(chatId);
       try {
         const result = await getApi().editMessageText(
-          chat_id,
+          chatId,
           message_id,
           text,
           { parse_mode, reply_markup },

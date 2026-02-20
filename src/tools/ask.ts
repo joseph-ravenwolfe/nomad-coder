@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getApi, getOffset, advanceOffset, filterAllowedUpdates, validateTargetChat, toResult, toError, validateText } from "../telegram.js";
+import { getApi, getOffset, advanceOffset, filterAllowedUpdates, resolveChat, toResult, toError, validateText } from "../telegram.js";
 
 /**
  * Sends a question and blocks until the user types a reply.
@@ -12,7 +12,6 @@ export function register(server: McpServer) {
     "ask",
     "Sends a question to a chat and blocks until the user replies with a text message. Returns the reply text directly. Use for open-ended prompts where a button isn't appropriate.",
     {
-      chat_id: z.string().describe("Target chat ID or @username"),
       question: z.string().describe("The question to send"),
       timeout_seconds: z
         .number()
@@ -22,15 +21,15 @@ export function register(server: McpServer) {
         .default(30)
         .describe("Seconds to wait for a reply before returning timed_out: true"),
     },
-    async ({ chat_id, question, timeout_seconds }) => {
-      const chatErr = validateTargetChat(chat_id);
+    async ({ question, timeout_seconds }) => {
+      const chatId = resolveChat();
+      if (typeof chatId !== "string") return toError(chatId);
+      const chatErr = validateText(question);
       if (chatErr) return toError(chatErr);
-      const textErr = validateText(question);
-      if (textErr) return toError(textErr);
 
       try {
         // Send the question
-        await getApi().sendMessage(chat_id, question);
+        await getApi().sendMessage(chatId, question);
 
         // Long-poll for the reply from the same chat
         const updates = await getApi().getUpdates({
@@ -43,7 +42,7 @@ export function register(server: McpServer) {
 
         const allowed = filterAllowedUpdates(updates);
         const match = allowed.find(
-          (u) => u.message?.text && String(u.message.chat.id) === chat_id
+          (u) => u.message?.text && String(u.message.chat.id) === chatId
         );
 
         if (!match?.message) {

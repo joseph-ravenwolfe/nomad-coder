@@ -1,24 +1,23 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getApi, toResult, toError, validateTargetChat } from "../telegram.js";
+import { getApi, toResult, toError, resolveChat } from "../telegram.js";
 
 export function register(server: McpServer) {
   server.tool(
     "pin_message",
     "Pins a message in a chat. Requires the bot to have appropriate admin rights.",
     {
-      chat_id: z.string().describe("Chat ID or @username"),
       message_id: z.number().int().describe("ID of the message to pin"),
       disable_notification: z
         .boolean()
         .optional()
         .describe("Pin without notifying members"),
     },
-    async ({ chat_id, message_id, disable_notification }) => {
-      const chatErr = validateTargetChat(chat_id);
-      if (chatErr) return toError(chatErr);
+    async ({ message_id, disable_notification }) => {
+      const chatId = resolveChat();
+      if (typeof chatId !== "string") return toError(chatId);
       try {
-        const ok = await getApi().pinChatMessage(chat_id, message_id, {
+        const ok = await getApi().pinChatMessage(chatId, message_id, {
           disable_notification,
         });
         return toResult({ ok });

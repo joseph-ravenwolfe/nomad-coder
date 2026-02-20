@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getApi, toResult, toError } from "../telegram.js";
+import { getApi, toResult, toError, resolveChat } from "../telegram.js";
 
 /**
  * Convenience tool for agent→human confirmation flows.
@@ -20,9 +20,6 @@ export function register(server: McpServer) {
     "send_confirmation",
     "Sends a message with Yes/No inline keyboard buttons. Returns the message_id to pass to wait_for_callback_query. Designed for agent-to-human approval/confirmation workflows.",
     {
-      chat_id: z
-        .string()
-        .describe("Target chat ID (number as string) or @username"),
       text: z
         .string()
         .describe("The question or request requiring confirmation"),
@@ -43,9 +40,11 @@ export function register(server: McpServer) {
         .default("confirm_no")
         .describe("Callback data sent when No is pressed"),
     },
-    async ({ chat_id, text, yes_text, no_text, yes_data, no_data }) => {
+    async ({ text, yes_text, no_text, yes_data, no_data }) => {
+      const chatId = resolveChat();
+      if (typeof chatId !== "string") return toError(chatId);
       try {
-        const msg = await getApi().sendMessage(chat_id, text, {
+        const msg = await getApi().sendMessage(chatId, text, {
           reply_markup: {
             inline_keyboard: [
               [

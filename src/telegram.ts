@@ -220,6 +220,29 @@ export function validateTargetChat(chatId: string): TelegramError | null {
   return null;
 }
 
+/**
+ * Resolves the target chat ID for all outbound tool calls.
+ *
+ * The server is designed for a single-user/single-chat workflow — the chat is
+ * always fully determined by ALLOWED_CHAT_ID in the server config. Tools never
+ * accept or expose chat_id as a parameter; it is resolved here transparently.
+ *
+ * Returns the chat ID string on success, or a TelegramError if ALLOWED_CHAT_ID
+ * has not been configured (use `typeof result !== "string"` to detect errors).
+ */
+export function resolveChat(): string | TelegramError {
+  const { chatId } = getSecurityConfig();
+  if (!chatId) {
+    return {
+      code: "UNAUTHORIZED_CHAT",
+      message:
+        "ALLOWED_CHAT_ID is not configured. Set it in your .env or MCP server " +
+        "config to lock this server to its intended conversation.",
+    };
+  }
+  return chatId;
+}
+
 // ---------------------------------------------------------------------------
 // Polling offset state  (persists for the lifetime of the MCP server process)
 // ---------------------------------------------------------------------------

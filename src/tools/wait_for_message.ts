@@ -12,7 +12,7 @@ import { getApi, getOffset, advanceOffset, filterAllowedUpdates, toResult, toErr
 export function register(server: McpServer) {
   server.tool(
     "wait_for_message",
-    "Blocks (long-poll) until a text message is received, then returns it. Optionally filter by chat_id or sender user_id. Returns { timed_out: true } on expiry. Use for open-ended questions where the user types a reply.",
+    "Blocks (long-poll) until a text message is received, then returns it. Optionally filter by sender user_id. Returns { timed_out: true } on expiry. Use for open-ended questions where the user types a reply.",
     {
       timeout_seconds: z
         .number()
@@ -21,17 +21,13 @@ export function register(server: McpServer) {
         .max(55)
         .default(30)
         .describe("How long to wait for a message (1–55 s)"),
-      chat_id: z
-        .string()
-        .optional()
-        .describe("Only accept messages from this chat"),
       user_id: z
         .number()
         .int()
         .optional()
         .describe("Only accept messages from this Telegram user ID"),
     },
-    async ({ timeout_seconds, chat_id, user_id }) => {
+    async ({ timeout_seconds, user_id }) => {
       try {
         const updates = await getApi().getUpdates({
           offset: getOffset(),
@@ -44,7 +40,6 @@ export function register(server: McpServer) {
         const allowed = filterAllowedUpdates(updates);
         const match = allowed.find((u) => {
           if (!u.message?.text) return false;
-          if (chat_id && String(u.message.chat.id) !== chat_id) return false;
           if (user_id !== undefined && u.message.from?.id !== user_id)
             return false;
           return true;

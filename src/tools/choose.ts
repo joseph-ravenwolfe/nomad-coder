@@ -2,7 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import {
   getApi, getOffset, advanceOffset,
-  filterAllowedUpdates, validateTargetChat,
+  filterAllowedUpdates, resolveChat,
   toResult, toError, validateText, validateCallbackData, LIMITS,
 } from "../telegram.js";
 
@@ -18,7 +18,6 @@ export function register(server: McpServer) {
     "choose",
     "Sends a question with 2–8 labeled option buttons and blocks until the user presses one. Returns { label, value } of the chosen option. Handles answering the callback_query automatically. Use instead of send_confirmation for any choice with more than Yes/No.",
     {
-      chat_id: z.string().describe("Target chat ID or @username"),
       question: z.string().describe("The question to display above the buttons"),
       options: z
         .array(
@@ -45,9 +44,9 @@ export function register(server: McpServer) {
         .default(2)
         .describe("Buttons per row (default 2)"),
     },
-    async ({ chat_id, question, options, timeout_seconds, columns }) => {
-      const chatErr = validateTargetChat(chat_id);
-      if (chatErr) return toError(chatErr);
+    async ({ question, options, timeout_seconds, columns }) => {
+      const chatId = resolveChat();
+      if (typeof chatId !== "string") return toError(chatId);
       const textErr = validateText(question);
       if (textErr) return toError(textErr);
 
@@ -74,7 +73,7 @@ export function register(server: McpServer) {
       }
 
       try {
-        const sent = await getApi().sendMessage(chat_id, question, {
+        const sent = await getApi().sendMessage(chatId, question, {
           reply_markup: { inline_keyboard: rows },
         });
 
@@ -92,7 +91,7 @@ export function register(server: McpServer) {
           (u) =>
             u.callback_query &&
             u.callback_query.message?.message_id === sent.message_id &&
-            String(u.callback_query.message?.chat.id) === chat_id
+            String(u.callback_query.message?.chat.id) === chatId
         );
 
         if (!match?.callback_query) {

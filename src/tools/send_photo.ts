@@ -1,15 +1,12 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getApi, toResult, toError, validateCaption, validateTargetChat } from "../telegram.js";
+import { getApi, toResult, toError, validateCaption, resolveChat } from "../telegram.js";
 
 export function register(server: McpServer) {
   server.tool(
     "send_photo",
     "Sends a photo to a chat by public URL or Telegram file_id. Supports captions and inline keyboards.",
     {
-      chat_id: z
-        .string()
-        .describe("Target chat ID (number as string) or @username"),
       photo: z
         .string()
         .describe("Public HTTPS URL of the image, or a Telegram file_id"),
@@ -27,15 +24,15 @@ export function register(server: McpServer) {
         .optional()
         .describe("Send silently"),
     },
-    async ({ chat_id, photo, caption, parse_mode, reply_markup, disable_notification }) => {
-      const chatErr = validateTargetChat(chat_id);
-      if (chatErr) return toError(chatErr);
+    async ({ photo, caption, parse_mode, reply_markup, disable_notification }) => {
+      const chatId = resolveChat();
+      if (typeof chatId !== "string") return toError(chatId);
       if (caption) {
         const capErr = validateCaption(caption);
         if (capErr) return toError(capErr);
       }
       try {
-        const msg = await getApi().sendPhoto(chat_id, photo, {
+        const msg = await getApi().sendPhoto(chatId, photo, {
           caption,
           parse_mode,
           reply_markup,

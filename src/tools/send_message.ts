@@ -1,15 +1,12 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getApi, toResult, toError, validateText, validateTargetChat } from "../telegram.js";
+import { getApi, toResult, toError, validateText, resolveChat } from "../telegram.js";
 
 export function register(server: McpServer) {
   server.tool(
     "send_message",
     "Sends a text message to a Telegram chat. Supports HTML/MarkdownV2 formatting and any Bot API reply_markup (inline keyboards, reply keyboards, etc.).",
     {
-      chat_id: z
-        .string()
-        .describe("Target chat ID (number as string) or @username"),
       text: z.string().describe("Message text"),
       parse_mode: z
         .enum(["HTML", "MarkdownV2"])
@@ -31,13 +28,13 @@ export function register(server: McpServer) {
         .optional()
         .describe("Reply to this message ID"),
     },
-    async ({ chat_id, text, parse_mode, reply_markup, disable_notification, reply_to_message_id }) => {
-      const chatErr = validateTargetChat(chat_id);
-      if (chatErr) return toError(chatErr);
+    async ({ text, parse_mode, reply_markup, disable_notification, reply_to_message_id }) => {
+      const chatId = resolveChat();
+      if (typeof chatId !== "string") return toError(chatId);
       const textErr = validateText(text);
       if (textErr) return toError(textErr);
       try {
-        const msg = await getApi().sendMessage(chat_id, text, {
+        const msg = await getApi().sendMessage(chatId, text, {
           parse_mode,
           reply_markup,
           disable_notification,

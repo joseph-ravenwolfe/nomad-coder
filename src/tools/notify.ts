@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getApi, toResult, toError, validateText, validateTargetChat } from "../telegram.js";
+import { getApi, toResult, toError, validateText, resolveChat } from "../telegram.js";
 
 const SEVERITY_PREFIX: Record<string, string> = {
   info: "ℹ️",
@@ -18,7 +18,6 @@ export function register(server: McpServer) {
     "notify",
     "Sends a formatted notification message to a chat. Handles severity styling (info/success/warning/error) automatically with emoji prefixes and HTML bold titles. The most common agent tool — use for build results, progress updates, and status changes.",
     {
-      chat_id: z.string().describe("Target chat ID or @username"),
       title: z.string().describe("Short bold heading, e.g. \"Build Failed\""),
       body: z.string().optional().describe("Optional detail paragraph"),
       severity: z
@@ -30,9 +29,9 @@ export function register(server: McpServer) {
         .optional()
         .describe("Send silently (no phone notification)"),
     },
-    async ({ chat_id, title, body, severity, disable_notification }) => {
-      const chatErr = validateTargetChat(chat_id);
-      if (chatErr) return toError(chatErr);
+    async ({ title, body, severity, disable_notification }) => {
+      const chatId = resolveChat();
+      if (typeof chatId !== "string") return toError(chatId);
       try {
         const prefix = SEVERITY_PREFIX[severity];
         const lines = [`${prefix} <b>${title}</b>`];
@@ -42,7 +41,7 @@ export function register(server: McpServer) {
         const err = validateText(text);
         if (err) return toError(err);
 
-        const msg = await getApi().sendMessage(chat_id, text, {
+        const msg = await getApi().sendMessage(chatId, text, {
           parse_mode: "HTML",
           disable_notification,
         });
