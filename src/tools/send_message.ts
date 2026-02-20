@@ -5,7 +5,7 @@ import { getApi, toResult, toError, validateText, resolveChat } from "../telegra
 export function register(server: McpServer) {
   server.tool(
     "send_message",
-    "Sends a text message to a Telegram chat. Supports HTML/MarkdownV2 formatting and any Bot API reply_markup (inline keyboards, reply keyboards, etc.). Prefer parse_mode HTML over MarkdownV2 — MarkdownV2 is NOT standard Markdown: it requires escaping . ! - ( ) = | and other punctuation everywhere, so standard Markdown output will produce broken messages. HTML only requires escaping & < >.",
+    "Sends a text message to a Telegram chat. Supports HTML/MarkdownV2 formatting and any Bot API reply_markup (inline keyboards, reply keyboards, etc.). For formatted messages, use parse_mode MarkdownV2 (agents write Markdown naturally — *bold*, _italic_, `code` all work). Caution: MarkdownV2 requires escaping . ! - ( ) = | and other punctuation in plain text portions. Use HTML instead if your content has heavy punctuation.",
     {
       text: z.string().describe("Message text"),
       parse_mode: z

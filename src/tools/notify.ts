@@ -16,7 +16,7 @@ const SEVERITY_PREFIX: Record<string, string> = {
 export function register(server: McpServer) {
   server.tool(
     "notify",
-    "Sends a formatted notification message to a chat. Handles severity styling (info/success/warning/error) automatically with emoji prefixes and HTML bold titles. The most common agent tool — use for build results, progress updates, and status changes. For rich body formatting pass parse_mode HTML: only & < > need escaping. Avoid MarkdownV2 — it is NOT standard Markdown and requires escaping common punctuation like . ! - ( ) everywhere.",
+    "Sends a formatted notification message to a chat. Handles severity styling (info/success/warning/error) automatically with emoji prefixes and HTML bold titles. The most common agent tool — use for build results, progress updates, and status changes. For rich body text, pass parse_mode MarkdownV2 (*bold*, `code`, etc.) but escape . ! - ( ) in plain text portions, or use HTML if content is punctuation-heavy.",
     {
       title: z.string().describe("Short bold heading, e.g. \"Build Failed\""),
       body: z.string().optional().describe("Optional detail paragraph"),
