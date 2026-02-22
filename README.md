@@ -131,7 +131,7 @@ Paste the contents of `LOOP-PROMPT.md` into your AI assistant's chat. It will co
 
 ### Files
 
-`send_document` · `send_photo` · `download_file`
+`send_document` · `send_photo` · `send_video` · `send_audio` · `send_voice` · `download_file`
 
 ### Interaction primitives
 

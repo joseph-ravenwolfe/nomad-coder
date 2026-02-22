@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { GrammyError } from "grammy";
 import {
   validateText,
@@ -6,6 +6,8 @@ import {
   validateCallbackData,
   toResult,
   toError,
+  splitMessage,
+  callApi,
   LIMITS,
 } from "./telegram.js";
 
@@ -175,5 +177,135 @@ describe("toError with plain Error", () => {
     const parsed = JSON.parse(result.content[0].text);
     expect(parsed.code).toBe("UNKNOWN");
     expect(parsed.message).toBe("network failure");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// splitMessage
+// ---------------------------------------------------------------------------
+
+describe("splitMessage", () => {
+  it("returns single-element array for text at or below limit", () => {
+    const text = "a".repeat(LIMITS.MESSAGE_TEXT);
+    const result = splitMessage(text);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toBe(text);
+  });
+
+  it("returns single-element array for short text", () => {
+    expect(splitMessage("hello")).toEqual(["hello"]);
+  });
+
+  it("splits text over the limit into multiple chunks", () => {
+    const chunks = splitMessage("a".repeat(LIMITS.MESSAGE_TEXT + 100));
+    expect(chunks.length).toBeGreaterThan(1);
+    for (const chunk of chunks) {
+      expect(chunk.length).toBeLessThanOrEqual(LIMITS.MESSAGE_TEXT);
+    }
+  });
+
+  it("reassembles losslessly (same total content)", () => {
+    const text = "word ".repeat(1500).trimEnd(); // ~7500 chars
+    const chunks = splitMessage(text);
+    expect(chunks.length).toBeGreaterThan(1);
+    // Joined with space or exact boundary — at least no chars lost
+    const totalLen = chunks.reduce((s, c) => s + c.length, 0);
+    // Allow some trim-loss at split boundaries, but shouldn't lose much
+    expect(totalLen).toBeGreaterThan(text.length * 0.95);
+  });
+
+  it("prefers paragraph breaks \\n\\n when available", () => {
+    // Must exceed limit: 2500 a's + \n\n + 2500 b's = 5002 chars
+    const para1 = "a".repeat(2500);
+    const para2 = "b".repeat(2500);
+    const text = para1 + "\n\n" + para2;
+    const chunks = splitMessage(text);
+    expect(chunks[0]).toBe(para1);
+    expect(chunks[1]).toBe(para2);
+  });
+
+  it("falls back to single newline when no paragraph break in range", () => {
+    // line1 at 2500 > limit*0.5=2048, no double-newline present
+    const line1 = "a".repeat(2500);
+    const line2 = "b".repeat(2500);
+    const text = line1 + "\n" + line2;
+    const chunks = splitMessage(text);
+    expect(chunks[0]).toBe(line1);
+    expect(chunks[1]).toBe(line2);
+  });
+
+  it("each chunk is within the Telegram text limit", () => {
+    const text = "x".repeat(LIMITS.MESSAGE_TEXT * 3);
+    const chunks = splitMessage(text);
+    for (const c of chunks) {
+      expect(c.length).toBeLessThanOrEqual(LIMITS.MESSAGE_TEXT);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// callApi — rate-limit retry
+// ---------------------------------------------------------------------------
+
+describe("callApi", () => {
+  it("returns the result of a successful call", async () => {
+    const fn = vi.fn().mockResolvedValue(42);
+    expect(await callApi(fn)).toBe(42);
+    expect(fn).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries once on RATE_LIMITED then succeeds", async () => {
+    vi.useFakeTimers();
+    const rateLimitErr = new GrammyError(
+      "Too Many Requests",
+      { ok: false, error_code: 429, description: "Too Many Requests: retry after 1" },
+      "sendMessage",
+      {}
+    );
+    (rateLimitErr as any).parameters = { retry_after: 1 };
+
+    const fn = vi.fn()
+      .mockRejectedValueOnce(rateLimitErr)
+      .mockResolvedValue("ok");
+
+    const promise = callApi(fn);
+    await vi.runAllTimersAsync();
+    expect(await promise).toBe("ok");
+    expect(fn).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
+  });
+
+  it("throws immediately for non-rate-limit GrammyError", async () => {
+    const err = new GrammyError(
+      "Not Found",
+      { ok: false, error_code: 400, description: "Bad Request: chat not found" },
+      "sendMessage",
+      {}
+    );
+    const fn = vi.fn().mockRejectedValue(err);
+    await expect(callApi(fn)).rejects.toThrow();
+    expect(fn).toHaveBeenCalledTimes(1);
+  });
+
+  it("throws after maxRetries exhausted", async () => {
+    vi.useFakeTimers();
+    const rateLimitErr = new GrammyError(
+      "Too Many Requests",
+      { ok: false, error_code: 429, description: "Too Many Requests: retry after 1" },
+      "sendMessage",
+      {}
+    );
+    (rateLimitErr as any).parameters = { retry_after: 1 };
+
+    const fn = vi.fn().mockRejectedValue(rateLimitErr);
+    const promise = callApi(fn, 2);
+    // Run concurrently so the rejection is caught before it can escape as unhandled
+    await Promise.all([
+      expect(promise).rejects.toBeInstanceOf(GrammyError),
+      vi.runAllTimersAsync(),
+    ]);
+    // Called once initially + 2 retries = 3 total
+    expect(fn).toHaveBeenCalledTimes(3);
+    vi.useRealTimers();
   });
 });

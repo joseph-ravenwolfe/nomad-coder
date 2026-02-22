@@ -67,10 +67,13 @@ Tools are grouped by abstraction level.
 
 | Tool | Description |
 |------|-------------|
-| `send_message` | Sends a text message. Supports Markdown, MarkdownV2, HTML. |
+| `send_message` | Sends a text message. Supports Markdown, MarkdownV2, HTML. Messages over 4096 chars are automatically split into sequential chunks. Set `voice: true` (or configure `TTS_PROVIDER`) to send as a spoken voice note via TTS instead. |
 | `edit_message_text` | Edits the text of a previously sent message. |
 | `send_photo` | Sends a photo by public URL or Telegram `file_id`. |
 | `send_document` | Sends a file by local path, public URL, or Telegram `file_id`. |
+| `send_video` | Sends a video by local path, public URL, or Telegram `file_id`. |
+| `send_audio` | Sends an audio track by local path, public URL, or Telegram `file_id`. Shown as a playable track with title/performer. |
+| `send_voice` | Sends a voice note (OGG/Opus) by local path, public URL, or Telegram `file_id`. Displayed with waveform playback. |
 | `download_file` | Downloads a received file to local disk by `file_id`. Returns text content for text-based files under 100 KB. |
 | `forward_message` | Forwards a message from another chat into the configured chat. |
 | `delete_message` | Deletes a message by ID. |
@@ -132,7 +135,7 @@ All Telegram API errors are caught and returned as structured MCP tool errors:
 }
 ```
 
-Pre-send validators run before hitting the API for text length, caption length, and callback data byte size. Missing `BOT_TOKEN` at startup causes an immediate fatal exit with a clear message to stderr.
+Pre-send validators run before hitting the API for text length, caption length, and callback data byte size. `send_message` auto-splits texts over 4096 chars rather than rejecting them. All outbound API calls use a `callApi()` wrapper that automatically retries on Telegram 429 rate-limit responses (waits `retry_after` seconds, up to 3 retries). Missing `BOT_TOKEN` at startup causes an immediate fatal exit with a clear message to stderr.
 
 ---
 
@@ -156,6 +159,7 @@ telegram-bridge-mcp/
 │   ├── telegram.ts           # grammy Api wrapper, security enforcement, offset state,
 │   │                         #   pre-send validators, error classification, pollUntil helper
 │   ├── transcribe.ts         # Local Whisper voice transcription (HuggingFace ONNX)
+│   ├── tts.ts                # OpenAI TTS synthesis → OGG/Opus for sendVoice
 │   ├── markdown.ts           # Markdown → MarkdownV2 auto-conversion
 │   ├── setup.ts              # pnpm pair wizard — writes .env from live bot pairing
 │   └── tools/
@@ -171,6 +175,9 @@ telegram-bridge-mcp/
 │       ├── send_message.ts
 │       ├── edit_message_text.ts
 │       ├── send_photo.ts
+│       ├── send_video.ts
+│       ├── send_audio.ts
+│       ├── send_voice.ts
 │       ├── forward_message.ts
 │       ├── delete_message.ts
 │       ├── pin_message.ts

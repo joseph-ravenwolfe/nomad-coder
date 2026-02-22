@@ -2,7 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { InputFile } from "grammy";
 import { existsSync } from "fs";
 import { z } from "zod";
-import { getApi, toResult, toError, validateCaption, resolveChat } from "../telegram.js";
+import { getApi, toResult, toError, validateCaption, resolveChat, callApi } from "../telegram.js";
 import { resolveParseMode } from "../markdown.js";
 import { cancelTyping } from "../typing-state.js";
 
@@ -64,14 +64,14 @@ export function register(server: McpServer) {
 
       try {
         cancelTyping();
-        const msg = await getApi().sendDocument(chatId, docSource, {
+        const msg = await callApi(() => getApi().sendDocument(chatId, docSource, {
           caption: resolved.text,
           parse_mode: resolved.parse_mode,
           disable_notification,
           reply_parameters: reply_to_message_id
             ? { message_id: reply_to_message_id }
             : undefined,
-        });
+        }));
         return toResult({
           message_id: msg.message_id,
           file_id: msg.document?.file_id,

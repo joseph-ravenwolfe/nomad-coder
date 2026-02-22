@@ -299,6 +299,73 @@ export function validateText(text: string): TelegramError | null {
   return null;
 }
 
+/**
+ * Splits text that exceeds Telegram's 4096-char message limit into an ordered
+ * array of chunks, each within the limit.  Prefers splitting at paragraph
+ * breaks (double newline), then single newlines, then word spaces — falling
+ * back to a hard cut only when no whitespace is found.
+ *
+ * Splitting is done on the already-processed (post-Markdown-conversion) text
+ * so character counts are exact.
+ */
+export function splitMessage(text: string): string[] {
+  if (text.length <= LIMITS.MESSAGE_TEXT) return [text];
+
+  const chunks: string[] = [];
+  let remaining = text;
+
+  while (remaining.length > LIMITS.MESSAGE_TEXT) {
+    const limit = LIMITS.MESSAGE_TEXT;
+    let splitAt = limit;
+
+    // Prefer paragraph break
+    const paraAt = remaining.lastIndexOf("\n\n", limit);
+    if (paraAt > limit * 0.5) {
+      splitAt = paraAt + 2;
+    } else {
+      // Then single newline
+      const nlAt = remaining.lastIndexOf("\n", limit);
+      if (nlAt > limit * 0.5) {
+        splitAt = nlAt + 1;
+      } else {
+        // Then word space
+        const spAt = remaining.lastIndexOf(" ", limit);
+        if (spAt > limit * 0.5) splitAt = spAt + 1;
+        // else hard cut at limit
+      }
+    }
+
+    chunks.push(remaining.slice(0, splitAt).trimEnd());
+    remaining = remaining.slice(splitAt).trimStart();
+  }
+
+  if (remaining.length > 0) chunks.push(remaining);
+  return chunks;
+}
+
+/**
+ * Wraps a single Telegram API call with automatic rate-limit retry.
+ * On a 429 RATE_LIMITED response, waits `retry_after` seconds (capped at 60s)
+ * and retries up to `maxRetries` times before re-throwing.
+ */
+export async function callApi<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (err instanceof GrammyError && attempt < maxRetries) {
+        const classified = classifyGrammyError(err);
+        if (classified.code === "RATE_LIMITED") {
+          const delay = Math.min((classified.retry_after ?? 5) * 1000, 60_000);
+          await new Promise((r) => setTimeout(r, delay));
+          continue;
+        }
+      }
+      throw err;
+    }
+  }
+}
+
 export function validateCaption(caption: string): TelegramError | null {
   if (caption.length > LIMITS.CAPTION)
     return { code: "CAPTION_TOO_LONG", message: `Caption is ${caption.length} chars but the Telegram limit is ${LIMITS.CAPTION}. Shorten by at least ${caption.length - LIMITS.CAPTION} characters.` };
