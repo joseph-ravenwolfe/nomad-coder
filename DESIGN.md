@@ -85,6 +85,7 @@ Tools are grouped by abstraction level.
 |------|-------------|
 | `get_me` | Returns basic information about the bot (id, username, capabilities). |
 | `get_chat` | Returns information about the configured chat. |
+| `set_commands` | Registers (or clears) the Telegram slash-command menu for the active chat or globally. Pass `[]` to remove the menu. Useful for surfacing escape-hatch commands like `/cancel` during long-running tasks. |
 
 ### Reactions
 
@@ -176,6 +177,10 @@ telegram-bridge-mcp/
 │       ├── send_chat_action.ts
 │       ├── show_typing.ts
 │       ├── cancel_typing.ts
+│       ├── send_document.ts
+│       ├── download_file.ts
+│       ├── set_topic.ts
+│       ├── set_commands.ts
 │       ├── get_me.ts
 │       ├── get_chat.ts
 │       ├── set_reaction.ts

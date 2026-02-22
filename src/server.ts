@@ -21,6 +21,7 @@ import { register as registerSendChatAction } from "./tools/send_chat_action.js"
 import { register as registerShowTyping } from "./tools/show_typing.js";
 import { register as registerCancelTyping } from "./tools/cancel_typing.js";
 import { register as registerRestartServer } from "./tools/restart_server.js";
+import { register as registerSetCommands } from "./tools/set_commands.js";
 import { register as registerWaitForCallbackQuery } from "./tools/wait_for_callback_query.js";
 import { register as registerWaitForMessage } from "./tools/wait_for_message.js";
 
@@ -38,7 +39,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 export function createServer(): McpServer {
   const server = new McpServer({
     name: "telegram-bridge-mcp",
-    version: "1.1.0",
+    version: "1.3.0",
   });
 
   // ── High-level agent tools (use these 99% of the time) ─────────────────
@@ -72,6 +73,7 @@ export function createServer(): McpServer {
   // ── Bot / chat info ──────────────────────────────────────────────────────
   registerGetMe(server);
   registerGetChat(server);
+  registerSetCommands(server);
 
   // ── Reactions ────────────────────────────────────────────────────────────
   registerSetReaction(server);

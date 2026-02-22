@@ -139,7 +139,9 @@ Paste the contents of `LOOP-PROMPT.md` into your AI assistant's chat. It will co
 
 ### Info & utilities
 
-`get_me` · `get_chat` · `set_reaction` · `get_updates` · `restart_server`
+`get_me` · `get_chat` · `set_commands` · `set_reaction` · `get_updates` · `restart_server`
+
+`set_commands` — registers (or clears) the bot's slash-command menu in the active chat. Pass `[{command, description}, ...]` to show commands in Telegram's autocomplete; pass `[]` to remove the menu.
 
 ---
 
