@@ -6,6 +6,11 @@ const mocks = vi.hoisted(() => ({
   getUpdates: vi.fn(),
   answerCallbackQuery: vi.fn(),
   editMessageText: vi.fn(),
+  transcribeWithIndicator: vi.fn(),
+}));
+
+vi.mock("../transcribe.js", () => ({
+  transcribeWithIndicator: (...args: any[]) => mocks.transcribeWithIndicator(...args),
 }));
 
 vi.mock("../telegram.js", async (importActual) => {
@@ -209,6 +214,31 @@ describe("choose tool", () => {
     const result = await call({ question: "Pick", options: OPTIONS, timeout_seconds: 1 });
     expect((parseResult(result) as any).timed_out).toBe(true);
     expect(mocks.editMessageText).not.toHaveBeenCalled();
+  });
+
+  it("returns skipped with voice transcription when user sends a voice message", async () => {
+    mocks.sendMessage.mockResolvedValue(SENT_MSG);
+    mocks.transcribeWithIndicator.mockResolvedValue("transcribed text");
+    mocks.getUpdates.mockResolvedValue([{
+      update_id: 5,
+      message: { message_id: 20, voice: { file_id: "file123", duration: 3 }, chat: { id: 42 } },
+    }]);
+    const result = await call({ question: "Pick", options: OPTIONS });
+    const data = parseResult(result) as any;
+    expect(data.skipped).toBe(true);
+    expect(data.voice).toBe(true);
+    expect(data.text_response).toBe("transcribed text");
+    expect(mocks.editMessageText).toHaveBeenCalledWith(
+      "42", 7,
+      expect.stringContaining("Skipped"),
+      expect.objectContaining({ reply_markup: { inline_keyboard: [] } }),
+    );
+  });
+
+  it("returns error when sendMessage throws", async () => {
+    mocks.sendMessage.mockRejectedValue(new Error("Network error"));
+    const result = await call({ question: "Pick", options: OPTIONS });
+    expect(isError(result)).toBe(true);
   });
 
   it("callback_query takes priority over text in same batch", async () => {

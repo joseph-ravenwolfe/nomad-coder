@@ -107,6 +107,23 @@ export async function ackAndEditSelection(
 }
 
 /**
+ * Edits the host message to show ⏱ Timed out with all buttons removed.
+ * Used by send_confirmation when no button was pressed within the timeout.
+ */
+export async function editWithTimedOut(
+  chatId: string,
+  messageId: number,
+  originalText: string,
+): Promise<void> {
+  await getApi()
+    .editMessageText(chatId, messageId, markdownToV2(`${originalText}\n\n⏱ _Timed out_`), {
+      parse_mode: "MarkdownV2",
+      reply_markup: { inline_keyboard: [] },
+    })
+    .catch((e) => { console.error("[button-helpers] editWithTimedOut failed:", e); });
+}
+
+/**
  * Edits the host message to show ⏭ Skipped with all buttons removed.
  * Used by choose when the user typed/spoke instead of pressing a button.
  */
@@ -120,5 +137,5 @@ export async function editWithSkipped(
       parse_mode: "MarkdownV2",
       reply_markup: { inline_keyboard: [] },
     })
-    .catch((e) => { console.error("[button-helpers] editMessageText (skipped) failed:", e); });
+    .catch((e) => { console.error("[button-helpers] editWithSkipped failed:", e); });
 }

@@ -119,7 +119,12 @@ describe("send_confirmation tool", () => {
     const data = parseResult(result) as any;
     expect(data.timed_out).toBe(true);
     expect(mocks.answerCallbackQuery).not.toHaveBeenCalled();
-    expect(mocks.editMessageText).not.toHaveBeenCalled();
+    expect(mocks.editMessageText).toHaveBeenCalledWith(
+      "42",
+      5,
+      expect.stringContaining("Timed out"),
+      expect.objectContaining({ reply_markup: { inline_keyboard: [] } }),
+    );
   });
 
   it("ignores callbacks from a different message_id", async () => {
@@ -136,6 +141,18 @@ describe("send_confirmation tool", () => {
     const result = await call({ text: "Proceed?" });
     const data = parseResult(result) as any;
     expect(data.timed_out).toBe(true);
+    expect(mocks.editMessageText).toHaveBeenCalledWith(
+      "42",
+      5,
+      expect.stringContaining("Timed out"),
+      expect.objectContaining({ reply_markup: { inline_keyboard: [] } }),
+    );
+  });
+
+  it("returns error when sendMessage throws", async () => {
+    mocks.sendMessage.mockRejectedValue(new Error("Network error"));
+    const result = await call({ text: "Proceed?" });
+    expect(isError(result)).toBe(true);
   });
 
   it("sends with a reply_to_message_id when provided", async () => {

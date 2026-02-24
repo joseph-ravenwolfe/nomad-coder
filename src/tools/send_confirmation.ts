@@ -4,7 +4,7 @@ import { getApi, toResult, toError, resolveChat, validateText } from "../telegra
 import { markdownToV2 } from "../markdown.js";
 import { cancelTyping } from "../typing-state.js";
 import { applyTopicToText } from "../topic-state.js";
-import { pollButtonPress, ackAndEditSelection } from "./button-helpers.js";
+import { pollButtonPress, ackAndEditSelection, editWithTimedOut } from "./button-helpers.js";
 
 /**
  * Convenience tool for agent→human Yes/No confirmation flows.
@@ -29,12 +29,12 @@ export function register(server: McpServer) {
         .describe("The question or request requiring confirmation"),
       yes_text: z
         .string()
-        .default("✔️ Yes")
-        .describe("Label for the affirmative button"),
+        .default("🟢 Yes")
+        .describe("Label for the affirmative button. When using yes_style, prefer plain text — the button color is the visual signal."),
       no_text: z
         .string()
-        .default("✖️ No")
-        .describe("Label for the negative button"),
+        .default("🔴 No")
+        .describe("Label for the negative button. When using no_style, prefer plain text — the button color is the visual signal."),
       yes_data: z
         .string()
         .default("confirm_yes")
@@ -43,6 +43,14 @@ export function register(server: McpServer) {
         .string()
         .default("confirm_no")
         .describe("Callback data sent when No is pressed"),
+      yes_style: z
+        .enum(["success", "primary", "danger"])
+        .optional()
+        .describe("Optional color for the Yes button: success (green), primary (blue), danger (red). Omit for app-default style. Tip: use primary+no style for a confirm/cancel emphasis pattern."),
+      no_style: z
+        .enum(["success", "primary", "danger"])
+        .optional()
+        .describe("Optional color for the No button: success (green), primary (blue), danger (red). Omit for app-default (gray/neutral)."),
       timeout_seconds: z
         .number()
         .int()
@@ -56,7 +64,7 @@ export function register(server: McpServer) {
         .optional()
         .describe("Reply to this message ID — shows quoted message above the confirmation"),
     },
-    async ({ text, yes_text, no_text, yes_data, no_data, timeout_seconds, reply_to_message_id }) => {
+    async ({ text, yes_text, no_text, yes_data, no_data, yes_style, no_style, timeout_seconds, reply_to_message_id }) => {
       const chatId = resolveChat();
       if (typeof chatId !== "string") return toError(chatId);
       const textErr = validateText(text);
@@ -69,8 +77,8 @@ export function register(server: McpServer) {
           reply_parameters: reply_to_message_id ? { message_id: reply_to_message_id } : undefined,
           reply_markup: {
             inline_keyboard: [[
-              { text: yes_text, callback_data: yes_data },
-              { text: no_text, callback_data: no_data },
+              { text: yes_text, callback_data: yes_data, ...(yes_style ? { style: yes_style } : {}) },
+              { text: no_text, callback_data: no_data, ...(no_style ? { style: no_style } : {}) },
             ]],
           },
         });
@@ -78,6 +86,7 @@ export function register(server: McpServer) {
         const cq = await pollButtonPress(chatId, sent.message_id, timeout_seconds);
 
         if (!cq) {
+          await editWithTimedOut(chatId, sent.message_id, text);
           return toResult({ timed_out: true, message_id: sent.message_id });
         }
 

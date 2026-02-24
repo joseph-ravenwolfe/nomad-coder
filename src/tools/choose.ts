@@ -28,6 +28,10 @@ export function register(server: McpServer) {
           z.object({
             label: z.string().describe(`Button label. Keep under ${LIMITS.BUTTON_DISPLAY_MULTI_COL} chars for 2-col layout, or ${LIMITS.BUTTON_DISPLAY_SINGLE_COL} chars for single-column. API hard limit is ${LIMITS.BUTTON_TEXT} chars but labels over the display limit are cut off on mobile.`),
             value: z.string().describe(`Callback data (max ${LIMITS.CALLBACK_DATA} bytes)`),
+            style: z
+              .enum(["success", "primary", "danger"])
+              .optional()
+              .describe("Optional button color: success (green), primary (blue), danger (red). Omit for default app style."),
           })
         )
         .min(2)
@@ -79,12 +83,13 @@ export function register(server: McpServer) {
       }
 
       // Build keyboard rows (n columns per row)
-      const rows: { text: string; callback_data: string }[][] = [];
+      const rows: { text: string; callback_data: string; style?: "success" | "primary" | "danger" }[][] = [];
       for (let i = 0; i < options.length; i += columns) {
         rows.push(
           options.slice(i, i + columns).map((o) => ({
             text: o.label,
             callback_data: o.value,
+            ...(o.style ? { style: o.style } : {}),
           }))
         );
       }

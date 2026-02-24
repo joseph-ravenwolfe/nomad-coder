@@ -78,9 +78,16 @@ export async function transcribeVoice(fileId: string): Promise<string> {
   // 3. Decode audio to Float32 PCM at 16 kHz (pure WASM, no ffmpeg)
   const audioData = await decodeAudioToFloat32(audioBytes);
 
-  // 4. Transcribe — model is downloaded once and cached
+  // 4. Transcribe — model is downloaded once and cached.
+  // chunk_length_s + stride_length_s enable long-form transcription:
+  // Whisper's context window is 30s, so audio longer than that is silently
+  // truncated without chunking. stride_length_s overlaps adjacent chunks
+  // to avoid losing words at chunk boundaries.
   const transcriber = await getPipeline();
-  const result = await transcriber(audioData) as { text: string };
+  const result = await transcriber(audioData, {
+    chunk_length_s: 30,
+    stride_length_s: 5,
+  }) as { text: string };
   return result.text.trim();
 }
 
