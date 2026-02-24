@@ -17,6 +17,7 @@ const STEPS = [
   { label: "Install deps", status: "done" },
   { label: "Build", status: "running" },
   { label: "Test", status: "pending" },
+  { label: "Deploy", status: "failed" },
 ];
 
 describe("update_status tool", () => {
@@ -54,6 +55,7 @@ describe("update_status tool", () => {
     await call({ title: "T", steps: STEPS });
     const [, text] = mocks.sendMessage.mock.calls[0];
     expect(text).toContain("✅");   // done
+    expect(text).toContain("⛔");   // failed
     expect(text).toContain("🔄");   // running
     expect(text).toContain("⬜");   // pending
   });

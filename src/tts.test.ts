@@ -278,7 +278,7 @@ describe("synthesizeToOgg (ollama provider)", () => {
     expect(result).toBe(fakeOgg);
 
     const [url, opts] = mockFetch.mock.calls[0];
-    expect(url).toBe("http://ollama.home.lan/v1/audio/speech");
+    expect(url).toBe("http://ollama.home.lan:8787/v1/audio/speech");
     const body = JSON.parse(opts.body);
     expect(body.input).toBe("hello");
     expect(body.model).toBe("kokoro");

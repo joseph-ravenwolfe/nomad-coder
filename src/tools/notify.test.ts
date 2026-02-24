@@ -31,7 +31,7 @@ describe("notify tool", () => {
     mocks.sendMessage.mockResolvedValue({ message_id: 1, chat: { id: 1 }, date: 0, text: "" });
     await call({ title: "Oops", severity: "error" });
     const [, text] = mocks.sendMessage.mock.calls[0];
-    expect(text).toContain("❌");
+    expect(text).toContain("⛔");
     expect(text).toContain("*Oops*");
   });
 

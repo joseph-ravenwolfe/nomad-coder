@@ -131,7 +131,7 @@ Call `show_typing` **after receiving a message**, right before doing actual work
 **Default timeouts are optimized for minimal token usage during idle polling:**
 
 - `wait_for_message`: 300 s (5 min) — use default when polling for next task
-- `ask`, `choose`, `wait_for_callback_query`: 60 s — reasonable wait when expecting a response
+- `ask`, `choose`, `send_confirmation`, `wait_for_callback_query`: 60 s — reasonable wait when expecting a response
 
 All tools support up to 300 s max. You can use shorter timeouts (e.g., 30–60 s) when you want more responsive feedback loops, or longer timeouts when idle to minimize repeated polling overhead.
 
@@ -172,7 +172,7 @@ Keep labels short and descriptive. Use `columns=1` for longer option text. Both 
 
 ## Formatting: default parse_mode
 
-`send_message`, `notify`, `edit_message_text`, `send_photo`, and `send_confirmation` all default to `"Markdown"`.
+`send_message`, `notify`, `edit_message_text`, and `send_photo` all default to `"Markdown"`.
 Standard Markdown (bold, italic, code, links, headings) is auto-converted to Telegram MarkdownV2. No manual escaping needed.
 
 See the `formatting-guide` resource (`telegram-bridge-mcp://formatting-guide`) for the full reference.

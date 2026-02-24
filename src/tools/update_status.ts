@@ -9,7 +9,7 @@ const STATUS_ICON: Record<string, string> = {
   pending:  "⬜",
   running:  "🔄",
   done:     "✅",
-  failed:   "❌",
+  failed:   "⛔",
   skipped:  "⏭️",
 };
 

@@ -17,7 +17,7 @@ import { toResult, toError, pollUntil } from "../telegram.js";
 export function register(server: McpServer) {
   server.tool(
     "wait_for_callback_query",
-    "Blocks (long-poll) until an inline button is pressed, then returns the callback data. Optionally filter by message_id. Returns { timed_out: true } if nobody responds within timeout_seconds. Use after send_confirmation for approval flows.",
+    "Blocks (long-poll) until an inline button is pressed, then returns the callback data. Low-level primitive — use only when buttons must remain active across multiple presses (e.g. persistent or broadcast keyboards). For single-use Yes/No use send_confirmation; for single-use N-option use choose.",
     {
       timeout_seconds: z
         .number()

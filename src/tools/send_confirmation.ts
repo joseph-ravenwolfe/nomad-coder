@@ -1,38 +1,39 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { getApi, toResult, toError, resolveChat, validateText } from "../telegram.js";
-import { resolveParseMode } from "../markdown.js";
+import { markdownToV2 } from "../markdown.js";
 import { cancelTyping } from "../typing-state.js";
 import { applyTopicToText } from "../topic-state.js";
+import { pollButtonPress, ackAndEditSelection } from "./button-helpers.js";
 
 /**
- * Convenience tool for agent→human confirmation flows.
+ * Convenience tool for agent→human Yes/No confirmation flows.
  *
- * Sends a message with Yes/No inline keyboard buttons and returns the
- * message_id so the agent can pass it directly to wait_for_callback_query.
+ * Fully self-contained — mirrors `choose` but hardcoded to two options:
+ *   1. Sends the question with Yes/No inline buttons
+ *   2. Blocks until the user presses one (or timeout)
+ *   3. Answers the callback_query (removes the spinner)
+ *   4. Edits the message to show the chosen label (buttons removed)
+ *   5. Returns { confirmed: true|false }
  *
- * Typical flow:
- *   1. Agent calls send_confirmation  → receives { message_id, chat_id }
- *   2. Agent calls wait_for_callback_query with that message_id
- *   3. Agent reads data ("confirm_yes" / "confirm_no") and acts accordingly
- *   4. Agent calls answer_callback_query to dismiss the loading spinner
- *   5. Agent calls edit_message_text to update the message with the outcome
+ * Use `wait_for_callback_query` directly only when buttons must remain
+ * interactive across multiple presses (e.g. broadcast / persistent keyboards).
  */
 export function register(server: McpServer) {
   server.tool(
     "send_confirmation",
-    "Sends a message with Yes/No inline keyboard buttons. Returns the message_id to pass to wait_for_callback_query. Designed for agent-to-human approval/confirmation workflows.",
+    "Sends a Yes/No confirmation message and blocks until the user presses a button. Automatically removes buttons and updates the message to show the chosen option. Returns { confirmed: true|false }.",
     {
       text: z
         .string()
         .describe("The question or request requiring confirmation"),
       yes_text: z
         .string()
-        .default("✅ Yes")
+        .default("✔️ Yes")
         .describe("Label for the affirmative button"),
       no_text: z
         .string()
-        .default("❌ No")
+        .default("✖️ No")
         .describe("Label for the negative button"),
       yes_data: z
         .string()
@@ -42,39 +43,53 @@ export function register(server: McpServer) {
         .string()
         .default("confirm_no")
         .describe("Callback data sent when No is pressed"),
-      parse_mode: z
-        .enum(["Markdown", "HTML", "MarkdownV2"])
-        .default("Markdown")
-        .describe("Markdown = standard Markdown auto-converted (default); MarkdownV2 = raw; HTML = HTML tags"),
+      timeout_seconds: z
+        .number()
+        .int()
+        .min(1)
+        .max(300)
+        .default(60)
+        .describe("Seconds to wait for a button press before returning timed_out: true"),
       reply_to_message_id: z
         .number()
         .int()
         .optional()
         .describe("Reply to this message ID — shows quoted message above the confirmation"),
     },
-    async ({ text, yes_text, no_text, yes_data, no_data, parse_mode, reply_to_message_id }) => {
+    async ({ text, yes_text, no_text, yes_data, no_data, timeout_seconds, reply_to_message_id }) => {
       const chatId = resolveChat();
       if (typeof chatId !== "string") return toError(chatId);
-      const resolved = resolveParseMode(applyTopicToText(text, parse_mode), parse_mode);
-      const textErr = validateText(resolved.text);
+      const textErr = validateText(text);
       if (textErr) return toError(textErr);
+
       try {
         cancelTyping();
-        const msg = await getApi().sendMessage(chatId, resolved.text, {
-          parse_mode: resolved.parse_mode,
+        const sent = await getApi().sendMessage(chatId, markdownToV2(applyTopicToText(text, "Markdown")), {
+          parse_mode: "MarkdownV2",
           reply_parameters: reply_to_message_id ? { message_id: reply_to_message_id } : undefined,
           reply_markup: {
-            inline_keyboard: [
-              [
-                { text: yes_text, callback_data: yes_data },
-                { text: no_text, callback_data: no_data },
-              ],
-            ],
+            inline_keyboard: [[
+              { text: yes_text, callback_data: yes_data },
+              { text: no_text, callback_data: no_data },
+            ]],
           },
         });
+
+        const cq = await pollButtonPress(chatId, sent.message_id, timeout_seconds);
+
+        if (!cq) {
+          return toResult({ timed_out: true, message_id: sent.message_id });
+        }
+
+        const confirmed = cq.data === yes_data;
+        const chosenLabel = confirmed ? yes_text : no_text;
+        await ackAndEditSelection(chatId, sent.message_id, text, chosenLabel, cq.id!);
+
         return toResult({
-          message_id: msg.message_id,
-          hint: "Pass message_id to wait_for_callback_query to block until the user responds.",
+          timed_out: false,
+          confirmed,
+          value: cq.data,
+          message_id: sent.message_id,
         });
       } catch (err) {
         return toError(err);

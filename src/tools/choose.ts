@@ -1,15 +1,14 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { Update } from "grammy/types";
 import { z } from "zod";
 import {
   getApi, resolveChat,
   toResult, toError, validateText, validateCallbackData, LIMITS,
-  pollUntil,
 } from "../telegram.js";
 import { markdownToV2 } from "../markdown.js";
 import { transcribeWithIndicator } from "../transcribe.js";
 import { cancelTyping } from "../typing-state.js";
 import { applyTopicToText } from "../topic-state.js";
+import { pollButtonOrTextOrVoice, ackAndEditSelection, editWithSkipped } from "./button-helpers.js";
 
 /**
  * Sends a question with labeled option buttons and blocks until one is pressed.
@@ -21,7 +20,7 @@ import { applyTopicToText } from "../topic-state.js";
 export function register(server: McpServer) {
   server.tool(
     "choose",
-    "Sends a question with 2–8 labeled option buttons and blocks until the user presses one. Returns { label, value } of the chosen option. Handles answering the callback_query automatically. Use instead of send_confirmation for any choice with more than Yes/No.",
+    "Sends a question with 2–8 labeled option buttons and blocks until the user presses one. Returns { label, value } of the chosen option. Automatically removes the buttons and updates the message to show the chosen option. Use for any single-selection choice.",
     {
       question: z.string().describe("The question to display above the buttons"),
       options: z
@@ -98,36 +97,7 @@ export function register(server: McpServer) {
           reply_parameters: reply_to_message_id ? { message_id: reply_to_message_id } : undefined,
         });
 
-        // Poll with 1 s ticks until EITHER a callback_query for this message
-        // OR a text/voice message arrives — whichever comes first.
-        const { match } = await pollUntil<
-          | { kind: "button"; cq: NonNullable<Update["callback_query"]> }
-          | { kind: "text"; message_id: number; text: string; reply_to_message_id?: number }
-          | { kind: "voice"; message_id: number; fileId: string; reply_to_message_id?: number }
-        >(
-          (updates) => {
-            // Check for a callback_query on our message first
-            const cq = updates.find(
-              (u) =>
-                u.callback_query &&
-                u.callback_query.message?.message_id === sent.message_id &&
-                String(u.callback_query.message?.chat.id) === chatId
-            );
-            if (cq?.callback_query) return { kind: "button", cq: cq.callback_query };
-
-            // Check for a text message (user typed instead of pressing a button).
-            // Only match messages sent AFTER our question so a pre-existing message isn't consumed.
-            const tm = updates.find((u) => u.message?.text && u.message.message_id > sent.message_id);
-            if (tm?.message) return { kind: "text" as const, message_id: tm.message.message_id, text: tm.message.text!, reply_to_message_id: tm.message.reply_to_message?.message_id };
-
-            // Check for a voice message (user spoke instead of pressing a button).
-            const vm = updates.find((u) => u.message?.voice && u.message.message_id > sent.message_id);
-            if (vm?.message?.voice) return { kind: "voice" as const, message_id: vm.message.message_id, fileId: vm.message.voice.file_id, reply_to_message_id: vm.message.reply_to_message?.message_id };
-
-            return undefined;
-          },
-          timeout_seconds,
-        );
+        const match = await pollButtonOrTextOrVoice(chatId, sent.message_id, timeout_seconds);
 
         if (!match) {
           // Timeout — keep buttons active (no edit), let user press later
@@ -138,15 +108,7 @@ export function register(server: McpServer) {
         }
 
         if (match.kind === "text") {
-          // User typed text instead of pressing a button — choice is skipped
-          // Edit message to show "⏭ Skipped" and remove the now-irrelevant buttons
-          await getApi()
-            .editMessageText(chatId, sent.message_id, markdownToV2(`${question}\n\n⏭ _Skipped_`), {
-              parse_mode: "MarkdownV2",
-              reply_markup: { inline_keyboard: [] },
-            })
-            .catch((e) => { console.error("[choose] editMessageText (skipped) failed:", e); });
-
+          await editWithSkipped(chatId, sent.message_id, question);
           return toResult({
             skipped: true,
             text_response: match.text,
@@ -157,15 +119,8 @@ export function register(server: McpServer) {
         }
 
         if (match.kind === "voice") {
-          // User sent a voice message instead of pressing a button — transcribe and treat as text skip
           const text = await transcribeWithIndicator(match.fileId, match.message_id).catch((e) => `[transcription failed: ${e.message}]`);
-          await getApi()
-            .editMessageText(chatId, sent.message_id, markdownToV2(`${question}\n\n⏭ _Skipped_`), {
-              parse_mode: "MarkdownV2",
-              reply_markup: { inline_keyboard: [] },
-            })
-            .catch((e) => { console.error("[choose] editMessageText (skipped/voice) failed:", e); });
-
+          await editWithSkipped(chatId, sent.message_id, question);
           return toResult({
             skipped: true,
             text_response: text,
@@ -178,19 +133,8 @@ export function register(server: McpServer) {
 
         // Button was pressed
         const chosen = options.find((o) => o.value === match.cq.data);
-        const chosenLabel = chosen?.label ?? match.cq.data;
-
-        // Acknowledge the callback so Telegram removes the loading spinner
-        await getApi().answerCallbackQuery(match.cq.id).catch(() => {/* non-fatal */});
-
-        // Replace the buttons with a text confirmation of the choice
-        const updatedText = `${question}\n\n▸ *${chosenLabel}*`;
-        await getApi()
-          .editMessageText(chatId, sent.message_id, markdownToV2(updatedText), {
-            parse_mode: "MarkdownV2",
-            reply_markup: { inline_keyboard: [] },
-          })
-          .catch((e) => { console.error("[choose] editMessageText failed:", e); });
+        const chosenLabel = chosen?.label ?? match.cq.data ?? "";
+        await ackAndEditSelection(chatId, sent.message_id, question, chosenLabel, match.cq.id!);
 
         return toResult({
           timed_out: false,

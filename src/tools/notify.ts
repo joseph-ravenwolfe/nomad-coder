@@ -9,7 +9,7 @@ const SEVERITY_PREFIX: Record<string, string> = {
   info: "ℹ️",
   success: "✅",
   warning: "⚠️",
-  error: "❌",
+  error: "⛔",
 };
 
 /**
