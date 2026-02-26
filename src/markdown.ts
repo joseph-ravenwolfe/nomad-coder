@@ -40,22 +40,22 @@ export function resolveParseMode(
 }
 
 export function markdownToV2(input: string): string {
-  // Normalize literal escape sequences that arrive unprocessed through MCP/XML transport:
-  //   \n  (two chars) → real newline
-  //   \"  (two chars) → real double-quote  (agents JSON-escape quotes before passing)
-  //   \\  (two chars) → real backslash     (agents double-escape backslashes)
-  const inputNorm = input
-    .replace(/\\n/g, "\n")
-    .replace(/\\"/g, '"')
-    .replace(/\\\\/g, "\\");
-
-  // ── 1. Extract fenced code blocks so they are never modified ───────────
+  // ── 0. Extract fenced code blocks FIRST so normalization never touches them ─
   const codeBlocks: string[] = [];
-  let text = inputNorm.replace(/```([^\n`]*)\n([\s\S]*?)```/g, (_m, lang, body) => {
+  let text = input.replace(/```([^\n`]*)\n([\s\S]*?)```/g, (_m, lang, body) => {
     const idx = codeBlocks.length;
     codeBlocks.push("```" + lang + "\n" + body + "```");
     return `\x00CB${idx}\x00`;
   });
+
+  // ── 1. Normalize MCP transport escape sequences (outside code blocks only) ─
+  //   \n  (two chars) → real newline
+  //   \"  (two chars) → real double-quote  (agents JSON-escape quotes before passing)
+  //   \\  (two chars) → real backslash     (agents double-escape backslashes)
+  text = text
+    .replace(/\\n/g, "\n")
+    .replace(/\\"/g, '"')
+    .replace(/\\\\/g, "\\");
 
   // ── 1b. Extract blockquote lines so > is never re-escaped ───────────────
   const blockquotes: string[] = [];

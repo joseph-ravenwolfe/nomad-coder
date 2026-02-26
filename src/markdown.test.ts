@@ -105,4 +105,11 @@ describe("markdownToV2", () => {
     expect(out).toContain('"the provisioner"');
     expect(out).not.toMatch(/\\"/);
   });
+
+  it("preserves backslashes inside fenced code blocks (not collapsed by MCP normalization)", () => {
+    // Backslashes inside code blocks must not be touched by the \\ → \ normalization
+    const input = "```\nC:\\\\Users\\\\name\n```";
+    const out = markdownToV2(input);
+    expect(out).toContain("C:\\\\Users\\\\name");
+  });
 });
