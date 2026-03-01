@@ -155,8 +155,8 @@ describe("markdownToV2 — partial mode", () => {
     expect(markdownToV2("**foo.bar", true)).toBe("*foo\\.bar*");
   });
 
-  it("non-partial mode escapes unclosed span markers as plain text", () => {
-    // Default behavior: unclosed ** falls through to escaped chars
-    expect(markdownToV2("**incomplete")).toBe("\\*\\*incomplete");
+  it("non-partial mode (explicit false) escapes unclosed span markers as plain text", () => {
+    // When partial=false, unclosed ** falls through to escaped chars
+    expect(markdownToV2("**incomplete", false)).toBe("\\*\\*incomplete");
   });
 });

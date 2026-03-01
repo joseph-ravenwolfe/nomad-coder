@@ -76,8 +76,8 @@ export function register(server: McpServer) {
       let finalMode: string | undefined = parse_mode;
       if (parse_mode === "Markdown") {
         const { markdownToV2 } = await import("../markdown.js");
-        // partial=true: unclosed spans auto-close so every chunk renders correctly
-        finalText = markdownToV2(text, true);
+        // partial mode (default): unclosed spans auto-close so every chunk renders correctly
+        finalText = markdownToV2(text);
         finalMode = "MarkdownV2";
       }
 

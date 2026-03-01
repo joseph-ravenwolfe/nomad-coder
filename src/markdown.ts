@@ -44,7 +44,7 @@ export function resolveParseMode(
   return { text, parse_mode: parseMode as "HTML" | "MarkdownV2" | undefined };
 }
 
-export function markdownToV2(input: string, partial = false): string {
+export function markdownToV2(input: string, partial = true): string {
   // ── 0. Extract fenced code blocks FIRST so normalization never touches them ─
   const codeBlocks: string[] = [];
   let text = input.replace(/```([^\n`]*)\n([\s\S]*?)```/g, (_m, lang, body) => {
