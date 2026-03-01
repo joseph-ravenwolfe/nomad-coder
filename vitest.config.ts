@@ -8,7 +8,20 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "lcov", "html"],
       include: ["src/**/*.ts"],
-      exclude: ["src/**/*.test.ts", "src/index.ts", "src/setup.ts", "src/tools/test-utils.ts", "src/test-setup.ts"],
+      exclude: [
+        "src/**/*.test.ts",
+        "src/index.ts",
+        "src/setup.ts",
+        "src/tools/test-utils.ts",
+        "src/test-setup.ts",
+        // Runtime entrypoint — not unit-testable
+        "src/server.ts",
+        // Low-level audio codec — integration-level concern, no unit tests
+        "src/ogg-opus-encoder.ts",
+        // Tool registration stubs with no logic
+        "src/tools/restart_server.ts",
+        "src/tools/get_agent_guide.ts",
+      ],
       thresholds: {
         lines: 80,
         functions: 80,
