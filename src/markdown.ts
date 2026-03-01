@@ -13,6 +13,11 @@
  *
  * All plain-text characters that carry special meaning in MarkdownV2
  * (_ * [ ] ( ) ~ ` > # + - = | { } . ! \) are automatically escaped.
+ *
+ * @param partial When true (streaming/draft mode), unclosed Markdown spans are
+ *   auto-closed at the end of the text rather than falling back to escaped plain
+ *   characters. This makes every intermediate chunk render correctly as formatted
+ *   text as the draft grows, without ever producing incomplete escape sequences.
  */
 
 const V2_SPECIAL = /[_*[\]()~`>#+\-=|{}.!\\]/g;
@@ -39,7 +44,7 @@ export function resolveParseMode(
   return { text, parse_mode: parseMode as "HTML" | "MarkdownV2" | undefined };
 }
 
-export function markdownToV2(input: string): string {
+export function markdownToV2(input: string, partial = false): string {
   // ── 0. Extract fenced code blocks FIRST so normalization never touches them ─
   const codeBlocks: string[] = [];
   let text = input.replace(/```([^\n`]*)\n([\s\S]*?)```/g, (_m, lang, body) => {
@@ -47,6 +52,14 @@ export function markdownToV2(input: string): string {
     codeBlocks.push("```" + lang + "\n" + body + "```");
     return `\x00CB${idx}\x00`;
   });
+  // In partial mode, also capture unclosed fenced code blocks (no closing ```)
+  if (partial) {
+    text = text.replace(/```([^\n`]*)\n([\s\S]*)$/, (_m, lang, body) => {
+      const idx = codeBlocks.length;
+      codeBlocks.push("```" + lang + "\n" + body + "```");
+      return `\x00CB${idx}\x00`;
+    });
+  }
 
   // ── 1. Normalize MCP transport escape sequences (outside code blocks only) ─
   //   \n  (two chars) → real newline
@@ -98,6 +111,13 @@ export function markdownToV2(input: string): string {
         i = end + 1;
         continue;
       }
+      if (partial) {
+        // Auto-close: treat rest of text as code span content
+        const inner = text.slice(i + 1).replace(/[\\`]/g, "\\$&");
+        out.push("`" + inner + "`");
+        i = text.length;
+        continue;
+      }
     }
 
     // Strikethrough  ~~text~~
@@ -106,6 +126,11 @@ export function markdownToV2(input: string): string {
       if (end !== -1) {
         out.push(`~${escapeV2(text.slice(i + 2, end))}~`);
         i = end + 2;
+        continue;
+      }
+      if (partial) {
+        out.push(`~${escapeV2(text.slice(i + 2))}~`);
+        i = text.length;
         continue;
       }
     }
@@ -118,6 +143,11 @@ export function markdownToV2(input: string): string {
         i = end + 2;
         continue;
       }
+      if (partial) {
+        out.push(`*${escapeV2(text.slice(i + 2))}*`);
+        i = text.length;
+        continue;
+      }
     }
 
     // Underline  __text__
@@ -126,6 +156,11 @@ export function markdownToV2(input: string): string {
       if (end !== -1) {
         out.push(`__${escapeV2(text.slice(i + 2, end))}__`);
         i = end + 2;
+        continue;
+      }
+      if (partial) {
+        out.push(`__${escapeV2(text.slice(i + 2))}__`);
+        i = text.length;
         continue;
       }
     }
@@ -141,6 +176,12 @@ export function markdownToV2(input: string): string {
         i = end + 1;
         continue;
       }
+      if (partial) {
+        // Auto-close to end of line (or end of text)
+        out.push(`*${escapeV2(text.slice(i + 1, limit))}*`);
+        i = limit;
+        continue;
+      }
     }
 
     // Italic  _text_  (single underscore)
@@ -151,6 +192,11 @@ export function markdownToV2(input: string): string {
       if (end !== -1 && end < limit) {
         out.push(`_${escapeV2(text.slice(i + 1, end))}_`);
         i = end + 1;
+        continue;
+      }
+      if (partial) {
+        out.push(`_${escapeV2(text.slice(i + 1, limit))}_`);
+        i = limit;
         continue;
       }
     }
@@ -166,6 +212,14 @@ export function markdownToV2(input: string): string {
           const url = text.slice(closeText + 2, closeUrl).replace(/[)\\]/g, "\\$&");
           out.push(`[${linkText}](${url})`);
           i = closeUrl + 1;
+          continue;
+        }
+        if (partial && closeText !== -1) {
+          // Have [text]( but no closing ) — auto-close URL at end of text
+          const linkText = escapeV2(text.slice(i + 1, closeText));
+          const url = text.slice(closeText + 2).replace(/[)\\]/g, "\\$&");
+          out.push(`[${linkText}](${url})`);
+          i = text.length;
           continue;
         }
       }

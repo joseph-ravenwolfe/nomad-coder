@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { markdownToV2 } from "./markdown.js";
 
+
 describe("markdownToV2", () => {
   it("escapes plain text special chars", () => {
     expect(markdownToV2("Hello. World!")).toBe("Hello\\. World\\!");
@@ -111,5 +112,51 @@ describe("markdownToV2", () => {
     const input = "```\nC:\\\\Users\\\\name\n```";
     const out = markdownToV2(input);
     expect(out).toContain("C:\\\\Users\\\\name");
+  });
+});
+
+describe("markdownToV2 — partial mode", () => {
+  it("auto-closes unclosed **bold** span", () => {
+    expect(markdownToV2("**incomplete", true)).toBe("*incomplete*");
+  });
+
+  it("auto-closes unclosed *bold* single-asterisk span", () => {
+    expect(markdownToV2("*halfway", true)).toBe("*halfway*");
+  });
+
+  it("auto-closes unclosed _italic_ span", () => {
+    expect(markdownToV2("_partial italic", true)).toBe("_partial italic_");
+  });
+
+  it("auto-closes unclosed __underline__ span", () => {
+    expect(markdownToV2("__under", true)).toBe("__under__");
+  });
+
+  it("auto-closes unclosed ~~strikethrough~~ span", () => {
+    expect(markdownToV2("~~stri", true)).toBe("~stri~");
+  });
+
+  it("auto-closes unclosed `inline code` span", () => {
+    expect(markdownToV2("`unclosed", true)).toBe("`unclosed`");
+  });
+
+  it("auto-closes unclosed fenced code block", () => {
+    const input = "```js\nhello world";
+    expect(markdownToV2(input, true)).toBe("```js\nhello world```");
+  });
+
+  it("handles complete spans identically to non-partial mode", () => {
+    const text = "**bold** and _italic_ text.";
+    expect(markdownToV2(text, true)).toBe(markdownToV2(text, false));
+  });
+
+  it("escapes special chars inside auto-closed span", () => {
+    // The content inside the unclosed **span** should still be escaped
+    expect(markdownToV2("**foo.bar", true)).toBe("*foo\\.bar*");
+  });
+
+  it("non-partial mode escapes unclosed span markers as plain text", () => {
+    // Default behavior: unclosed ** falls through to escaped chars
+    expect(markdownToV2("**incomplete")).toBe("\\*\\*incomplete");
   });
 });

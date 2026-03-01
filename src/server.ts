@@ -6,6 +6,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 // Low-level tools
 import { register as registerGetMe } from "./tools/get_me.js";
 import { register as registerSendMessage } from "./tools/send_message.js";
+import { register as registerSendMessageDraft } from "./tools/send_message_draft.js";
 import { register as registerGetUpdates } from "./tools/get_updates.js";
 import { register as registerAnswerCallbackQuery } from "./tools/answer_callback_query.js";
 import { register as registerEditMessageText } from "./tools/edit_message_text.js";
@@ -44,7 +45,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 export function createServer(): McpServer {
   const server = new McpServer({
     name: "telegram-bridge-mcp",
-    version: "1.5.0",
+    version: "1.9.0",
   });
 
   // ── High-level agent tools (use these 99% of the time) ─────────────────
@@ -67,6 +68,7 @@ export function createServer(): McpServer {
   registerCancelTyping(server);
   registerRestartServer(server);
   registerSendMessage(server);
+  registerSendMessageDraft(server);
   registerEditMessageText(server);
   registerSendPhoto(server);
   registerSendDocument(server);

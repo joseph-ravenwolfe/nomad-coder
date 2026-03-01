@@ -16,6 +16,9 @@ vi.mock("../telegram.js", async (importActual) => {
     getOffset: offsetMocks.get,
     advanceOffset: offsetMocks.advance,
     resetOffset: offsetMocks.reset,
+    // Bypass security filtering so fixture data (chat.id: 42) is never dropped
+    // regardless of ALLOWED_CHAT_ID cached state from other test files.
+    filterAllowedUpdates: (updates: unknown[]) => updates,
   };
 });
 
