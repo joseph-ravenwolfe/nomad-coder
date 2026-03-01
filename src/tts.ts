@@ -1,28 +1,29 @@
 /**
  * Text-to-speech synthesis module.
  *
- * Supported providers (TTS_PROVIDER env var):
+ * Provider is selected automatically from environment variables:
  *
- *   local   — Free, zero configuration.  Uses @huggingface/transformers (ONNX)
- *             with opusscript (WASM libopus) for OGG/Opus encoding.
- *             Model is downloaded once on first use and cached locally.
- *             Env vars:
- *               TTS_MODEL_LOCAL  (default: Xenova/mms-tts-eng)
- *               TTS_CACHE_DIR    (optional cache directory override)
+ *   TTS_HOST set       — Any OpenAI-compatible /v1/audio/speech server.
+ *                        No API key required unless the server demands one.
+ *                        Env vars:
+ *                          TTS_HOST    (required — e.g. http://voice.cortex.lan)
+ *                          TTS_MODEL   (optional — sent only if set)
+ *                          TTS_VOICE   (optional — sent only if set)
+ *                          TTS_FORMAT  (default: wav — set to opus or ogg if the
+ *                                       server can return OGG/Opus directly;
+ *                                       skips local decode+re-encode entirely)
  *
- *   openai  — High quality.  Requires an OpenAI account and API key.
- *             Env vars:
- *               OPENAI_API_KEY (required)
- *               TTS_VOICE      (default: alloy — alloy/echo/fable/onyx/nova/shimmer)
- *               TTS_MODEL      (default: tts-1 — use tts-1-hd for higher quality)
+ *   OPENAI_API_KEY set — api.openai.com /v1/audio/speech.
+ *   (no TTS_HOST)        Env vars:
+ *                          OPENAI_API_KEY (required)
+ *                          TTS_VOICE      (default: alloy)
+ *                          TTS_MODEL      (default: tts-1)
  *
- *   ollama  — Uses a local Ollama instance (e.g. Kokoro) via its OpenAI-compatible
- *             /v1/audio/speech endpoint.  No API key required.
- *             Env vars:
- *               TTS_OLLAMA_HOST  (default: http://ollama.home.lan)
- *               TTS_MODEL        (default: kokoro)
- *               TTS_VOICE        (default: af_sky — Kokoro voices: af_sky, af_bella,
- *                                 af_nicole, af_sarah, am_adam, am_michael, …)
+ *   Neither set        — Free local provider. Uses @huggingface/transformers (ONNX).
+ *                        Model is downloaded once on first use and cached locally.
+ *                        Env vars:
+ *                          TTS_MODEL_LOCAL  (default: Xenova/mms-tts-eng)
+ *                          TTS_CACHE_DIR    (optional cache directory override)
  *
  * Output:  OGG/Opus container — natively supported by Telegram sendVoice.
  *
@@ -37,11 +38,9 @@ import { pipeline, env } from "@huggingface/transformers";
 /** Maximum characters accepted per TTS request (matches Telegram text limit). */
 export const TTS_LIMIT = 4096;
 
-/** Returns true when TTS delivery is globally configured via env vars.
- *  When TTS_PROVIDER is not set, defaults to the free local provider. */
+/** Always true — local provider is always available as a fallback. */
 export function isTtsEnabled(): boolean {
-  const p = process.env.TTS_PROVIDER?.toLowerCase();
-  return !p || p === "openai" || p === "local" || p === "ollama";
+  return true;
 }
 
 /**
@@ -105,7 +104,7 @@ export function stripForTts(text: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Local provider (TTS_PROVIDER=local)
+// Local provider (no TTS_HOST, no OPENAI_API_KEY)
 // ---------------------------------------------------------------------------
 
 const DEFAULT_LOCAL_MODEL = "Xenova/mms-tts-eng";
@@ -138,77 +137,52 @@ async function synthesizeLocalToOgg(text: string): Promise<Buffer> {
 }
 
 // ---------------------------------------------------------------------------
-// OpenAI provider (TTS_PROVIDER=openai)
+// HTTP provider is above (TTS_HOST or OPENAI_API_KEY)
 // ---------------------------------------------------------------------------
 
-async function synthesizeOpenAiToOgg(text: string): Promise<Buffer> {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new Error("TTS_PROVIDER=openai requires the OPENAI_API_KEY environment variable to be set.");
-  }
 
-  const voice = process.env.TTS_VOICE ?? "alloy";
-  const model = process.env.TTS_MODEL ?? "tts-1";
-
-  const res = await fetch("https://api.openai.com/v1/audio/speech", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model,
-      input: text,
-      voice,
-      response_format: "wav", // Convert locally to guaranteed OGG/Opus container
-    }),
-  });
-
-  if (!res.ok) {
-    const body = await res.text().catch(() => "(no body)");
-    throw new Error(`OpenAI TTS API error ${res.status}: ${body}`);
-  }
-
-  const wav = Buffer.from(await res.arrayBuffer());
-  const { default: decode } = await import("audio-decode");
-  const decoded = await decode(wav);
-  const channelData = decoded.getChannelData(0);
-  const { pcmToOggOpus } = await import("./ogg-opus-encoder.js");
-  return pcmToOggOpus(channelData, decoded.sampleRate);
-}
 
 // ---------------------------------------------------------------------------
-// Ollama provider (TTS_PROVIDER=ollama)
+// HTTP provider (TTS_HOST or OPENAI_API_KEY)
 // ---------------------------------------------------------------------------
 
-const DEFAULT_OLLAMA_HOST = "http://ollama.home.lan:8787";
-const DEFAULT_OLLAMA_MODEL = "kokoro";
-const DEFAULT_OLLAMA_VOICE = "af_sky";
+async function synthesizeHttpToOgg(text: string, host: string, apiKey: string | null): Promise<Buffer> {
+  const model = process.env.TTS_MODEL;
+  const voice = process.env.TTS_VOICE;
+  const fmt = (process.env.TTS_FORMAT ?? "wav").toLowerCase();
+  const nativeOgg = fmt === "opus" || fmt === "ogg";
 
-async function synthesizeOllamaToOgg(text: string): Promise<Buffer> {
-  const host = (process.env.TTS_OLLAMA_HOST ?? DEFAULT_OLLAMA_HOST).replace(/\/$/, "");
-  const model = process.env.TTS_MODEL ?? DEFAULT_OLLAMA_MODEL;
-  const voice = process.env.TTS_VOICE ?? DEFAULT_OLLAMA_VOICE;
+  // Apply OpenAI defaults only when using the OpenAI endpoint
+  const isOpenAi = host.includes("api.openai.com");
+  const resolvedModel = model ?? (isOpenAi ? "tts-1" : undefined);
+  const resolvedVoice = voice ?? (isOpenAi ? "alloy" : undefined);
+
+  const body: Record<string, string> = { input: text, response_format: nativeOgg ? fmt : "wav" };
+  if (resolvedModel) body.model = resolvedModel;
+  if (resolvedVoice) body.voice = resolvedVoice;
+
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
 
   const res = await fetch(`${host}/v1/audio/speech`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model,
-      input: text,
-      voice,
-      response_format: "wav",
-    }),
+    headers,
+    body: JSON.stringify(body),
   });
 
   if (!res.ok) {
     const body = await res.text().catch(() => "(no body)");
-    throw new Error(`Ollama TTS error ${res.status}: ${body}`);
+    throw new Error(`TTS API error ${res.status}: ${body}`);
   }
 
-  const wav = Buffer.from(await res.arrayBuffer());
+  const audio = Buffer.from(await res.arrayBuffer());
+
+  // If the server returns OGG/Opus natively, use it directly — no decode needed.
+  if (nativeOgg) return audio;
+
+  // Otherwise decode WAV → Float32 PCM → OGG/Opus
   const { default: decode } = await import("audio-decode");
-  const decoded = await decode(wav);
+  const decoded = await decode(audio);
   const channelData = decoded.getChannelData(0);
   const { pcmToOggOpus } = await import("./ogg-opus-encoder.js");
   return pcmToOggOpus(channelData, decoded.sampleRate);
@@ -234,7 +208,7 @@ function validateTtsInput(text: string): void {
 /**
  * Synthesizes plain text to an OGG/Opus audio buffer.
  *
- * - Dispatches to the provider selected by `TTS_PROVIDER`.
+ * - Dispatches to the right provider based on TTS_HOST / OPENAI_API_KEY env vars.
  * - Input `text` should already be stripped of formatting (call `stripForTts` first).
  * - Input length must be ≤ `TTS_LIMIT` (4096) characters.
  * - Returns a raw Buffer containing the OGG/Opus audio — pass directly to grammy
@@ -245,10 +219,11 @@ function validateTtsInput(text: string): void {
 export async function synthesizeToOgg(text: string): Promise<Buffer> {
   validateTtsInput(text);
 
-  const provider = process.env.TTS_PROVIDER?.toLowerCase();
+  const ttsHost = process.env.TTS_HOST?.replace(/\/$/, "");
+  if (ttsHost) return synthesizeHttpToOgg(text, ttsHost, process.env.OPENAI_API_KEY ?? null);
 
-  if (provider === "openai") return synthesizeOpenAiToOgg(text);
-  if (provider === "ollama") return synthesizeOllamaToOgg(text);
-  // "local" or unset — default to the free local provider
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (apiKey) return synthesizeHttpToOgg(text, "https://api.openai.com", apiKey);
+
   return synthesizeLocalToOgg(text);
 }

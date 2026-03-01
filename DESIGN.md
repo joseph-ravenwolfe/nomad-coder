@@ -67,7 +67,7 @@ Tools are grouped by abstraction level.
 
 | Tool | Description |
 | --- | --- |
-| `send_message` | Sends a text message. Supports Markdown, MarkdownV2, HTML. Messages over 4096 chars are automatically split into sequential chunks. Set `voice: true` (or configure `TTS_PROVIDER`) to send as a spoken voice note via TTS instead. |
+| `send_message` | Sends a text message. Supports Markdown, MarkdownV2, HTML. Messages over 4096 chars are automatically split into sequential chunks. Set `voice: true` (or configure `TTS_HOST`/`OPENAI_API_KEY`) to send as a spoken voice note via TTS instead. |
 | `edit_message_text` | Edits the text of a previously sent message. |
 | `send_photo` | Sends a photo by public URL or Telegram `file_id`. |
 | `send_document` | Sends a file by local path, public URL, or Telegram `file_id`. |

@@ -9,7 +9,7 @@ import { isTtsEnabled, stripForTts, synthesizeToOgg } from "../tts.js";
 export function register(server: McpServer) {
   server.tool(
     "send_message",
-    "Sends a text message to a Telegram chat. Default parse_mode is Markdown — write standard Markdown (*bold*, _italic_, `code`, **bold**, [links](url)) and it is auto-converted so no manual escaping is needed. Use MarkdownV2 for full control, or HTML for punctuation-heavy content. Messages longer than 4096 characters are automatically split and sent as sequential parts. When TTS is configured (TTS_PROVIDER env var), setting voice:true sends the message as a spoken voice note instead; formatting is stripped to plain text before synthesis.",
+    "Sends a text message to a Telegram chat. Default parse_mode is Markdown — write standard Markdown (*bold*, _italic_, `code`, **bold**, [links](url)) and it is auto-converted so no manual escaping is needed. Use MarkdownV2 for full control, or HTML for punctuation-heavy content. Messages longer than 4096 characters are automatically split and sent as sequential parts. When TTS is configured (TTS_HOST or OPENAI_API_KEY env var), setting voice:true sends the message as a spoken voice note instead; formatting is stripped to plain text before synthesis.",
     {
       text: z.string().describe("Message text. Automatically split into multiple messages if longer than 4096 characters."),
       parse_mode: z
@@ -30,7 +30,7 @@ export function register(server: McpServer) {
         .optional()
         .describe(
           "Send as a spoken voice note via TTS instead of text. " +
-          "Requires TTS_PROVIDER to be configured. " +
+          "Requires TTS_HOST or OPENAI_API_KEY to be configured. " +
           "Formatting is stripped to plain text before synthesis — no markdown in audio."
         ),
     },
