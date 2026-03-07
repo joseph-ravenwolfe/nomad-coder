@@ -7,7 +7,6 @@
 [![CI](https://github.com/electricessence/Telegram-Bridge-MCP/actions/workflows/ci.yml/badge.svg)](https://github.com/electricessence/Telegram-Bridge-MCP/actions/workflows/ci.yml)
 [![Docker](https://github.com/electricessence/Telegram-Bridge-MCP/actions/workflows/publish.yml/badge.svg)](https://github.com/electricessence/Telegram-Bridge-MCP/actions/workflows/publish.yml)
 [![Coverage](https://codecov.io/gh/electricessence/Telegram-Bridge-MCP/branch/master/graph/badge.svg)](https://codecov.io/gh/electricessence/Telegram-Bridge-MCP)
-[![npm](https://img.shields.io/npm/v/telegram-bridge-mcp?logo=npm)](https://www.npmjs.com/package/telegram-bridge-mcp)
 [![Docker Image](https://img.shields.io/badge/ghcr.io-telegram--bridge--mcp-blue?logo=docker)](https://github.com/electricessence/Telegram-Bridge-MCP/pkgs/container/telegram-bridge-mcp)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
