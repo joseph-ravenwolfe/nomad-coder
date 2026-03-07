@@ -1,20 +1,38 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+Format follows [Keep a Changelog](https://keepachangelog.com).
 
-## [Unreleased] — 1.16.0
+## [Unreleased]
+
+---
+
+## [1.16.0] — 2026-03-07
 
 ### Security
 - **Auth bypass fix**: `filterAllowedUpdates` now default-denies updates with undefined sender ID (channel posts, anonymous admins were previously let through)
 - **Path traversal in `download_file`**: filenames from Telegram are now sanitized with `basename()` and leading dots stripped before writing to disk
 - **File permissions**: downloaded files written with `0o600` (owner read/write only) instead of world-readable
-- **`send_voice` file restriction**: local file reads in `sendVoiceDirect` restricted to the server's temp directory to prevent arbitrary file exfiltration
+- **`send_voice` file restriction**: local file reads in `sendVoiceDirect` restricted to the server's temp directory; check uses `path.relative` to prevent prefix-bypass (e.g. `telegram-bridge-mcp2/`)
+- **`filterAllowedUpdates` null-chat gap**: updates where chat ID cannot be determined now default-denied when `ALLOWED_CHAT_ID` is configured
 
 ### Removed
-- **`forward_message` tool**: removed. Forwarding a message back into the same single-user chat is redundant — `pin_message` covers the intent with less API surface. The tool also introduced a cross-chat exfiltration vector that was not worth patching.
+- **`forward_message` tool**: removed. Forwarding a message back into the same single-user chat is redundant — `pin_message` covers the intent with less API surface.
 
 ### Changed
-- `download_file` size limit (20MB) from PR #7 **not included**: Telegram Bot API already enforces this limit upstream via `getFile` returning no `file_path` for files >20MB. The check was redundant.
+- Upgraded base Docker image from `node:22-slim` to `node:24-slim` (even-numbered release, becomes LTS Oct 2026, better security posture than the odd-numbered 25)
+- Bumped `grammy` to 1.40.1
+- Bumped `@modelcontextprotocol/sdk` to 1.27.1
+- Bumped `zod` to 4.3.6
+- Bumped `dotenv` to 17.3.1
+- Bumped `@types/node` to 25.3.3
+
+### Added
+- 25 new security tests covering `filterAllowedUpdates`, `validateTargetChat`, `resolveChat`, offset management, and `sendVoiceDirect` path restriction (400 tests total)
+- `CHANGELOG.md`
+
+### Fixed
+- `u.message?.chat?.id` optional chain (was `chat.id`, would throw TypeError if `chat` absent)
 
 ---
 
