@@ -1,4 +1,5 @@
 import { vi, describe, it, expect, beforeEach } from "vitest";
+import type { Update } from "grammy/types";
 import { createMockServer, parseResult, isError } from "./test-utils.js";
 
 const apiMocks = vi.hoisted(() => ({ getUpdates: vi.fn() }));
@@ -7,7 +8,7 @@ const offsetMocks = vi.hoisted(() => ({
   get: vi.fn(() => 0),
 }));
 const bufferMocks = vi.hoisted(() => ({
-  drainN: vi.fn(() => [] as any[]),
+  drainN: vi.fn((): Update[] => []),
   bufferSize: vi.fn(() => 0),
 }));
 
@@ -24,7 +25,7 @@ vi.mock("../telegram.js", async (importActual) => {
 });
 
 vi.mock("../update-buffer.js", () => ({
-  drainN: (...args: any[]) => bufferMocks.drainN.apply(null, args as Parameters<typeof bufferMocks.drainN>),
+  drainN: (n: number) => bufferMocks.drainN(n),
   bufferSize: () => bufferMocks.bufferSize(),
   // other exports passthrough (not used by get_update)
   peekBuffer: vi.fn(() => []),
@@ -48,7 +49,7 @@ describe("get_update tool", () => {
     bufferMocks.bufferSize.mockReturnValue(0);
     apiMocks.getUpdates.mockResolvedValue([]);
     const server = createMockServer();
-    register(server as any);
+    register(server);
     call = server.getHandler("get_update");
   });
 
@@ -57,7 +58,7 @@ describe("get_update tool", () => {
   it("returns empty updates with remaining=0 and hint when nothing is available", async () => {
     const result = await call({});
     expect(isError(result)).toBe(false);
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.updates).toEqual([]);
     expect(data.remaining).toBe(0);
     expect(data.hint).toMatch(/wait_for_message/);
@@ -67,7 +68,7 @@ describe("get_update tool", () => {
     // Buffer was empty but Telegram returns nothing, but bufferSize() > 0 (edge case from race)
     bufferMocks.bufferSize.mockReturnValue(2);
     const result = await call({});
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.remaining).toBe(2);
     // hint should say "more updates buffered"
     expect(data.hint).toMatch(/get_update/);
@@ -82,7 +83,7 @@ describe("get_update tool", () => {
 
     const result = await call({});
     expect(isError(result)).toBe(false);
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.updates).toHaveLength(1);
     expect(data.updates[0].text).toBe("hello");
     expect(data.updates[0].content_type).toBe("text");
@@ -96,7 +97,7 @@ describe("get_update tool", () => {
     bufferMocks.bufferSize.mockReturnValue(3);
 
     const result = await call({});
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.remaining).toBe(3);
     expect(data.hint).toMatch(/3 more update/);
   });
@@ -120,7 +121,7 @@ describe("get_update tool", () => {
     bufferMocks.bufferSize.mockReturnValue(0);
 
     const result = await call({ max: 2 });
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.updates).toHaveLength(2);
     expect(data.updates[0].text).toBe("buf");
     expect(data.updates[1].text).toBe("fresh");
@@ -133,7 +134,7 @@ describe("get_update tool", () => {
     bufferMocks.bufferSize.mockReturnValue(0);
 
     const result = await call({});
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.updates).toHaveLength(1);
     expect(data.updates[0].text).toBe("telegram");
   });
@@ -175,7 +176,7 @@ describe("get_update tool", () => {
     bufferMocks.drainN.mockReturnValue([update]);
 
     const result = await call({});
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.updates[0].content_type).toBe("document");
     expect(data.updates[0].file_id).toBe("fdoc");
     expect(data.updates[0].caption).toBe("See attached");
@@ -196,7 +197,7 @@ describe("get_update tool", () => {
     bufferMocks.drainN.mockReturnValue([update]);
 
     const result = await call({});
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.updates[0].content_type).toBe("photo");
     expect(data.updates[0].file_id).toBe("large");
   });
@@ -214,7 +215,7 @@ describe("get_update tool", () => {
     bufferMocks.drainN.mockReturnValue([update]);
 
     const result = await call({});
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.updates[0].type).toBe("callback_query");
     expect(data.updates[0].data).toBe("btn_yes");
   });
@@ -227,7 +228,7 @@ describe("get_update tool", () => {
     bufferMocks.bufferSize.mockReturnValue(1);
 
     const result = await call({});
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.hint).toMatch(/1 more update[^s]/);
   });
 
@@ -237,7 +238,7 @@ describe("get_update tool", () => {
     bufferMocks.bufferSize.mockReturnValue(2);
 
     const result = await call({});
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.hint).toMatch(/2 more updates/);
   });
 

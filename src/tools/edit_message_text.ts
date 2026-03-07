@@ -1,4 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { InlineKeyboardMarkup } from "grammy/types";
 import { z } from "zod";
 import { getApi, toResult, toError, resolveChat, validateText } from "../telegram.js";
 import { resolveParseMode } from "../markdown.js";
@@ -46,7 +47,9 @@ export function register(server: McpServer) {
           chatId,
           message_id,
           resolved.text,
-          { parse_mode: resolved.parse_mode, reply_markup: reply_markup as any },
+          // Zod validates structure at runtime; grammy's InlineKeyboardButton is a
+          // discriminated union incompatible with the looser zod-inferred shape.
+          { parse_mode: resolved.parse_mode, reply_markup: reply_markup as unknown as InlineKeyboardMarkup | undefined },
         );
         const editedId = typeof result === "boolean" ? message_id : result.message_id;
         return toResult({ message_id: editedId });

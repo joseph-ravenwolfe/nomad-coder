@@ -36,22 +36,6 @@ function randomCode(): string {
   return code;
 }
 
-function readEnv(): Record<string, string> {
-  if (!existsSync(ENV_PATH)) return {};
-  const lines = readFileSync(ENV_PATH, "utf8").split("\n");
-  const result: Record<string, string> = {};
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const eqIdx = trimmed.indexOf("=");
-    if (eqIdx === -1) continue;
-    const key = trimmed.slice(0, eqIdx).trim();
-    const val = trimmed.slice(eqIdx + 1).trim();
-    result[key] = val;
-  }
-  return result;
-}
-
 function writeEnv(vars: Record<string, string>): void {
   // Preserve existing .env content, updating or appending keys
   let existing = existsSync(ENV_PATH) ? readFileSync(ENV_PATH, "utf8") : "";

@@ -35,7 +35,7 @@ describe("get_updates tool", () => {
     vi.clearAllMocks();
     offsetMocks.get.mockReturnValue(0);
     const server = createMockServer();
-    register(server as any);
+    register(server);
     call = server.getHandler("get_updates");
   });
 
@@ -44,7 +44,7 @@ describe("get_updates tool", () => {
     mocks.getUpdates.mockResolvedValue(updates);
     const result = await call({ limit: 10, timeout: 0 });
     expect(isError(result)).toBe(false);
-    const data = parseResult(result) as any[];
+    const data = (parseResult(result) as unknown[]);
     expect(data[0].type).toBe("message");
     expect(data[0].content_type).toBe("text");
     expect(data[0].text).toBe("hi");
@@ -63,7 +63,7 @@ describe("get_updates tool", () => {
     }];
     mocks.getUpdates.mockResolvedValue(updates);
     const result = await call({ limit: 10, timeout_seconds: 0 });
-    const data = parseResult(result) as any[];
+    const data = (parseResult(result) as unknown[]);
     expect(data[0].content_type).toBe("document");
     expect(data[0].file_id).toBe("f1");
     expect(data[0].file_name).toBe("test.pdf");
@@ -84,7 +84,7 @@ describe("get_updates tool", () => {
     }];
     mocks.getUpdates.mockResolvedValue(updates);
     const result = await call({ limit: 10, timeout_seconds: 0 });
-    const data = parseResult(result) as any[];
+    const data = (parseResult(result) as unknown[]);
     expect(data[0].content_type).toBe("photo");
     expect(data[0].file_id).toBe("large");
     expect(data[0].width).toBe(800);
@@ -118,7 +118,7 @@ describe("get_updates tool", () => {
     }];
     mocks.getUpdates.mockResolvedValue(updates);
     const result = await call({ limit: 10, timeout_seconds: 0 });
-    const data = parseResult(result) as any[];
+    const data = (parseResult(result) as unknown[]);
     expect(data[0].content_type).toBe("voice");
     expect(data[0].text).toBe("transcribed text");
     expect(data[0].file_id).toBe("v1");
@@ -136,7 +136,7 @@ describe("get_updates tool", () => {
     }];
     mocks.getUpdates.mockResolvedValue(updates);
     const result = await call({ limit: 10, timeout_seconds: 0 });
-    const data = parseResult(result) as any[];
+    const data = (parseResult(result) as unknown[]);
     expect(data[0].content_type).toBe("audio");
     expect(data[0].file_id).toBe("a1");
     expect(data[0].title).toBe("Track");
@@ -154,7 +154,7 @@ describe("get_updates tool", () => {
     }];
     mocks.getUpdates.mockResolvedValue(updates);
     const result = await call({ limit: 10, timeout_seconds: 0 });
-    const data = parseResult(result) as any[];
+    const data = (parseResult(result) as unknown[]);
     expect(data[0].content_type).toBe("video");
     expect(data[0].file_id).toBe("vid1");
     expect(data[0].width).toBe(1920);
@@ -167,7 +167,7 @@ describe("get_updates tool", () => {
     }];
     mocks.getUpdates.mockResolvedValue(updates);
     const result = await call({ limit: 10, timeout_seconds: 0 });
-    const data = parseResult(result) as any[];
+    const data = (parseResult(result) as unknown[]);
     expect(data[0].type).toBe("callback_query");
     expect(data[0].callback_query_id).toBe("cq1");
     expect(data[0].data).toBe("action:ok");
@@ -186,7 +186,7 @@ describe("get_updates tool", () => {
     }];
     mocks.getUpdates.mockResolvedValue(updates);
     const result = await call({ limit: 10, timeout_seconds: 0 });
-    const data = parseResult(result) as any[];
+    const data = (parseResult(result) as unknown[]);
     expect(data[0].type).toBe("message_reaction");
     expect(data[0].emoji_added).toEqual(["👍"]);
     expect(data[0].emoji_removed).toEqual([]);
@@ -200,7 +200,7 @@ describe("get_updates tool", () => {
     }];
     mocks.getUpdates.mockResolvedValue(updates);
     const result = await call({ limit: 10, timeout_seconds: 0 });
-    const data = parseResult(result) as any[];
+    const data = (parseResult(result) as unknown[]);
     expect(data[0].content_type).toBe("unknown");
     expect(data[0].content_keys).toContain("some_new_field");
   });

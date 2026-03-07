@@ -21,7 +21,21 @@ Lessons learned from active development on this codebase. Rules are stated with 
 
 **No `!` non-null assertions (null-forgiving operator)** — The postfix `!` tells the compiler "trust me, this isn't null" without any runtime guarantee. It silences the error by lying about the type. The correct fix is to narrow with a runtime check or change the type signature. Every `!` is a bet that will eventually lose.
 
-**No `as any`** — Casts to `any` remove all type safety downstream. Use a named interface/type alias, proper narrowing, or the real library type. If a library type is incomplete, cast to a narrow intermediate type, not `any`.
+**No `as any`** — Casts to `any` remove all type safety downstream. Use a named interface/type alias, proper narrowing, or the real library type. If a library type is incomplete, cast to a narrow intermediate type, not `any`. Use `as unknown as T` when a structural mismatch is unavoidable (e.g. a zod-inferred type vs a grammy discriminated union) — the `unknown` step makes the unsafety explicit and auditable.
+
+---
+
+## Linting
+
+**ESLint v10 + typescript-eslint** — Configured in `eslint.config.js` with flat config. Run with `pnpm lint`.
+
+**Three enforced rules** — `no-explicit-any`, `no-non-null-assertion`, `no-unused-vars` (with `_` prefix escape hatch for intentional ignores).
+
+**Suppression policy** — No blanket `any`-typed suppressions. Every deviation must be justified:
+- **Fix the root cause** first: import the real library type, narrow with a guard, or change the return type.
+- **`as unknown as T`** for unavoidable structural mismatches (name the real target type `T`, not `any`).
+- **`eslint-disable-next-line` with a comment** only when the fix is genuinely impossible (e.g. a readonly property that must be mutated in test setup). The comment must explain *why*.
+- `tsconfig.json` excludes test files from compilation — TypeScript type errors in `*.test.ts` don't block the build, but ESLint still checks them. Keep test files lint-clean; use `as unknown as T` instead of `as any` when casting is necessary.
 
 **Numeric sentinel `0` for "not set"** — Use `0` instead of `null` or `NaN` for optional numeric IDs. `NaN` causes subtle bugs (`NaN !== NaN`); `null` forces null-checks everywhere. `0` is falsy, compares cleanly with `> 0`, and makes intent obvious: "0 means no filter".
 

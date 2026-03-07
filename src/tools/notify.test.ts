@@ -16,7 +16,7 @@ describe("notify tool", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     const server = createMockServer();
-    register(server as any);
+    register(server);
     call = server.getHandler("notify");
   });
 
@@ -24,7 +24,7 @@ describe("notify tool", () => {
     mocks.sendMessage.mockResolvedValue({ message_id: 5, chat: { id: 99 }, date: 0, text: "" });
     const result = await call({ title: "Done", severity: "success" });
     expect(isError(result)).toBe(false);
-    expect((parseResult(result) as any).message_id).toBe(5);
+    expect((parseResult(result)).message_id).toBe(5);
   });
 
   it("prefixes title with correct severity emoji", async () => {

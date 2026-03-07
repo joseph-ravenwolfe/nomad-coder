@@ -3,7 +3,7 @@
  * Shared by get_update, get_updates, and session recording tools.
  */
 
-import type { Update } from "grammy/types";
+import type { Update, ReactionTypeEmoji } from "grammy/types";
 import type { SessionEntry, BotEntry } from "./session-recording.js";
 import { transcribeWithIndicator } from "./transcribe.js";
 
@@ -105,7 +105,7 @@ export async function sanitizeUpdate(u: Update): Promise<Record<string, unknown>
       return {
         type: "message", content_type: "poll", ...base,
         question: msg.poll.question,
-        options: msg.poll.options.map((o: any) => o.text),
+        options: msg.poll.options.map(o => o.text),
       };
 
     // Unknown message content
@@ -123,10 +123,10 @@ export async function sanitizeUpdate(u: Update): Promise<Record<string, unknown>
       message_id: u.callback_query.message?.message_id,
     };
 
-  if ((u as any).message_reaction) {
-    const mr = (u as any).message_reaction;
-    const newEmoji = (mr.new_reaction ?? []).filter((r: any) => r.type === "emoji").map((r: any) => r.emoji);
-    const oldEmoji = (mr.old_reaction ?? []).filter((r: any) => r.type === "emoji").map((r: any) => r.emoji);
+  if (u.message_reaction) {
+    const mr = u.message_reaction;
+    const newEmoji = mr.new_reaction.filter((r): r is ReactionTypeEmoji => r.type === "emoji").map(r => r.emoji);
+    const oldEmoji = mr.old_reaction.filter((r): r is ReactionTypeEmoji => r.type === "emoji").map(r => r.emoji);
     const user = mr.user
       ? { id: mr.user.id, name: [mr.user.first_name, mr.user.last_name].filter(Boolean).join(" "), username: mr.user.username }
       : undefined;

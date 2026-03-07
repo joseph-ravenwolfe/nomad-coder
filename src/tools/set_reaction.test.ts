@@ -17,7 +17,7 @@ describe("set_reaction tool", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     const server = createMockServer();
-    register(server as any);
+    register(server);
     call = server.getHandler("set_reaction");
     mocks.setMessageReaction.mockResolvedValue(true);
   });
@@ -25,7 +25,7 @@ describe("set_reaction tool", () => {
   it("sets an emoji reaction and returns ok", async () => {
     const result = await call({ message_id: 100, emoji: "👍" });
     expect(isError(result)).toBe(false);
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.ok).toBe(true);
     expect(data.message_id).toBe(100);
     expect(data.emoji).toBe("👍");
@@ -40,7 +40,7 @@ describe("set_reaction tool", () => {
   it("removes reaction when emoji is omitted (empty reaction array)", async () => {
     const result = await call({ message_id: 55 });
     expect(isError(result)).toBe(false);
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.ok).toBe(true);
     expect(data.emoji).toBeNull();
     expect(mocks.setMessageReaction).toHaveBeenCalledWith(42, 55, [], { is_big: undefined });
@@ -55,7 +55,7 @@ describe("set_reaction tool", () => {
   it("resolves aliases to canonical emoji", async () => {
     const result = await call({ message_id: 100, emoji: "rocket" });
     expect(isError(result)).toBe(false);
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.ok).toBe(true);
     expect(data.emoji).toBe("🚀");
     expect(mocks.setMessageReaction).toHaveBeenCalledWith(

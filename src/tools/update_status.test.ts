@@ -26,7 +26,7 @@ describe("update_status tool", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     const server = createMockServer();
-    register(server as any);
+    register(server);
     call = server.getHandler("update_status");
   });
 
@@ -34,7 +34,7 @@ describe("update_status tool", () => {
     mocks.sendMessage.mockResolvedValue({ message_id: 10, chat: { id: 1 }, date: 0 });
     const result = await call({ title: "CI Pipeline", steps: STEPS });
     expect(isError(result)).toBe(false);
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.message_id).toBe(10);
     expect(data.hint).toBeDefined();
     expect(mocks.sendMessage).toHaveBeenCalledOnce();
@@ -45,7 +45,7 @@ describe("update_status tool", () => {
     mocks.editMessageText.mockResolvedValue({ message_id: 10 });
     const result = await call({ title: "CI Pipeline", steps: STEPS, message_id: 10 });
     expect(isError(result)).toBe(false);
-    expect((parseResult(result) as any).updated).toBe(true);
+    expect((parseResult(result)).updated).toBe(true);
     expect(mocks.editMessageText).toHaveBeenCalledOnce();
     expect(mocks.sendMessage).not.toHaveBeenCalled();
   });

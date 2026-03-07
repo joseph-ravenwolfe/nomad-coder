@@ -1,4 +1,6 @@
 import { vi, describe, it, expect, beforeEach } from "vitest";
+import type { SessionEntry } from "../session-recording.js";
+import type { Update } from "grammy/types";
 import { createMockServer, parseResult, isError } from "./test-utils.js";
 
 const recMocks = vi.hoisted(() => ({
@@ -6,8 +8,8 @@ const recMocks = vi.hoisted(() => ({
   stopRecording: vi.fn(),
   isRecording: vi.fn(() => false),
   recordedCount: vi.fn(() => 0),
-  getSessionEntries: vi.fn(() => [] as any[]),
-  getRecordedUpdates: vi.fn(() => [] as any[]),
+  getSessionEntries: vi.fn((): SessionEntry[] => []),
+  getRecordedUpdates: vi.fn((): Update[] => []),
   clearRecording: vi.fn(),
   getMaxUpdates: vi.fn(() => 50),
 }));
@@ -37,7 +39,7 @@ describe("start_session_recording tool", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     const server = createMockServer();
-    registerStart(server as any);
+    registerStart(server);
     call = server.getHandler("start_session_recording");
   });
 
@@ -45,7 +47,7 @@ describe("start_session_recording tool", () => {
     const result = await call({});
     expect(isError(result)).toBe(false);
     expect(recMocks.startRecording).toHaveBeenCalledWith(50);
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.recording).toBe(true);
     expect(data.max_updates).toBe(50);
   });
@@ -58,21 +60,21 @@ describe("start_session_recording tool", () => {
   it("reports reset:true when was already recording", async () => {
     recMocks.isRecording.mockReturnValue(true);
     const result = await call({});
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.reset).toBe(true);
   });
 
   it("reports reset:false when was not recording", async () => {
     recMocks.isRecording.mockReturnValue(false);
     const result = await call({});
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.reset).toBe(false);
   });
 
   it("includes captured count in response", async () => {
     recMocks.recordedCount.mockReturnValue(7);
     const result = await call({});
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.captured).toBe(7);
   });
 });
@@ -85,7 +87,7 @@ describe("cancel_session_recording tool", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     const server = createMockServer();
-    registerCancel(server as any);
+    registerCancel(server);
     call = server.getHandler("cancel_session_recording");
   });
 
@@ -95,7 +97,7 @@ describe("cancel_session_recording tool", () => {
     expect(isError(result)).toBe(false);
     expect(recMocks.stopRecording).toHaveBeenCalledOnce();
     expect(recMocks.clearRecording).toHaveBeenCalledOnce();
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.recording).toBe(false);
     expect(data.was_active).toBe(true);
   });
@@ -103,7 +105,7 @@ describe("cancel_session_recording tool", () => {
   it("reports was_active:false when not recording", async () => {
     recMocks.isRecording.mockReturnValue(false);
     const result = await call({});
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.was_active).toBe(false);
   });
 });
@@ -125,14 +127,14 @@ describe("get_session_updates tool", () => {
     recMocks.recordedCount.mockReturnValue(0);
     recMocks.getSessionEntries.mockReturnValue([]);
     const server = createMockServer();
-    registerGet(server as any);
+    registerGet(server);
     call = server.getHandler("get_session_updates");
   });
 
   it("returns empty updates with recording state", async () => {
     const result = await call({});
     expect(isError(result)).toBe(false);
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.updates).toEqual([]);
     expect(data.recording).toBe(true);
     expect(data.returned).toBe(0);
@@ -144,7 +146,7 @@ describe("get_session_updates tool", () => {
     recMocks.recordedCount.mockReturnValue(3);
 
     const result = await call({});
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     // sanitizer maps update_id→message_id; fixture uses same number for both
     expect(data.updates[0].message_id).toBe(3);
     expect(data.updates[2].message_id).toBe(1);
@@ -155,7 +157,7 @@ describe("get_session_updates tool", () => {
     recMocks.getSessionEntries.mockReturnValue(entries);
 
     const result = await call({ oldest_first: true });
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.updates[0].message_id).toBe(1);
     expect(data.updates[2].message_id).toBe(3);
   });
@@ -166,7 +168,7 @@ describe("get_session_updates tool", () => {
     recMocks.recordedCount.mockReturnValue(4);
 
     const result = await call({ messages: 2 });
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.returned).toBe(2);
     expect(data.updates).toHaveLength(2);
     // newest-first default → message_ids 4, 3
@@ -178,7 +180,7 @@ describe("get_session_updates tool", () => {
     recMocks.recordedCount.mockReturnValue(1);
 
     const result = await call({});
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.updates[0].text).toBe("hello");
     expect(data.updates[0].content_type).toBe("text");
   });
@@ -189,7 +191,7 @@ describe("get_session_updates tool", () => {
     recMocks.recordedCount.mockReturnValue(3);
 
     const result = await call({ messages: 1 });
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.total_captured).toBe(3);
     expect(data.returned).toBe(1);
   });
@@ -215,7 +217,7 @@ describe("dump_session_record tool", () => {
     recMocks.getSessionEntries.mockReturnValue([]);
     recMocks.getMaxUpdates.mockReturnValue(50);
     const server = createMockServer();
-    registerDump(server as any);
+    registerDump(server);
     call = server.getHandler("dump_session_record");
   });
 

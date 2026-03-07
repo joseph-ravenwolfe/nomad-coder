@@ -16,7 +16,7 @@ describe("send_voice tool", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     const server = createMockServer();
-    register(server as any);
+    register(server);
     call = server.getHandler("send_voice");
   });
 
@@ -24,7 +24,7 @@ describe("send_voice tool", () => {
     mocks.sendVoiceDirect.mockResolvedValue({ message_id: 8, voice: { file_id: "fid", mime_type: "audio/ogg", file_size: 1000, duration: 2 } });
     const result = await call({ voice: "https://example.com/msg.ogg" });
     expect(isError(result)).toBe(false);
-    expect((parseResult(result) as any).message_id).toBe(8);
+    expect((parseResult(result)).message_id).toBe(8);
   });
 
   it("validates caption length pre-send", async () => {

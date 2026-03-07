@@ -44,7 +44,7 @@ export function register(server: McpServer) {
             offset: getOffset(),
             limit: max - buffered.length,
             timeout: 0,
-            allowed_updates: (allowed_updates ?? DEFAULT_ALLOWED_UPDATES) as any,
+            allowed_updates: (allowed_updates ?? DEFAULT_ALLOWED_UPDATES) as ReadonlyArray<Exclude<keyof Update, "update_id">>,
           });
           advanceOffset(fetched);
           fresh = filterAllowedUpdates(fetched);

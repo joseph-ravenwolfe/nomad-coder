@@ -16,7 +16,7 @@ describe("unpin_message tool", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     const server = createMockServer();
-    register(server as any);
+    register(server);
     call = server.getHandler("unpin_message");
   });
 
@@ -24,7 +24,7 @@ describe("unpin_message tool", () => {
     mocks.unpinChatMessage.mockResolvedValue(true);
     const result = await call({ message_id: 5 });
     expect(isError(result)).toBe(false);
-    expect((parseResult(result) as any).ok).toBe(true);
+    expect((parseResult(result)).ok).toBe(true);
   });
 
   it("passes message_id to the API", async () => {

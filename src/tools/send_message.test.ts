@@ -29,7 +29,7 @@ describe("send_message tool", () => {
     ttsMocks.isTtsEnabled.mockReturnValue(false);
     ttsMocks.stripForTts.mockImplementation((t: string) => t);
     const server = createMockServer();
-    register(server as any);
+    register(server);
     call = server.getHandler("send_message");
   });
 
@@ -37,7 +37,7 @@ describe("send_message tool", () => {
     mocks.sendMessage.mockResolvedValue({ message_id: 1, chat: { id: 123 }, date: 1000, text: "hi" });
     const result = await call({ text: "hi" });
     expect(isError(result)).toBe(false);
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.message_id).toBe(1);
     expect(data.chat_id).toBeUndefined();
   });
@@ -82,7 +82,7 @@ describe("send_message tool", () => {
     mocks.sendMessage.mockResolvedValue({ message_id: 1, chat: { id: 1 }, date: 0, text: "x" });
     const result = await call({ text: "a".repeat(5000) });
     expect(isError(result)).toBe(false);
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.split).toBe(true);
     expect(Array.isArray(data.message_ids)).toBe(true);
     expect(mocks.sendMessage.mock.calls.length).toBeGreaterThan(1);
@@ -113,7 +113,7 @@ describe("send_message tool — voice mode", () => {
     ttsMocks.synthesizeToOgg.mockResolvedValue(Buffer.from("fakeaudio"));
     mocks.sendVoiceDirect.mockResolvedValue({ message_id: 99, voice: { file_id: "f1", duration: 1, file_size: 9, mime_type: "audio/ogg" } });
     const server = createMockServer();
-    register(server as any);
+    register(server);
     call = server.getHandler("send_message");
   });
 
@@ -123,7 +123,7 @@ describe("send_message tool — voice mode", () => {
     expect(isError(result)).toBe(false);
     expect(mocks.sendVoiceDirect).toHaveBeenCalledTimes(1);
     expect(mocks.sendMessage).not.toHaveBeenCalled();
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.message_id).toBe(99);
     expect(data.voice).toBe(true);
   });

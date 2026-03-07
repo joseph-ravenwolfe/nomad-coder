@@ -47,7 +47,7 @@ describe("download_file tool", () => {
     mocks.writeFile.mockResolvedValue(undefined);
 
     const server = createMockServer();
-    register(server as any);
+    register(server);
     call = server.getHandler("download_file");
   });
 
@@ -70,7 +70,7 @@ describe("download_file tool", () => {
     const result = await call({ file_id: "fileABC", file_name: "report.pdf", mime_type: "application/pdf" });
 
     expect(isError(result)).toBe(false);
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.local_path).toContain("report.pdf");
     expect(data.file_name).toBe("report.pdf");
     expect(data.mime_type).toBe("application/pdf");
@@ -94,7 +94,7 @@ describe("download_file tool", () => {
 
     const result = await call({ file_id: "imgXYZ" });
     expect(isError(result)).toBe(false);
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.file_name).toBe("file_123.jpg");
   });
 
@@ -109,7 +109,7 @@ describe("download_file tool", () => {
 
     const result = await call({ file_id: "txtID", file_name: "notes.txt" });
     expect(isError(result)).toBe(false);
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.text).toBe(content);
   });
 
@@ -124,7 +124,7 @@ describe("download_file tool", () => {
 
     const result = await call({ file_id: "csvID", file_name: "data.bin", mime_type: "text/csv" });
     expect(isError(result)).toBe(false);
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.text).toBe(content);
   });
 
@@ -139,7 +139,7 @@ describe("download_file tool", () => {
 
     const result = await call({ file_id: "bigTxt", file_name: "big.txt" });
     expect(isError(result)).toBe(false);
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.text).toBeUndefined();
   });
 
@@ -147,7 +147,7 @@ describe("download_file tool", () => {
     delete process.env.BOT_TOKEN;
     const result = await call({ file_id: "anyID" });
     expect(isError(result)).toBe(true);
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.message).toMatch(/BOT_TOKEN/);
   });
 
@@ -155,7 +155,7 @@ describe("download_file tool", () => {
     mocks.getFile.mockResolvedValue({});
     const result = await call({ file_id: "noPath" });
     expect(isError(result)).toBe(true);
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.message).toMatch(/file_path/);
   });
 
@@ -164,7 +164,7 @@ describe("download_file tool", () => {
     fetchMock.mockResolvedValue({ ok: false, status: 404, statusText: "Not Found" });
     const result = await call({ file_id: "failID", file_name: "x.pdf" });
     expect(isError(result)).toBe(true);
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.message).toMatch(/404/);
   });
 });

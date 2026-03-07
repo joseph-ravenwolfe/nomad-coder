@@ -5,6 +5,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+### Added
+
+- **ESLint v10 + typescript-eslint** — `eslint.config.js` (flat config) with `no-explicit-any`, `no-non-null-assertion`, and `no-unused-vars` (with `_` prefix ignore pattern); `pnpm lint` script added to `package.json`
+
+### Changed
+
+- **Eliminated all 199 ESLint errors** — Zero `as any` casts remain in the codebase:
+  - `telegram.ts`: imported `ApiError` from `grammy/types`; `sendVoiceDirect` error construction uses `as ApiError`; `pollUntil` `allowed_updates` cast uses `ReadonlyArray<Exclude<keyof Update, "update_id">>`
+  - `get_update.ts`, `get_updates.ts`: `allowed_updates` cast replaced with named type (`ReadonlyArray<Exclude<keyof Update, "update_id">>`)
+  - `edit_message_text.ts`: `reply_markup` cast changed from `as any` to `as unknown as InlineKeyboardMarkup | undefined` with comment explaining discriminated-union mismatch
+  - `set_reaction.ts`: imported `ReactionType` from `grammy/types`; `reaction` array typed as `ReactionType[]`; `ReactionEmoji` imported from `telegram.ts`; `as any` removed
+  - `send_voice.ts`: `msg.voice?.field` — `as any` removed (grammy's `Voice` type is complete)
+  - `update_status.ts`: `(edited as any).message_id` — removed cast (both union members have `message_id`)
+  - `update-sanitizer.ts`: `u.message_reaction` accessed directly (exists in `@grammyjs/types@3.24.0`); `ReactionTypeEmoji` imported for typed filter predicate; `msg.poll.options.map(o => o.text)` — `(o: any)` removed
+  - `test-utils.ts`: `parseResult` return type changed from `unknown` to `Record<string, unknown>`; `createMockServer` return type changed to `MockServer & McpServer` with `as unknown as MockServer & McpServer` cast + comment; all test files updated — `register(server as any)` → `register(server)`, `parseResult(result) as any` → `parseResult(result)`
+  - `telegram.test.ts`: `makeGrammyError` accepts optional `parameters?: ResponseParameters`; GrammyError constructor now includes `parameters` — eliminates all `(err as any).parameters =` assignments; `makeMessageUpdate`/`makeCallbackUpdate` return `Update` via `as unknown as Update`; `noSender`/`noChatMsg` same pattern; `(result as any).code` → `(result as TelegramError).code`; `{ update_id: n } as any` → `as unknown as Update`; removed unused `escapePath` variable
+  - `tts.test.ts`: `vi.mocked(decode as any)` / `vi.mocked(pipeline as any)` → `vi.mocked(decode)` / `vi.mocked(pipeline)` (test files excluded from `tsconfig.json`; esbuild strips types)
+  - Five polling test files (`ask`, `choose`, `send_confirmation`, `wait_for_message`, `wait_for_callback_query`): `pollUntil` mock typed with `matcher: (updates: Update[]) => unknown`; `(u: any)` filter callbacks typed; `mocks.getUpdates()` cast to `Update[]`
+  - `session_recording.test.ts`: `[] as any[]` replaced with `(): SessionEntry[] => []` / `(): Update[] => []` with proper imports
+  - `get_update.test.ts`: `drainN: vi.fn(() => [] as any[])` typed as `(): Update[] => []`; spread passthrough simplified to `(n: number) => bufferMocks.drainN(n)`
+  - `setup.ts`: removed dead `readEnv()` function (defined but never called)
+- **Updated TypeScript standards doc** — Added `Linting` section with ESLint setup, three enforced rules, and suppression policy (`as unknown as T` over `as any`; `eslint-disable-next-line` only with explanation)
+
 ### Changed
 
 - **Extracted all inline regex literals to named module-level constants** — 28 constants in `tts.ts` (`RE_ESCAPE_NEWLINE`, `RE_FENCED_CODE`, `RE_HTML_B`, `RE_TRAILING_SLASH`, etc.); `RE_BOT_COMMAND` in `set_commands.ts`; trailing-slash removal in `transcribe.ts` replaced with `endsWith`/`slice` string method

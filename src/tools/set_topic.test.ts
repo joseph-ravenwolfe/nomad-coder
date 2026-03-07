@@ -22,7 +22,7 @@ describe("set_topic tool", () => {
     vi.clearAllMocks();
     mocks.getTopic.mockReturnValue(null);
     const server = createMockServer();
-    register(server as any);
+    register(server);
     call = server.getHandler("set_topic");
   });
 
@@ -30,7 +30,7 @@ describe("set_topic tool", () => {
     mocks.getTopic.mockReturnValueOnce(null).mockReturnValueOnce("Refactor Agent");
     const result = await call({ topic: "Refactor Agent" });
     expect(isError(result)).toBe(false);
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.set).toBe(true);
     expect(data.topic).toBe("Refactor Agent");
     expect(data.previous).toBeNull();
@@ -40,7 +40,7 @@ describe("set_topic tool", () => {
   it("replaces an existing topic", async () => {
     mocks.getTopic.mockReturnValueOnce("Old Topic").mockReturnValueOnce("New Topic");
     const result = await call({ topic: "New Topic" });
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.previous).toBe("Old Topic");
     expect(data.topic).toBe("New Topic");
   });
@@ -49,7 +49,7 @@ describe("set_topic tool", () => {
     mocks.getTopic.mockReturnValueOnce("Refactor Agent");
     const result = await call({ topic: "" });
     expect(isError(result)).toBe(false);
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.cleared).toBe(true);
     expect(data.topic).toBeNull();
     expect(data.previous).toBe("Refactor Agent");
@@ -60,7 +60,7 @@ describe("set_topic tool", () => {
   it("clears topic when whitespace-only string passed", async () => {
     mocks.getTopic.mockReturnValueOnce("Test Runner");
     const result = await call({ topic: "   " });
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.cleared).toBe(true);
     expect(mocks.clearTopic).toHaveBeenCalledOnce();
   });

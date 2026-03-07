@@ -32,14 +32,14 @@ describe("send_message_draft tool", () => {
     vi.stubEnv("BOT_TOKEN", "test-token");
     mockFetch.mockImplementation(okResponse);
     const server = createMockServer();
-    register(server as any);
+    register(server);
     call = server.getHandler("send_message_draft");
   });
 
   it("returns ok + draft_id on success", async () => {
     const result = await call({ draft_id: 1, text: "Hello world" });
     expect(isError(result)).toBe(false);
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.ok).toBe(true);
     expect(data.draft_id).toBe(1);
   });

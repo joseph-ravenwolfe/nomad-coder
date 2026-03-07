@@ -1,4 +1,5 @@
 import { vi, describe, it, expect, beforeEach } from "vitest";
+import type { Update } from "grammy/types";
 import { createMockServer, parseResult, isError } from "./test-utils.js";
 
 const mocks = vi.hoisted(() => ({
@@ -16,11 +17,11 @@ vi.mock("../telegram.js", async (importActual) => {
     getOffset: () => 0,
     advanceOffset: vi.fn(),
     resolveChat: () => 42,
-    pollUntil: async (matcher: any, _timeout: number) => {
-      const updates = await mocks.getUpdates();
+    pollUntil: async (matcher: (updates: Update[]) => unknown, _timeout: number) => {
+      const updates = (await mocks.getUpdates()) as Update[];
       const result = matcher(updates);
       const missed = result !== undefined
-        ? updates.filter((u: any) => matcher([u]) === undefined)
+        ? updates.filter(u => matcher([u]) === undefined)
         : [...updates];
       return { match: result, missed };
     },
@@ -49,7 +50,7 @@ describe("send_confirmation tool", () => {
     mocks.answerCallbackQuery.mockResolvedValue(true);
     mocks.editMessageText.mockResolvedValue(true);
     const server = createMockServer();
-    register(server as any);
+    register(server);
     call = server.getHandler("send_confirmation");
   });
 
@@ -58,7 +59,7 @@ describe("send_confirmation tool", () => {
     mocks.getUpdates.mockResolvedValue([makeCallbackUpdate("confirm_yes")]);
     const result = await call({ text: "Proceed?" });
     expect(isError(result)).toBe(false);
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.timed_out).toBe(false);
     expect(data.confirmed).toBe(true);
     expect(data.value).toBe("confirm_yes");
@@ -70,7 +71,7 @@ describe("send_confirmation tool", () => {
     mocks.getUpdates.mockResolvedValue([makeCallbackUpdate("confirm_no")]);
     const result = await call({ text: "Delete everything?" });
     expect(isError(result)).toBe(false);
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.confirmed).toBe(false);
     expect(data.value).toBe("confirm_no");
   });
@@ -107,7 +108,7 @@ describe("send_confirmation tool", () => {
     mocks.sendMessage.mockResolvedValue(SENT_MSG);
     mocks.getUpdates.mockResolvedValue([makeCallbackUpdate("approve")]);
     const result = await call({ text: "Approve?", yes_data: "approve", no_data: "reject" });
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.confirmed).toBe(true);
     expect(data.value).toBe("approve");
   });
@@ -116,7 +117,7 @@ describe("send_confirmation tool", () => {
     mocks.sendMessage.mockResolvedValue(SENT_MSG);
     mocks.getUpdates.mockResolvedValue([]);
     const result = await call({ text: "Proceed?" });
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.timed_out).toBe(true);
     expect(mocks.answerCallbackQuery).not.toHaveBeenCalled();
     expect(mocks.editMessageText).toHaveBeenCalledWith(
@@ -139,7 +140,7 @@ describe("send_confirmation tool", () => {
       },
     }]);
     const result = await call({ text: "Proceed?" });
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.timed_out).toBe(true);
     expect(mocks.editMessageText).toHaveBeenCalledWith(
       42,

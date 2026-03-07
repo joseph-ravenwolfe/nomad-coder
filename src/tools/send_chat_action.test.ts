@@ -20,7 +20,7 @@ describe("send_chat_action tool", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     const server = createMockServer();
-    register(server as any);
+    register(server);
     call = server.getHandler("send_chat_action");
   });
 
@@ -28,7 +28,7 @@ describe("send_chat_action tool", () => {
     mocks.sendChatAction.mockResolvedValue(undefined);
     const result = await call({ action: "typing" });
     expect(isError(result)).toBe(false);
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.ok).toBe(true);
     expect(mocks.sendChatAction).toHaveBeenCalledWith(123, "typing");
   });

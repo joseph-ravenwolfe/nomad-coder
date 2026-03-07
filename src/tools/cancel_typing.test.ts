@@ -17,7 +17,7 @@ describe("cancel_typing tool", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     const server = createMockServer();
-    register(server as any);
+    register(server);
     call = server.getHandler("cancel_typing");
   });
 
@@ -25,7 +25,7 @@ describe("cancel_typing tool", () => {
     mocks.cancelTyping.mockReturnValue(true);
     const result = await call({});
     expect(isError(result)).toBe(false);
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.cancelled).toBe(true);
     expect(mocks.cancelTyping).toHaveBeenCalledOnce();
   });
@@ -34,7 +34,7 @@ describe("cancel_typing tool", () => {
     mocks.cancelTyping.mockReturnValue(false);
     const result = await call({});
     expect(isError(result)).toBe(false);
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.cancelled).toBe(false);
     expect(mocks.cancelTyping).toHaveBeenCalledOnce();
   });

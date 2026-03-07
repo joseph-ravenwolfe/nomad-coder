@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { GrammyError } from "grammy";
+import type { Update, ResponseParameters } from "grammy/types";
 import { tmpdir } from "os";
 import { resolve, join } from "path";
 import { writeFileSync, mkdirSync, rmSync } from "fs";
@@ -22,16 +23,17 @@ import {
   resetOffset,
   sendVoiceDirect,
   LIMITS,
+  type TelegramError,
 } from "./telegram.js";
 
 // ---------------------------------------------------------------------------
 // Helper
 // ---------------------------------------------------------------------------
 
-function makeGrammyError(error_code: number, description: string): GrammyError {
+function makeGrammyError(error_code: number, description: string, parameters?: ResponseParameters): GrammyError {
   return new GrammyError(
     description,
-    { ok: false, error_code, description },
+    { ok: false, error_code, description, ...(parameters !== undefined && { parameters }) },
     "sendMessage",
     {}
   );
@@ -164,8 +166,7 @@ describe("toError with GrammyError", () => {
   });
 
   it("classifies 429 as RATE_LIMITED with retry_after", () => {
-    const err = makeGrammyError(429, "Too Many Requests: retry after 5");
-    (err as any).parameters = { retry_after: 5 };
+    const err = makeGrammyError(429, "Too Many Requests: retry after 5", { retry_after: 5 });
     const result = toError(err);
     const parsed = JSON.parse(result.content[0].text);
     expect(parsed.code).toBe("RATE_LIMITED");
@@ -271,11 +272,10 @@ describe("callApi", () => {
     vi.useFakeTimers();
     const rateLimitErr = new GrammyError(
       "Too Many Requests",
-      { ok: false, error_code: 429, description: "Too Many Requests: retry after 1" },
+      { ok: false, error_code: 429, description: "Too Many Requests: retry after 1", parameters: { retry_after: 1 } },
       "sendMessage",
       {}
     );
-    (rateLimitErr as any).parameters = { retry_after: 1 };
 
     const fn = vi.fn()
       .mockRejectedValueOnce(rateLimitErr)
@@ -304,11 +304,10 @@ describe("callApi", () => {
     vi.useFakeTimers();
     const rateLimitErr = new GrammyError(
       "Too Many Requests",
-      { ok: false, error_code: 429, description: "Too Many Requests: retry after 1" },
+      { ok: false, error_code: 429, description: "Too Many Requests: retry after 1", parameters: { retry_after: 1 } },
       "sendMessage",
       {}
     );
-    (rateLimitErr as any).parameters = { retry_after: 1 };
 
     const fn = vi.fn().mockRejectedValue(rateLimitErr);
     const promise = callApi(fn, 2);
@@ -340,12 +339,12 @@ describe("filterAllowedUpdates", () => {
     resetSecurityConfig();
   });
 
-  function makeMessageUpdate(userId: number, chatId: number): any {
-    return { message: { from: { id: userId }, chat: { id: chatId } } };
+  function makeMessageUpdate(userId: number, chatId: number): Update {
+    return { message: { from: { id: userId }, chat: { id: chatId } } } as unknown as Update;
   }
 
-  function makeCallbackUpdate(userId: number, chatId: number): any {
-    return { callback_query: { from: { id: userId }, message: { chat: { id: chatId } } } };
+  function makeCallbackUpdate(userId: number, chatId: number): Update {
+    return { callback_query: { from: { id: userId }, message: { chat: { id: chatId } } } } as unknown as Update;
   }
 
   it("passes all updates through when no filters are configured", () => {
@@ -365,7 +364,7 @@ describe("filterAllowedUpdates", () => {
   it("filters by userId: drops update with no sender (senderId undefined)", () => {
     process.env.ALLOWED_USER_ID = "42";
     resetSecurityConfig();
-    const noSender: any = { message: { chat: { id: 100 } } }; // from is absent
+    const noSender = { message: { chat: { id: 100 } } } as unknown as Update; // from is absent
     expect(filterAllowedUpdates([noSender])).toHaveLength(0);
   });
 
@@ -382,7 +381,7 @@ describe("filterAllowedUpdates", () => {
     process.env.ALLOWED_CHAT_ID = "100";
     resetSecurityConfig();
     // Update has no chat info at all — updateChatId resolves to null
-    const noChatMsg: any = { message: { from: { id: 1 } } }; // chat property absent
+    const noChatMsg = { message: { from: { id: 1 } } } as unknown as Update; // chat property absent
     expect(filterAllowedUpdates([noChatMsg])).toHaveLength(0);
   });
 
@@ -500,7 +499,7 @@ describe("resolveChat", () => {
   it("returns UNAUTHORIZED_CHAT error when ALLOWED_CHAT_ID is not set", () => {
     const result = resolveChat();
     expect(typeof result).toBe("object");
-    expect((result as any).code).toBe("UNAUTHORIZED_CHAT");
+    expect((result as TelegramError).code).toBe("UNAUTHORIZED_CHAT");
   });
 
   it("returns the configured chatId when ALLOWED_CHAT_ID is set", () => {
@@ -523,7 +522,7 @@ describe("offset management", () => {
   });
 
   it("advanceOffset sets offset to max update_id + 1", () => {
-    advanceOffset([{ update_id: 5 } as any, { update_id: 3 } as any]);
+    advanceOffset([{ update_id: 5 } as unknown as Update, { update_id: 3 } as unknown as Update]);
     expect(getOffset()).toBe(6);
   });
 
@@ -533,7 +532,7 @@ describe("offset management", () => {
   });
 
   it("resetOffset resets to 0", () => {
-    advanceOffset([{ update_id: 10 } as any]);
+    advanceOffset([{ update_id: 10 } as unknown as Update]);
     resetOffset();
     expect(getOffset()).toBe(0);
   });
@@ -558,7 +557,6 @@ describe("sendVoiceDirect path restriction", () => {
 
   it("throws when voice path escapes the safe directory via ../", async () => {
     process.env.BOT_TOKEN = "bot_test_token";
-    const escapePath = join(SAFE_DIR, "..", "escaped.ogg");
     // create the target file so existsSync passes — the path check must fire
     const parentDir = resolve(tmpdir());
     const escapedTarget = join(parentDir, "escaped.ogg");

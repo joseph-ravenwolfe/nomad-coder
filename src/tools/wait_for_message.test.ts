@@ -1,12 +1,13 @@
 import { vi, describe, it, expect, beforeEach } from "vitest";
+import type { Update } from "grammy/types";
 import { createMockServer, parseResult, isError } from "./test-utils.js";
 
 const mocks = vi.hoisted(() => ({ getUpdates: vi.fn() }));
 
 vi.mock("../telegram.js", async (importActual) => {
   const actual = await importActual<typeof import("../telegram.js")>();
-  const filterFn = (updates: any[]) => {
-    return updates.filter((u: any) => {
+  const filterFn = (updates: Update[]) => {
+    return updates.filter(u => {
       const chatId = u.message?.chat?.id ?? u.callback_query?.message?.chat?.id;
       return chatId === undefined || String(chatId) === "42";
     });
@@ -17,12 +18,12 @@ vi.mock("../telegram.js", async (importActual) => {
     getOffset: () => 0,
     advanceOffset: vi.fn(),
     filterAllowedUpdates: filterFn,
-    pollUntil: async (matcher: any, _timeout: number) => {
-      const updates = await mocks.getUpdates();
+    pollUntil: async (matcher: (updates: Update[]) => unknown, _timeout: number) => {
+      const updates = (await mocks.getUpdates()) as Update[];
       const allowed = filterFn(updates);
       const result = matcher(allowed);
       const missed = result !== undefined
-        ? allowed.filter((u: any) => matcher([u]) === undefined)
+        ? allowed.filter(u => matcher([u]) === undefined)
         : [...allowed];
       return { match: result, missed };
     },
@@ -90,7 +91,7 @@ describe("wait_for_message tool", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     const server = createMockServer();
-    register(server as any);
+    register(server);
     call = server.getHandler("wait_for_message");
   });
 
@@ -98,7 +99,7 @@ describe("wait_for_message tool", () => {
     mocks.getUpdates.mockResolvedValue([makeTextUpdate(42, 10, "hello")]);
     const result = await call({ timeout_seconds: 5 });
     expect(isError(result)).toBe(false);
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.timed_out).toBe(false);
     expect(data.type).toBe("text");
     expect(data.text).toBe("hello");
@@ -109,25 +110,25 @@ describe("wait_for_message tool", () => {
   it("returns timed_out when no message arrives", async () => {
     mocks.getUpdates.mockResolvedValue([]);
     const result = await call({ timeout_seconds: 1 });
-    expect((parseResult(result) as any).timed_out).toBe(true);
+    expect((parseResult(result)).timed_out).toBe(true);
   });
 
   it("filters by chat_id", async () => {
     mocks.getUpdates.mockResolvedValue([makeTextUpdate(999, 10, "hi")]);
     const result = await call({ timeout_seconds: 1 });
-    expect((parseResult(result) as any).timed_out).toBe(true);
+    expect((parseResult(result)).timed_out).toBe(true);
   });
 
   it("filters by user_id", async () => {
     mocks.getUpdates.mockResolvedValue([makeTextUpdate(42, 99, "hi")]);
     const result = await call({ timeout_seconds: 1, user_id: 10 });
-    expect((parseResult(result) as any).timed_out).toBe(true);
+    expect((parseResult(result)).timed_out).toBe(true);
   });
 
   it("returns document message with type=document", async () => {
     mocks.getUpdates.mockResolvedValue([makeDocumentUpdate(42, 10)]);
     const result = await call({ timeout_seconds: 5 });
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.timed_out).toBe(false);
     expect(data.type).toBe("document");
     expect(data.file_id).toBe("doc123");
@@ -139,7 +140,7 @@ describe("wait_for_message tool", () => {
   it("returns photo message with type=photo and largest size", async () => {
     mocks.getUpdates.mockResolvedValue([makePhotoUpdate(42, 10)]);
     const result = await call({ timeout_seconds: 5 });
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.timed_out).toBe(false);
     expect(data.type).toBe("photo");
     expect(data.file_id).toBe("large");
@@ -150,7 +151,7 @@ describe("wait_for_message tool", () => {
   it("returns unknown type with note", async () => {
     mocks.getUpdates.mockResolvedValue([makeUnknownUpdate(42, 10)]);
     const result = await call({ timeout_seconds: 5 });
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.timed_out).toBe(false);
     expect(data.type).toBe("unknown");
     expect(data.note).toContain("What would you like me to do with it");
@@ -168,7 +169,7 @@ describe("wait_for_message tool", () => {
       },
     }]);
     const result = await call({ timeout_seconds: 5 });
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.timed_out).toBe(false);
     expect(data.type).toBe("voice");
     expect(data.text).toBe("hello from voice");
@@ -192,7 +193,7 @@ describe("wait_for_message tool", () => {
       makeTextUpdate(42, 10, "hello"),
     ]);
     const result = await call({ timeout_seconds: 5 });
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.timed_out).toBe(false);
     expect(data.text).toBe("hello");
     // reactions are no longer inlined — they are buffered for later consumption

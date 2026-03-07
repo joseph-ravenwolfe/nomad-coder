@@ -1,5 +1,6 @@
 import { vi } from "vitest";
 import { z, type ZodRawShape } from "zod";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { TelegramError } from "../telegram.js";
 
 // ---------------------------------------------------------------------------
@@ -14,7 +15,7 @@ export interface MockServer {
   getHandler(name: string): ToolHandler;
 }
 
-export function createMockServer(): MockServer {
+export function createMockServer(): MockServer & McpServer {
   const handlers: Record<string, ToolHandler> = {};
   const registerTool = vi.fn(
     (_name: string, config: { description?: string; inputSchema?: ZodRawShape }, handler: ToolHandler) => {
@@ -31,16 +32,18 @@ export function createMockServer(): MockServer {
       if (!h) throw new Error(`No tool registered with name "${name}"`);
       return h;
     },
-  };
+    // Only implements the McpServer subset that tools call (registerTool, resource).
+    // Full McpServer has additional members never invoked by tools during testing.
+  } as unknown as MockServer & McpServer;
 }
 
 // ---------------------------------------------------------------------------
 // Helpers for asserting MCP tool results
 // ---------------------------------------------------------------------------
 
-export function parseResult(result: unknown): unknown {
+export function parseResult(result: unknown): Record<string, unknown> {
   const r = result as { content: { text: string }[] };
-  return JSON.parse(r.content[0].text);
+  return JSON.parse(r.content[0].text) as Record<string, unknown>;
 }
 
 export function isError(result: unknown): boolean {

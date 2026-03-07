@@ -16,7 +16,7 @@ describe("send_photo tool", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     const server = createMockServer();
-    register(server as any);
+    register(server);
     call = server.getHandler("send_photo");
   });
 
@@ -24,7 +24,7 @@ describe("send_photo tool", () => {
     mocks.sendPhoto.mockResolvedValue({ message_id: 3, chat: { id: 1 }, date: 0 });
     const result = await call({ photo: "https://example.com/img.jpg" });
     expect(isError(result)).toBe(false);
-    expect((parseResult(result) as any).message_id).toBe(3);
+    expect((parseResult(result)).message_id).toBe(3);
   });
 
   it("validates caption length pre-send", async () => {

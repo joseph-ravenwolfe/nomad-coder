@@ -66,10 +66,10 @@ export function register(server: McpServer) {
         recordBotMessage({ content_type: "voice", caption, message_id: msg.message_id });
         return toResult({
           message_id: msg.message_id,
-          file_id: (msg.voice as any)?.file_id,
-          mime_type: (msg.voice as any)?.mime_type,
-          file_size: (msg.voice as any)?.file_size,
-          duration: (msg.voice as any)?.duration,
+          file_id: msg.voice?.file_id,
+          mime_type: msg.voice?.mime_type,
+          file_size: msg.voice?.file_size,
+          duration: msg.voice?.duration,
         });
       } catch (err) {
         cancelTyping();

@@ -16,7 +16,7 @@ describe("get_chat tool", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     const server = createMockServer();
-    register(server as any);
+    register(server);
     call = server.getHandler("get_chat");
   });
 

@@ -1,4 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { Update } from "grammy/types";
 import { z } from "zod";
 import { getApi, getOffset, advanceOffset, resetOffset, filterAllowedUpdates, toResult, toError, DEFAULT_ALLOWED_UPDATES } from "../telegram.js";
 import { drainBuffer } from "../update-buffer.js";
@@ -58,7 +59,7 @@ export function register(server: McpServer) {
             offset: getOffset(),
             limit: limit - filteredBuffered.length,
             timeout: timeout_seconds,
-            allowed_updates: (allowed_updates ?? DEFAULT_ALLOWED_UPDATES) as any,
+            allowed_updates: (allowed_updates ?? DEFAULT_ALLOWED_UPDATES) as ReadonlyArray<Exclude<keyof Update, "update_id">>,
           });
           advanceOffset(fetched);
           fresh = filterAllowedUpdates(fetched);

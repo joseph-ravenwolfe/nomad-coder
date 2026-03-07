@@ -78,7 +78,7 @@ export function register(server: McpServer) {
             { parse_mode: "HTML" },
           );
           const edited = typeof result === "boolean" ? { message_id } : result;
-          return toResult({ message_id: (edited as any).message_id ?? message_id, updated: true });
+          return toResult({ message_id: edited.message_id ?? message_id, updated: true });
         } else {
           const msg = await getApi().sendMessage(chatId, text, {
             parse_mode: "HTML",

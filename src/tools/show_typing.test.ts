@@ -23,7 +23,7 @@ describe("show_typing tool", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     const server = createMockServer();
-    register(server as any);
+    register(server);
     call = server.getHandler("show_typing");
   });
 
@@ -31,7 +31,7 @@ describe("show_typing tool", () => {
     mocks.showTyping.mockResolvedValue(true);
     const result = await call({});
     expect(isError(result)).toBe(false);
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.ok).toBe(true);
     expect(data.timeout_seconds).toBe(20);
     expect(mocks.showTyping).toHaveBeenCalledWith(20);
@@ -41,7 +41,7 @@ describe("show_typing tool", () => {
     mocks.showTyping.mockResolvedValue(true);
     const result = await call({ timeout_seconds: 60 });
     expect(isError(result)).toBe(false);
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.timeout_seconds).toBe(60);
     expect(mocks.showTyping).toHaveBeenCalledWith(60);
   });
@@ -49,14 +49,14 @@ describe("show_typing tool", () => {
   it("returns started:true when newly started", async () => {
     mocks.showTyping.mockResolvedValue(true);
     const result = await call({ timeout_seconds: 30 });
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.started).toBe(true);
   });
 
   it("returns started:false when extending an existing indicator", async () => {
     mocks.showTyping.mockResolvedValue(false);
     const result = await call({ timeout_seconds: 30 });
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.started).toBe(false);
   });
 });

@@ -1,12 +1,13 @@
 import { vi, describe, it, expect, beforeEach } from "vitest";
+import type { Update } from "grammy/types";
 import { createMockServer, parseResult, isError } from "./test-utils.js";
 
 const mocks = vi.hoisted(() => ({ getUpdates: vi.fn() }));
 
 vi.mock("../telegram.js", async (importActual) => {
   const actual = await importActual<typeof import("../telegram.js")>();
-  const filterFn = (updates: any[]) => {
-    return updates.filter((u: any) => {
+  const filterFn = (updates: Update[]) => {
+    return updates.filter(u => {
       const chatId = u.callback_query?.message?.chat?.id;
       return chatId === undefined || String(chatId) === "42";
     });
@@ -17,12 +18,12 @@ vi.mock("../telegram.js", async (importActual) => {
     getOffset: () => 0,
     advanceOffset: vi.fn(),
     filterAllowedUpdates: filterFn,
-    pollUntil: async (matcher: any, _timeout: number) => {
-      const updates = await mocks.getUpdates();
+    pollUntil: async (matcher: (updates: Update[]) => unknown, _timeout: number) => {
+      const updates = (await mocks.getUpdates()) as Update[];
       const allowed = filterFn(updates);
       const result = matcher(allowed);
       const missed = result !== undefined
-        ? allowed.filter((u: any) => matcher([u]) === undefined)
+        ? allowed.filter(u => matcher([u]) === undefined)
         : [...allowed];
       return { match: result, missed };
     },
@@ -47,7 +48,7 @@ describe("wait_for_callback_query tool", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     const server = createMockServer();
-    register(server as any);
+    register(server);
     call = server.getHandler("wait_for_callback_query");
   });
 
@@ -55,7 +56,7 @@ describe("wait_for_callback_query tool", () => {
     mocks.getUpdates.mockResolvedValue([makeUpdate(42, 7, "action_yes")]);
     const result = await call({ timeout_seconds: 5 });
     expect(isError(result)).toBe(false);
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.timed_out).toBe(false);
     expect(data.data).toBe("action_yes");
     expect(data.callback_query_id).toBe("cq1");
@@ -66,18 +67,18 @@ describe("wait_for_callback_query tool", () => {
   it("returns timed_out when no callback_query arrives", async () => {
     mocks.getUpdates.mockResolvedValue([]);
     const result = await call({ timeout_seconds: 1 });
-    expect((parseResult(result) as any).timed_out).toBe(true);
+    expect((parseResult(result)).timed_out).toBe(true);
   });
 
   it("filters by chat_id", async () => {
     mocks.getUpdates.mockResolvedValue([makeUpdate(999, 1, "data")]);
     const result = await call({ timeout_seconds: 1 });
-    expect((parseResult(result) as any).timed_out).toBe(true);
+    expect((parseResult(result)).timed_out).toBe(true);
   });
 
   it("filters by message_id", async () => {
     mocks.getUpdates.mockResolvedValue([makeUpdate(42, 99, "data")]);
     const result = await call({ timeout_seconds: 1, message_id: 7 });
-    expect((parseResult(result) as any).timed_out).toBe(true);
+    expect((parseResult(result)).timed_out).toBe(true);
   });
 });

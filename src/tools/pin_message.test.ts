@@ -16,7 +16,7 @@ describe("pin_message tool", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     const server = createMockServer();
-    register(server as any);
+    register(server);
     call = server.getHandler("pin_message");
   });
 
@@ -24,7 +24,7 @@ describe("pin_message tool", () => {
     mocks.pinChatMessage.mockResolvedValue(true);
     const result = await call({ message_id: 5 });
     expect(isError(result)).toBe(false);
-    expect((parseResult(result) as any).ok).toBe(true);
+    expect((parseResult(result)).ok).toBe(true);
   });
 
   it("passes disable_notification option", async () => {

@@ -16,7 +16,7 @@ describe("send_video tool", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     const server = createMockServer();
-    register(server as any);
+    register(server);
     call = server.getHandler("send_video");
   });
 
@@ -24,7 +24,7 @@ describe("send_video tool", () => {
     mocks.sendVideo.mockResolvedValue({ message_id: 7, chat: { id: 1 }, date: 0 });
     const result = await call({ video: "https://example.com/clip.mp4" });
     expect(isError(result)).toBe(false);
-    expect((parseResult(result) as any).message_id).toBe(7);
+    expect((parseResult(result)).message_id).toBe(7);
   });
 
   it("validates caption length pre-send", async () => {

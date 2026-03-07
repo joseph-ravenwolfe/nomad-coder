@@ -38,7 +38,7 @@ describe("send_document tool", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     const server = createMockServer();
-    register(server as any);
+    register(server);
     call = server.getHandler("send_document");
   });
 
@@ -49,7 +49,7 @@ describe("send_document tool", () => {
     });
     const result = await call({ document: "https://example.com/report.pdf" });
     expect(isError(result)).toBe(false);
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.message_id).toBe(10);
     expect(data.file_name).toBe("report.pdf");
     expect(data.mime_type).toBe("application/pdf");

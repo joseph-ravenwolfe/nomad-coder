@@ -28,14 +28,14 @@ describe("send_temp_message tool", () => {
     vi.clearAllMocks();
     apiMocks.sendMessage.mockResolvedValue({ message_id: 42 });
     const server = createMockServer();
-    register(server as any);
+    register(server);
     call = server.getHandler("send_temp_message");
   });
 
   it("sends message and returns ok + ttl_seconds", async () => {
     const result = await call({ text: "Thinking…" });
     expect(isError(result)).toBe(false);
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.ok).toBe(true);
     expect(data.ttl_seconds).toBe(30);
   });

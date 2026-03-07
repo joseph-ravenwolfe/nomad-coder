@@ -1,5 +1,5 @@
 import { Api, GrammyError, HttpError, InputFile } from "grammy";
-import type { ReactionTypeEmoji, Update } from "grammy/types";
+import type { ApiError, ReactionTypeEmoji, Update } from "grammy/types";
 import { readFileSync, existsSync } from "fs";
 import path, { resolve } from "path";
 import { tmpdir } from "os";
@@ -484,7 +484,7 @@ export async function sendVoiceDirect(
     // Throw as GrammyError so classifyGrammyError in toError() can classify it
     throw new GrammyError(
       desc,
-      { ok: false, error_code: json.error_code ?? 0, description: desc } as any,
+      { ok: false, error_code: json.error_code ?? 0, description: desc } as ApiError,
       "sendVoice",
       {}
     );
@@ -610,7 +610,7 @@ export async function pollUntil<T>(
       offset: getOffset(),
       limit: 1,   // one at a time — prevents batch-drop when multiple messages arrive simultaneously
       timeout: 25,
-      allowed_updates: [...DEFAULT_ALLOWED_UPDATES] as any,
+      allowed_updates: [...DEFAULT_ALLOWED_UPDATES] as ReadonlyArray<Exclude<keyof Update, "update_id">>,
     });
 
     advanceOffset(updates);

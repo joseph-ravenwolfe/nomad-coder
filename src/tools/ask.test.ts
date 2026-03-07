@@ -1,4 +1,5 @@
 import { vi, describe, it, expect, beforeEach } from "vitest";
+import type { Update } from "grammy/types";
 import { createMockServer, parseResult, isError, errorCode } from "./test-utils.js";
 
 const mocks = vi.hoisted(() => ({
@@ -14,11 +15,11 @@ vi.mock("../telegram.js", async (importActual) => {
     getOffset: () => 0,
     advanceOffset: vi.fn(),
     resolveChat: () => 42,
-    pollUntil: async (matcher: any, _timeout: number) => {
-      const updates = await mocks.getUpdates();
+    pollUntil: async (matcher: (updates: Update[]) => unknown, _timeout: number) => {
+      const updates = (await mocks.getUpdates()) as Update[];
       const result = matcher(updates);
       const missed = result !== undefined
-        ? updates.filter((u: any) => matcher([u]) === undefined)
+        ? updates.filter(u => matcher([u]) === undefined)
         : [...updates];
       return { match: result, missed };
     },
@@ -35,7 +36,7 @@ describe("ask tool", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     const server = createMockServer();
-    register(server as any);
+    register(server);
     call = server.getHandler("ask");
   });
 
@@ -47,7 +48,7 @@ describe("ask tool", () => {
     ]);
     const result = await call({ question: "Continue?" });
     expect(isError(result)).toBe(false);
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.timed_out).toBe(false);
     expect(data.text).toBe("sure");
   });
@@ -59,14 +60,14 @@ describe("ask tool", () => {
       { update_id: 1, message: { ...BASE_MSG, message_id: 10, text: "old voice reply", from: null, chat: { id: 42 } } },
     ]);
     const result = await call({ question: "Continue?" });
-    expect((parseResult(result) as any).timed_out).toBe(true);
+    expect((parseResult(result)).timed_out).toBe(true);
   });
 
   it("returns timed_out when no matching update arrives", async () => {
     mocks.sendMessage.mockResolvedValue(BASE_MSG);
     mocks.getUpdates.mockResolvedValue([]);
     const result = await call({ question: "Continue?" });
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.timed_out).toBe(true);
   });
 
@@ -77,7 +78,7 @@ describe("ask tool", () => {
       { update_id: 1, message: { ...BASE_MSG, text: "hi", chat: { id: 999 } } },
     ]);
     const result = await call({ question: "Hello?" });
-    expect((parseResult(result) as any).timed_out).toBe(true);
+    expect((parseResult(result)).timed_out).toBe(true);
   });
 
   it("validates question text before sending", async () => {

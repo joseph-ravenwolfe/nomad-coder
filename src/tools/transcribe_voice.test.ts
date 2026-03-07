@@ -17,7 +17,7 @@ describe("transcribe_voice tool", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     const server = createMockServer();
-    register(server as any);
+    register(server);
     call = server.getHandler("transcribe_voice");
   });
 
@@ -25,7 +25,7 @@ describe("transcribe_voice tool", () => {
     mocks.transcribeWithIndicator.mockResolvedValue("hello world");
     const result = await call({ file_id: "abc123" });
     expect(isError(result)).toBe(false);
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.text).toBe("hello world");
     expect(mocks.transcribeWithIndicator).toHaveBeenCalledWith("abc123", undefined);
   });

@@ -16,7 +16,7 @@ describe("answer_callback_query tool", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     const server = createMockServer();
-    register(server as any);
+    register(server);
     call = server.getHandler("answer_callback_query");
   });
 
@@ -24,7 +24,7 @@ describe("answer_callback_query tool", () => {
     mocks.answerCallbackQuery.mockResolvedValue(true);
     const result = await call({ callback_query_id: "cq123" });
     expect(isError(result)).toBe(false);
-    expect((parseResult(result) as any).ok).toBe(true);
+    expect((parseResult(result)).ok).toBe(true);
   });
 
   it("passes optional text and show_alert", async () => {

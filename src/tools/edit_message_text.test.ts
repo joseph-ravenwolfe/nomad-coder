@@ -16,7 +16,7 @@ describe("edit_message_text tool", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     const server = createMockServer();
-    register(server as any);
+    register(server);
     call = server.getHandler("edit_message_text");
   });
 

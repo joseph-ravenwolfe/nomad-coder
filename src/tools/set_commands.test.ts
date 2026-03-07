@@ -22,7 +22,7 @@ describe("set_commands tool", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     const server = createMockServer();
-    register(server as any);
+    register(server);
     call = server.getHandler("set_commands");
     mocks.setMyCommands.mockResolvedValue(true);
   });
@@ -30,7 +30,7 @@ describe("set_commands tool", () => {
   it("registers commands scoped to active chat (default scope)", async () => {
     const result = await call({ commands: SAMPLE_COMMANDS });
     expect(isError(result)).toBe(false);
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.ok).toBe(true);
     expect(data.count).toBe(2);
     expect(data.scope).toBe("chat");
@@ -51,7 +51,7 @@ describe("set_commands tool", () => {
   it("registers commands with default (global) scope", async () => {
     const result = await call({ commands: SAMPLE_COMMANDS, scope: "default" });
     expect(isError(result)).toBe(false);
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.scope).toBe("default");
     expect(mocks.setMyCommands).toHaveBeenCalledWith(SAMPLE_COMMANDS, {
       scope: { type: "default" },
@@ -61,7 +61,7 @@ describe("set_commands tool", () => {
   it("clears commands when empty array passed", async () => {
     const result = await call({ commands: [] });
     expect(isError(result)).toBe(false);
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.ok).toBe(true);
     expect(data.count).toBe(0);
     expect(data.cleared).toBe(true);

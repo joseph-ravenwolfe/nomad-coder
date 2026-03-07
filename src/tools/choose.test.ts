@@ -1,4 +1,5 @@
 import { vi, describe, it, expect, beforeEach } from "vitest";
+import type { Update } from "grammy/types";
 import { createMockServer, parseResult, isError, errorCode } from "./test-utils.js";
 
 const mocks = vi.hoisted(() => ({
@@ -10,7 +11,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../transcribe.js", () => ({
-  transcribeWithIndicator: (...args: any[]) => mocks.transcribeWithIndicator(...args),
+  transcribeWithIndicator: (fileId: string, messageId?: number) => mocks.transcribeWithIndicator(fileId, messageId),
 }));
 
 vi.mock("../telegram.js", async (importActual) => {
@@ -21,11 +22,11 @@ vi.mock("../telegram.js", async (importActual) => {
     getOffset: () => 0,
     advanceOffset: vi.fn(),
     resolveChat: () => 42,
-    pollUntil: async (matcher: any, _timeout: number) => {
-      const updates = await mocks.getUpdates();
+    pollUntil: async (matcher: (updates: Update[]) => unknown, _timeout: number) => {
+      const updates = (await mocks.getUpdates()) as Update[];
       const result = matcher(updates);
       const missed = result !== undefined
-        ? updates.filter((u: any) => matcher([u]) === undefined)
+        ? updates.filter(u => matcher([u]) === undefined)
         : [...updates];
       return { match: result, missed };
     },
@@ -59,7 +60,7 @@ describe("choose tool", () => {
     mocks.answerCallbackQuery.mockResolvedValue(true);
     mocks.editMessageText.mockResolvedValue(true);
     const server = createMockServer();
-    register(server as any);
+    register(server);
     call = server.getHandler("choose");
   });
 
@@ -68,7 +69,7 @@ describe("choose tool", () => {
     mocks.getUpdates.mockResolvedValue([makeCallbackUpdate("opt_a")]);
     const result = await call({ question: "Pick one", options: OPTIONS });
     expect(isError(result)).toBe(false);
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.timed_out).toBe(false);
     expect(data.value).toBe("opt_a");
     expect(data.label).toBe("Option A");
@@ -108,7 +109,7 @@ describe("choose tool", () => {
     mocks.sendMessage.mockResolvedValue(SENT_MSG);
     mocks.getUpdates.mockResolvedValue([]);
     const result = await call({ question: "Pick", options: OPTIONS, timeout_seconds: 1 });
-    expect((parseResult(result) as any).timed_out).toBe(true);
+    expect((parseResult(result)).timed_out).toBe(true);
   });
 
   it("filters callback_queries from different messages", async () => {
@@ -125,7 +126,7 @@ describe("choose tool", () => {
     };
     mocks.getUpdates.mockResolvedValue([foreignUpdate]);
     const result = await call({ question: "Pick", options: OPTIONS, timeout_seconds: 1 });
-    expect((parseResult(result) as any).timed_out).toBe(true);
+    expect((parseResult(result)).timed_out).toBe(true);
   });
 
   it("validates question text", async () => {
@@ -189,7 +190,7 @@ describe("choose tool", () => {
       },
     ]);
     const result = await call({ question: "Pick", options: OPTIONS, timeout_seconds: 1 });
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.skipped).toBe(true);
     expect(data.text_response).toBe("hello");
     expect(data.text_message_id).toBe(20);
@@ -212,7 +213,7 @@ describe("choose tool", () => {
       { update_id: 5, message: { message_id: 7, text: "old voice reply", chat: { id: 42 } } },
     ]);
     const result = await call({ question: "Pick", options: OPTIONS, timeout_seconds: 1 });
-    expect((parseResult(result) as any).timed_out).toBe(true);
+    expect((parseResult(result)).timed_out).toBe(true);
     // Timed out — buttons removed
     expect(mocks.editMessageText).toHaveBeenCalledTimes(1);
   });
@@ -225,7 +226,7 @@ describe("choose tool", () => {
       message: { message_id: 20, voice: { file_id: "file123", duration: 3 }, chat: { id: 42 } },
     }]);
     const result = await call({ question: "Pick", options: OPTIONS });
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     expect(data.skipped).toBe(true);
     expect(data.voice).toBe(true);
     expect(data.text_response).toBe("transcribed text");
@@ -253,7 +254,7 @@ describe("choose tool", () => {
       makeCallbackUpdate("opt_a"),
     ]);
     const result = await call({ question: "Pick", options: OPTIONS });
-    const data = parseResult(result) as any;
+    const data = parseResult(result);
     // Callback wins — choice is returned, no skipped
     expect(data.timed_out).toBe(false);
     expect(data.value).toBe("opt_a");
