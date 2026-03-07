@@ -7,6 +7,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com).
 
 ## [2.0.0] — 2026-03-07
 
+### Fixed
+
+- **Docker build**: `prepare` script now uses `|| true` so it doesn't fail when `git` is not available in the container build environment
+
 ### Added
 
 - **ESLint v10 + typescript-eslint** — `eslint.config.js` (flat config) with `no-explicit-any`, `no-non-null-assertion`, and `no-unused-vars` (with `_` prefix ignore pattern); `pnpm lint` script added to `package.json`
