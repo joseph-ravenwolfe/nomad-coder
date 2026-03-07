@@ -65,6 +65,8 @@ jobs:
       - name: Sign the image with Cosign
         env:
           DIGEST: ${{ steps.build-push.outputs.digest }}
+          IMAGE: ${{ steps.meta.outputs.tags }}
         run: |
-          cosign sign --yes \
-            "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${DIGEST}"
+          # Use the first tag from metadata (already lowercased by docker/metadata-action)
+          FIRST_TAG=$(echo "$IMAGE" | head -n1)
+          cosign sign --yes "${FIRST_TAG}@${DIGEST}"
