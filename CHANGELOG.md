@@ -5,6 +5,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+### Changed
+
+- **`send_temp_message` TTL** — default raised from 30 s to 300 s (5 minutes); maximum raised from 300 s to 600 s (10 minutes)
+- **`clearPendingTemp` grace period** — instead of deleting immediately when any outbound tool fires, the temp message now lingers for 10 seconds so the user can still read it if the real response arrives fast
+
 ### Added
 
 - **CI workflow** — new `.github/workflows/ci.yml` runs tests and uploads coverage to Codecov on every push/PR to `master`
