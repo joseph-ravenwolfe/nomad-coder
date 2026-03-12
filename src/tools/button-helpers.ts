@@ -134,7 +134,7 @@ async function appendSuffixAndEdit(
       parse_mode: "MarkdownV2",
       reply_markup: { inline_keyboard: [] },
     })
-    .catch((e) => { console.error("[button-helpers] editMessageText failed:", e); });
+    .catch((e: unknown) => { console.error("[button-helpers] editMessageText failed:", e); });
 }
 
 /**

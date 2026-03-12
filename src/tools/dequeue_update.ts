@@ -13,7 +13,7 @@ function ackVoice(event: TimelineEvent): void {
   if (event.from !== "user" || event.content.type !== "voice") return;
   const chatId = typeof resolveChat() === "number" ? resolveChat() as number : undefined;
   if (!chatId) return;
-  trySetMessageReaction(chatId, event.id, REACT_SALUTE)
+  void trySetMessageReaction(chatId, event.id, REACT_SALUTE)
     .then((ok) => { if (!ok) process.stderr.write(`[dequeue] ack 🫡 failed for voice msg ${event.id}\n`); });
 }
 
@@ -26,10 +26,11 @@ function compactEvent(event: TimelineEvent): Record<string, unknown> {
 const DESCRIPTION =
   "Consume the next update from the queue. Response lane (reactions, callbacks) " +
   "drains before message lane (new messages, commands, media). " +
-  "Waits up to timeout seconds if the queue is empty. " +
+  "Voice messages arrive pre-transcribed as { type: \"voice\", text: \"...\" }. " +
+  "pending > 0 means more updates are queued — call again before blocking. " +
   "Returns compact format: { id, event, from, content }. " +
-  "pending > 0 means more updates waiting — call again before blocking. " +
-  "Voice messages arrive pre-transcribed as { type: \"voice\", text: \"...\" }.";
+  "Two modes: omit timeout (default 60 s) to block until an update arrives; " +
+  "pass timeout: 0 for an instant non-blocking poll (use only for startup drain loops).";
 
 export function register(server: McpServer) {
   server.registerTool(
@@ -43,7 +44,7 @@ export function register(server: McpServer) {
           .min(0)
           .max(300)
           .default(60)
-          .describe("Seconds to block when queue is empty (0 = instant poll, default 60)"),
+          .describe("Seconds to block when queue is empty. Default 60 blocks until an update arrives (normal loop). Pass 0 for an instant non-blocking poll (drain loops only). Max 300 (5 min)."),
       },
     },
     async ({ timeout }) => {

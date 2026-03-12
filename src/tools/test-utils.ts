@@ -28,7 +28,7 @@ export function createMockServer(): MockServer & McpServer {
     registerTool,
     resource,
     getHandler(name: string): ToolHandler {
-      const h = handlers[name];
+      const h = handlers[name] as ToolHandler | undefined;
       if (!h) throw new Error(`No tool registered with name "${name}"`);
       return h;
     },

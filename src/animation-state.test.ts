@@ -99,7 +99,7 @@ describe("animation-state", () => {
     it("throws if resolveChat returns non-number", async () => {
       mocks.resolveChat.mockReturnValueOnce("not_a_number" as unknown as number);
 
-      await expect(startAnimation()).rejects.toThrow("ALLOWED_CHAT_ID not configured");
+      await expect(startAnimation()).rejects.toThrow("ALLOWED_USER_ID not configured");
     });
   });
 

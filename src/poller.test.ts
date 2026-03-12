@@ -11,9 +11,9 @@ const mocks = vi.hoisted(() => ({
   advanceOffset: vi.fn(),
   filterAllowedUpdates: vi.fn((u: Update[]): Update[] => u),
   trySetMessageReaction: vi.fn(),
-  handleIfBuiltIn: vi.fn(async (): Promise<boolean> => false),
+  handleIfBuiltIn: vi.fn((): Promise<boolean> => Promise.resolve(false)),
   recordInbound: vi.fn(),
-  transcribeVoice: vi.fn(async (): Promise<string> => "hello world"),
+  transcribeVoice: vi.fn((): Promise<string> => Promise.resolve("hello world")),
 }));
 
 vi.mock("./telegram.js", async (importActual) => {
@@ -85,7 +85,7 @@ async function runOneCycle(updates: Update[]): Promise<void> {
     .mockResolvedValueOnce(updates)
     .mockImplementation(
       () => new Promise<Update[]>((resolve) => {
-        resolveHang = () => resolve([]);
+        resolveHang = () => { resolve([]); };
       }),
     );
 

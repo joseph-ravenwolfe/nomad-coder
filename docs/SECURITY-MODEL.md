@@ -16,8 +16,7 @@ This document explains the security boundary for Telegram Bridge MCP, what is pr
 
 Telegram Bridge MCP enforces a strict, single-user / single-chat model by default:
 
-- `ALLOWED_USER_ID` blocks inbound updates from anyone else.
-- `ALLOWED_CHAT_ID` blocks outbound tool calls to any other chat, and discards inbound updates from other chats.
+- `ALLOWED_USER_ID` blocks inbound updates from anyone else, and its value is used as the outbound chat target (for private bots, chat.id === user.id).
 
 This prevents message injection from unknown Telegram users and prevents misdirected sends.
 
@@ -41,7 +40,7 @@ The operator's personal information (real name, Telegram username, chat descript
 ## What This Server DOES Protect
 
 - Inbound message authenticity within Telegram (only the configured user is accepted).
-- Outbound message targeting (only the configured chat is allowed).
+- Outbound message targeting (chat target derived from `ALLOWED_USER_ID` — no `chat_id` parameter to misuse).
 - Telegram API errors are surfaced as structured errors with clear remediation.
 - User PII is not exposed to agents without explicit operator consent (see User Privacy table above).
 
@@ -68,7 +67,7 @@ Use these controls at the MCP host level when you care about safety:
 - Use allow-lists for tools and directories.
 - Require explicit user confirmation for destructive actions (delete, overwrite, network sends).
 - Run the agent in a sandboxed account or container when possible.
-- Keep `ALLOWED_USER_ID` and `ALLOWED_CHAT_ID` set at all times.
+- Keep `ALLOWED_USER_ID` set at all times.
 
 ---
 
@@ -88,7 +87,7 @@ Treat file tools as privileged operations and gate them accordingly in your MCP 
 | Threat | Mitigated Here | Mitigation |
 | --- | --- | --- |
 | Stranger messages the bot | Yes | `ALLOWED_USER_ID` filter |
-| Agent sends to wrong chat | Yes | `ALLOWED_CHAT_ID` filter |
+| Agent sends to wrong chat | Yes | No `chat_id` parameter — target derived from `ALLOWED_USER_ID` |
 | Destructive local actions | No | Host-level tool policy |
 | Secret exfiltration | No | Host-level tool policy |
 | Arbitrary network access | No | Host-level tool policy |

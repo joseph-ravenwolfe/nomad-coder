@@ -12,7 +12,7 @@
 import type { Update } from "grammy/types";
 import {
   getApi, getOffset, advanceOffset, filterAllowedUpdates,
-  DEFAULT_ALLOWED_UPDATES, resolveChat, trySetMessageReaction,
+  DEFAULT_ALLOWED_UPDATES, trySetMessageReaction,
   type ReactionEmoji,
 } from "./telegram.js";
 import { handleIfBuiltIn } from "./built-in-commands.js";
@@ -71,11 +71,12 @@ async function _pollLoop(): Promise<void> {
         await Promise.all(voiceUpdates.map((u) => _transcribeAndRecord(u)));
       }
     } catch (err) {
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- _running is mutated externally by stopPoller()
       if (!_running) break;
       const msg = err instanceof Error ? err.message : String(err);
       process.stderr.write(`[poller] error: ${msg}\n`);
       // Back off on persistent errors
-      await new Promise((r) => setTimeout(r, 5000));
+      await new Promise<void>((r) => setTimeout(r, 5000));
     }
   }
 }
@@ -93,9 +94,9 @@ async function _transcribeAndRecord(u: Update): Promise<void> {
 
     const text = await Promise.race([
       transcribeVoice(msg.voice.file_id),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("transcription timed out (60s)")), 60_000),
-      ),
+      new Promise<never>((_, reject) => {
+        setTimeout(() => { reject(new Error("transcription timed out (60s)")); }, 60_000);
+      }),
     ]);
 
     // Swap to 😴 (queued)

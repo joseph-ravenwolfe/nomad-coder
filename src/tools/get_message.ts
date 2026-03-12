@@ -26,7 +26,7 @@ export function register(server: McpServer) {
           .describe("Version: -1 = current/latest (default), 0 = original, 1+ = edit history"),
       },
     },
-    async ({ message_id, version }) => {
+    ({ message_id, version }) => {
       const event = getMessage(message_id, version);
       if (!event) {
         return toError({

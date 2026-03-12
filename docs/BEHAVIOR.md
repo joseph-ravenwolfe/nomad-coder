@@ -6,7 +6,7 @@ This is **Telegram Bridge MCP** — a Model Context Protocol server that bridges
 
 **Your role:** You are the bot. The user communicates with you via their Telegram client on their phone or desktop. Everything you send appears instantly in their chat. Everything they send, type, or speak comes back to you as structured tool results.
 
-**This is a single-user, single-chat server.** The bot is locked to one Telegram user (`ALLOWED_USER_ID`) and one chat (`ALLOWED_CHAT_ID`) via environment config. You are never talking to strangers.
+**This is a single-user server.** The bot is locked to one Telegram user (`ALLOWED_USER_ID`) via environment config — their user ID is also used as the outbound chat target. You are never talking to strangers.
 
 ---
 
@@ -26,63 +26,35 @@ When starting a new session with this MCP:
 
 1. Call `get_agent_guide` (this tool) to load behavioral rules.
 2. Read the `telegram-bridge-mcp://communication-guide` resource for Telegram communication patterns.
-3. Call `get_updates` once (limit 100, timeout 0) to drain any stale messages from the queue — discard results.
+3. Drain stale messages: call `dequeue_update(timeout: 0)` in a loop, discarding results, until `pending == 0`.
 4. Send a brief **silent** `notify` that you're online and ready.
-5. Enter the `wait_for_message` loop.
+5. Enter the `dequeue_update` loop — call with no arguments to block up to 60 s (the default).
 
-**`get_update` is the default tool for receiving messages.** Use it for all ongoing message handling.
+**`dequeue_update` is the sole tool for receiving updates.** It handles messages, voice (pre-transcribed), commands, reactions, and callback queries in a single unified queue. The response lane (reactions and callbacks) drains before the message lane on each call.
 
-### Recovering lost context with `get_prior_update`
+### `dequeue_update` loop pattern
 
-If your context compacts or you lose track of conversation state, use `get_prior_update` to navigate backward through update history one at a time:
+`dequeue_update` has two distinct modes — pick the right one for each situation:
 
-```text
-1. Call get_prior_update(offset: 1)      — get the most recent update
-2. Read it. Decide: is this the start of what I need to replay?
-3. If yes: call get_update(from_update_id: <that ID>) to read forward from there
-4. Or increase offset: get_prior_update(offset: 2) to go further back
-```
+| Mode | Call | Behavior |
+| --- | --- | --- |
+| **Block** (normal loop) | `dequeue_update()` — no args | Waits up to 60 s for the next update. Use this in the main loop. |
+| **Instant poll** (drain) | `dequeue_update(timeout: 0)` | Returns immediately — an update if one exists, or `{ empty: true }`. |
+| **Long idle wait** | `dequeue_update(timeout: 300)` | Waits up to 5 min. Use after doubling idle backoff. |
 
-Ring buffer stores the last 100 updates (all types: messages, reactions, callbacks, etc.). Use `filter` to focus on specific senders:
-
-- `"user"` — updates from the operator only
-- `"bot"` — updates from the bot (echoes, confirmations)
-- A specific user ID (number) — updates from that exact user
-- `"all"` (default) — everything
-
-### `get_update` loop pattern
-
-After any task completes, drain the buffer before blocking:
+Normal drain-then-block sequence:
 
 ```text
-1. Call get_update()               — handle the returned update.
-2. If remaining > 0, repeat step 1 — do not skip to wait_for_message.
-3. When updates=[] and remaining=0, call wait_for_message to block.
+1. drain: call dequeue_update(timeout: 0) until empty: true — handles any backlog
+2. block: call dequeue_update()           — waits up to 60 s for the next task
+3. On update: handle it, then go to step 1
 ```
 
-`remaining` is the count still buffered after the call. Ignoring it means messages queued while you were busy get silently dropped.
+`pending` (included in every non-empty response) tells you how many items are still queued. When `pending > 0`, skip straight to another `dequeue_update(timeout: 0)` call instead of blocking.
 
-**Optional parameters:**
+### Looking up prior messages
 
-- `update_id <number>` — jump directly to a specific update ID (if you know it)
-- `from_update_id <number>` — start reading from this ID forward (useful with `get_prior_update` to replay a section)
-- `filter` — limit to `"user"` (operator only), `"bot"` (bot's own messages), `<user ID>` (exact user), or `"all"` (default)
-
-### When to use `get_updates` (plural)
-
-Only use `get_updates` when you are **prepared to store and respond to every update it returns**. It dumps all pending updates at once with no `remaining` signal — if you handle only the first and move on, the rest are gone.
-
-Optional parameters (for replay):
-
-- `from_update_id <number>` — read all updates from this ID forward (useful for bulk replay after recovering context with `get_prior_update`)
-- `limit <number>` — max updates to return (default all available)
-- `filter` — same filter options as `get_update`
-
-Acceptable uses:
-
-- Startup drain (draining stale queue) — call once with no params, discard everything.
-- Explicit bulk replay where you will iterate and process the full returned array — use `from_update_id` to start from a known point.
-- Targeted debugging when explicitly asked.
+Use `get_message(message_id)` to retrieve a previously seen message by its ID. Returns text, caption, file metadata, and edit history. Only call for message IDs already known to this agent session (received via `dequeue_update` or sent by the agent).
 
 ---
 
@@ -192,8 +164,8 @@ set_topic("Refactor Agent")
 
 **Behavior:**
 
-- Applies to: `send_message`, `notify`, `ask`, `choose`, `send_confirmation`, `update_status`
-- Does **not** apply to: `send_photo`, `send_document` (file captions stay clean)
+- Applies to: `send_text`, `notify`, `ask`, `choose`, `send_confirmation`, `update_status`
+- Does **not** apply to: `send_file` (file captions stay clean)
 - The tag always appears — there is no per-message override
 - Pass an empty string to clear: `set_topic("")`
 - Process-scoped: resets if the server restarts
@@ -205,35 +177,38 @@ set_topic("Refactor Agent")
 Call `show_typing` **after receiving a message**, right before doing actual work. It is idempotent — you can call it multiple times and only one interval runs; repeated calls just extend the deadline without spamming Telegram.
 
 - **Default timeout:** 20 s — enough for most tasks. Pass a longer value for slow operations.
-- **Auto-cancelled** when any message-sending tool (`send_message`, `notify`, `send_photo`, etc.) is called. You don't need to manually cancel on normal send paths.
-- Use `cancel_typing` only if you decide not to send a message after all.
+- **Auto-cancelled** when any message-sending tool (`send_text`, `notify`, `send_file`, etc.) is called. You don't need to manually cancel on normal send paths.
+- Use `show_typing(cancel: true)` to immediately stop the indicator if you decide not to send a message after all.
 - Do **not** call `show_typing` while idle/polling. The indicator is for signalling active work to the user.
 
 ---
 
-## Tool usage: `send_temp_message`
+## Tool usage: Animations (`show_animation` / `cancel_animation`)
 
-Sends a short placeholder that is **automatically deleted** the moment any outbound tool fires, or after the TTL expires (default 30 s). Zero cleanup required.
+Create an ephemeral cycling placeholder visible to the user while you work. Unlike the typing indicator, animations show actual text (frames) and leave a permanent message when cancelled with text.
 
 **When to use:** right before a slow operation where the typing indicator isn't enough context.
 
 ```ts
-send_temp_message("Analyzing 47 files…")   // user sees this immediately
+const { message_id } = await show_animation({ frames: ["Analyzing…", "Analyzing.", "Analyzing.."] })
 // ... do the work ...
-notify("Analysis complete", ...)            // temp message deleted automatically
+await cancel_animation({ text: "Analysis complete — 47 files scanned." })
 ```
 
+For a static placeholder:
+
 ```ts
-send_temp_message("Setting up…", ttl_seconds: 10)
-update_status(...)                          // replaces the placeholder
+const { message_id } = await show_animation({ frames: ["Setting up…"] })
+await update_status(...)  // visible; animation still cleaned up by cancel_animation
+await cancel_animation()
 ```
 
 **Rules:**
 
-- Only one pending temp at a time — a second call replaces the first.
-- Do **not** delete it manually; the next outbound tool handles it.
-- Prefer `update_status` for tasks with 3+ visible steps. Use `send_temp_message` for a quick "I'm on it" with no structured progress to show.
-- Plain text only — no Markdown.
+- Only one animation at a time — `show_animation` replaces any active one.
+- `cancel_animation` without `text` deletes the placeholder message.
+- `cancel_animation` with `text` edits the placeholder into a permanent log message.
+- Prefer `update_status` for tasks with 3+ named steps. Use `show_animation` for a quick "I'm on it" with no structured progress to show.
 
 ---
 
@@ -241,12 +216,10 @@ update_status(...)                          // replaces the placeholder
 
 **Default timeouts are optimized for minimal token usage during idle polling:**
 
-- `wait_for_message`: 300 s (5 min) — use default when polling for next task
-- `ask`, `choose`, `send_confirmation`, `wait_for_callback_query`: 60 s — reasonable wait when expecting a response
+- `dequeue_update`: 60 s (default) — blocks until a message arrives or timeout occurs; up to 300 s for long idle periods
+- `ask`, `choose`, `send_confirmation`: 60 s — reasonable wait when expecting a response
 
-All tools support up to 300 s max. You can use shorter timeouts (e.g., 30–60 s) when you want more responsive feedback loops, or longer timeouts when idle to minimize repeated polling overhead.
-
-Internal Telegram API long-polling uses 25 s intervals — one `wait_for_message(300)` makes ~12 API calls vs. 300+ calls with the old 1 s interval and 30 s timeout loop.
+All tools support up to 300 s max. Use shorter timeouts (e.g., 30–60 s) when you want more responsive feedback loops, or longer timeouts when idle to minimize repeated polling overhead.
 
 ---
 
@@ -283,7 +256,7 @@ Keep labels short and descriptive. Use `columns=1` for longer option text. Both 
 
 ## Formatting: default parse_mode
 
-`send_message`, `notify`, `edit_message_text`, and `send_photo` all default to `"Markdown"`.
+`send_text`, `notify`, `edit_message_text`, `append_text`, and `send_file` all default to `"Markdown"`.
 Standard Markdown (bold, italic, code, links, headings) is auto-converted to Telegram MarkdownV2. No manual escaping needed.
 
 See the `formatting-guide` resource (`telegram-bridge-mcp://formatting-guide`) for the full reference.
@@ -300,18 +273,18 @@ Do not use `\\n` (double backslash) — that would produce a visible backslash i
 
 ## Voice message handling
 
-All message-receiving tools (`wait_for_message`, `ask`, `choose`, `get_updates`, `get_update`) support voice messages with automatic transcription via local Whisper. While transcribing, a `✍` reaction is applied to the voice message; when done, it swaps to `🫡`.
+Voice messages are automatically transcribed by the background poller before they arrive in `dequeue_update`. `ask` and `choose` also handle voice replies inline. While transcribing, a `✍` reaction is applied to the voice message; when done, it swaps to `🫡`.
 
-Transcription is transparent — returned as `text` with `voice: true` in the result.
+Transcription is transparent — results arrive as `text` with `voice: true`.
 
-### Sending voice: `send_message` vs `send_voice`
+### Sending voice: `send_text_as_voice` vs `send_file`
 
 | Tool | When to use |
 | --- | --- |
-| `send_message(voice: true)` | **Speak a text response via TTS.** The text is synthesized to speech and sent as a voice note. Requires `TTS_HOST` or `OPENAI_API_KEY`. Use this to reply in audio. |
-| `send_voice(voice: <file>)` | **Send an existing audio file.** Accepts a local OGG/Opus file path, public URL, or Telegram `file_id`. Use this when you already have audio to deliver. |
+| `send_text_as_voice(text)` | **Speak a text response via TTS.** The text is synthesized to speech and sent as a voice note. Requires `TTS_HOST` or `OPENAI_API_KEY`. Write as natural spoken language — Markdown is stripped before synthesis. |
+| `send_file(file, type: "voice")` | **Send an existing audio file.** Accepts a local OGG/Opus path, public HTTPS URL, or Telegram `file_id`. Use this when you already have audio to deliver. |
 
-Never call `send_voice` to speak text — it only accepts pre-existing audio files.
+Never call `send_file(type: "voice")` to speak text — it only delivers pre-existing audio.
 
 ### TTS delivery error: "user restricted receiving of voice note messages"
 

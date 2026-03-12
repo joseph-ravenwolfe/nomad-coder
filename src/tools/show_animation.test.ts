@@ -64,7 +64,7 @@ describe("show_animation tool", () => {
   });
 
   it("returns error when startAnimation throws", async () => {
-    mocks.startAnimation.mockRejectedValue(new Error("ALLOWED_CHAT_ID not configured"));
+    mocks.startAnimation.mockRejectedValue(new Error("ALLOWED_USER_ID not configured"));
     const result = await call({});
     expect(isError(result)).toBe(true);
   });

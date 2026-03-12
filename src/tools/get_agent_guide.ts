@@ -18,7 +18,7 @@ export function register(server: McpServer) {
     {
       description: DESCRIPTION,
     },
-    async () => {
+    () => {
       const content = readFileSync(
         join(__dirname, "..", "..", "BEHAVIOR.md"),
         "utf-8"

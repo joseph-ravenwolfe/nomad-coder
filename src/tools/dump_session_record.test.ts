@@ -1,5 +1,5 @@
 import { vi, describe, it, expect, beforeEach } from "vitest";
-import { createMockServer, parseResult, isError } from "./test-utils.js";
+import { createMockServer, isError } from "./test-utils.js";
 
 // ── dump_session_record (V3 — uses message-store) ───────────────────────
 

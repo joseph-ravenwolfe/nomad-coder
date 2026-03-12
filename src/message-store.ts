@@ -18,8 +18,38 @@
  */
 
 import type { Update } from "grammy/types";
-import Queue from "@tsdotnet/queue";
 import { recordUpdate, recordBotMessage } from "./session-recording.js";
+
+// ---------------------------------------------------------------------------
+// Simple generic queue (replaces @tsdotnet/queue)
+// ---------------------------------------------------------------------------
+
+class SimpleQueue<T> {
+  private _items: T[] = [];
+
+  enqueue(item: T): void {
+    this._items.push(item);
+  }
+
+  dequeue(): T | undefined {
+    return this._items.shift();
+  }
+
+  /** Destructive drain — empties the queue, returns all items. */
+  dump(): T[] {
+    const items = this._items;
+    this._items = [];
+    return items;
+  }
+
+  clear(): void {
+    this._items = [];
+  }
+
+  get count(): number {
+    return this._items.length;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -100,8 +130,8 @@ let _index = new Map<number, Map<number, TimelineEvent>>();
 let _insertionOrder: number[] = [];
 
 /** Two-lane queue — response lane items drain before message lane. */
-let _responseLane = new Queue<QueueItem>();
-let _messageLane = new Queue<QueueItem>();
+const _responseLane = new SimpleQueue<QueueItem>();
+const _messageLane = new SimpleQueue<QueueItem>();
 
 /**
  * Listeners waiting for the next enqueue. Resolved when a new item is
@@ -454,13 +484,12 @@ export function dequeueMatch<T>(
 
 /** Drain a lane, extract the first match, re-enqueue the rest. */
 function _scanAndRemove<T>(
-  lane: Queue<QueueItem>,
+  lane: SimpleQueue<QueueItem>,
   predicate: (event: TimelineEvent) => T | undefined,
 ): T | undefined {
-  const items = lane.dump(); // destructive — empties the lane (may contain nulls from internal buffer)
+  const items = lane.dump();
   let found: T | undefined;
   for (const item of items) {
-    if (!item) continue; // skip null/undefined buffer slots
     if (found === undefined) {
       const result = predicate(item.event);
       if (result !== undefined) {

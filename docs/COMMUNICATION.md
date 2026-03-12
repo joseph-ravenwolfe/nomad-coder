@@ -10,7 +10,7 @@ MCP resources: `telegram-bridge-mcp://communication-guide` (full) · `telegram-b
 
 1. **`send_confirmation`** — all yes/no questions. Always buttons.
 2. **`choose`** — all multi-option questions. Always buttons.
-3. **`wait_for_message`** — all input waiting. Long-polls correctly.
+3. **`dequeue_update`** — all update waiting. Blocks up to timeout with `pending` count.
 4. **`reply_to_message_id`** — include on every reply to thread messages visually.
 5. **Commit/push** — get explicit operator approval first. Send a `notify` summary before committing.
 6. **`show_typing`** — call immediately after receiving a message, before starting work.
@@ -27,8 +27,8 @@ MCP resources: `telegram-bridge-mcp://communication-guide` (full) · `telegram-b
 | Fixed options | `choose` |
 | Open-ended input | `ask` |
 | Short status (1–2 sentences) | `notify` |
-| Ephemeral placeholder ("Thinking…") | `send_temp_message` |
-| Structured result / explanation | `send_message` (Markdown) |
+| Ephemeral placeholder ("Thinking…") | `show_animation` / `cancel_animation` |
+| Structured result / explanation | `send_text` (Markdown) |
 | Build / deploy / error event | `notify` with severity |
 | Multi-step task (3+ steps) | `update_status` checklist |
 
@@ -60,7 +60,7 @@ MCP resources: `telegram-bridge-mcp://communication-guide` (full) · `telegram-b
 2. Review every `.md` file touched during the session — fix any markdown warnings, broken links, inconsistent heading levels, trailing spaces, or formatting issues, however trivial.
 3. Commit.
 4. Edit the notify message to add a `↑ Push` button.
-5. `wait_for_callback_query` — wait for operator tap.
+5. `dequeue_update` — wait for operator tap (callback query).
 6. `answer_callback_query` to dismiss spinner.
 7. Send `notify` "Pushing…" (save message_id).
 8. Remove the button from step 4.

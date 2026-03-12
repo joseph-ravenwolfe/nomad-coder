@@ -4,7 +4,7 @@
  */
 
 import type { Update, ReactionTypeEmoji } from "grammy/types";
-import type { SessionEntry, BotEntry } from "./session-recording.js";
+import type { SessionEntry } from "./session-recording.js";
 import { transcribeWithIndicator } from "./transcribe.js";
 
 export async function sanitizeUpdate(u: Update): Promise<Record<string, unknown>> {
@@ -17,7 +17,7 @@ export async function sanitizeUpdate(u: Update): Promise<Record<string, unknown>
 
     if (msg.voice) {
       const text = await transcribeWithIndicator(msg.voice.file_id, msg.message_id)
-        .catch((e: Error) => `[transcription failed: ${e.message}]`);
+        .catch((e: unknown) => `[transcription failed: ${e instanceof Error ? e.message : String(e)}]`);
       return {
         type: "message", content_type: "voice", ...base,
         text, file_id: msg.voice.file_id, voice: true,
@@ -152,7 +152,7 @@ export async function sanitizeSessionEntry(entry: SessionEntry): Promise<Record<
     const sanitized = await sanitizeUpdate(entry.update);
     return { from: "user", ...sanitized };
   }
-  const { direction: _direction, ...rest } = entry as BotEntry;
+  const { direction: _direction, ...rest } = entry;
   return { from: "bot", ...rest };
 }
 

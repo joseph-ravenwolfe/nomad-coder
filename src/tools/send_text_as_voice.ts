@@ -30,7 +30,7 @@ export function register(server: McpServer) {
     async ({ text, disable_notification, reply_to_message_id }) => {
       const chatId = resolveChat();
       if (typeof chatId !== "number") return toError(chatId);
-      await clearPendingTemp();
+      clearPendingTemp();
 
       if (!isTtsEnabled()) {
         return toError({

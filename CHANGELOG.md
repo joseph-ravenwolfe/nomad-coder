@@ -5,6 +5,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+### Changed
+
+- **ESLint upgraded to `strictTypeChecked`** — switched from `recommended` to `strictTypeChecked` preset; fixed all violations across source and test files (323 → 0)
+- **Replaced `@tsdotnet/queue` with inline `SimpleQueue<T>`** — eliminates external dependency and fixes 33 type-resolution failures caused by pnpm strict symlinking
+- **Test-file ESLint override** — relaxed `no-non-null-assertion`, `no-unsafe-*`, and `no-unnecessary-condition` for `*.test.ts` files (standard practice for mock-heavy test code)
+- **Renamed `session_recording.test.ts` → `dump_session_record.test.ts`** — test file now matches the tool it tests
+
 ### Security
 
 - **`get_chat` consent gate** — tool now sends an inline keyboard confirmation to the user before returning any chat info; agent cannot access chat metadata (including username, first/last name, description) without explicit approval

@@ -38,7 +38,7 @@ let _state: AnimationState | null = null;
 // Helpers
 // ---------------------------------------------------------------------------
 
-function unrefTimer(t: ReturnType<typeof setInterval> | ReturnType<typeof setTimeout>): void {
+function unrefTimer(t: ReturnType<typeof setTimeout>): void {
   if (typeof t === "object" && "unref" in t) t.unref();
 }
 
@@ -91,7 +91,7 @@ export async function startAnimation(
   await cancelAnimation();
 
   const chatId = resolveChat();
-  if (typeof chatId !== "number") throw new Error("ALLOWED_CHAT_ID not configured");
+  if (typeof chatId !== "number") throw new Error("ALLOWED_USER_ID not configured");
 
   // Pre-process all frames through Markdown→MarkdownV2 once
   const processed = frames.map((f) => resolveParseMode(f, "Markdown"));

@@ -13,7 +13,7 @@ export function register(server: McpServer) {
     {
       description: DESCRIPTION,
     },
-    async () => {
+    () => {
       // Send the response first so the caller gets confirmation before we exit
       const result = toResult({ restarting: true });
       setImmediate(() => void clearCommandsOnShutdown().finally(() => process.exit(0)));

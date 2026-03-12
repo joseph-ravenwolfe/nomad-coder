@@ -3,7 +3,6 @@ import type { ApiError, ReactionTypeEmoji, Update } from "grammy/types";
 import { readFileSync, existsSync } from "fs";
 import path, { resolve } from "path";
 import { tmpdir } from "os";
-import { handleIfBuiltIn, isBuiltInPanelQuery } from "./built-in-commands.js";
 
 /** Directory where downloaded files are stored — only local paths under this dir are allowed for file uploads. */
 export const SAFE_FILE_DIR = resolve(tmpdir(), "telegram-bridge-mcp");
@@ -174,7 +173,7 @@ function classifyGrammyError(err: GrammyError): TelegramError {
     };
 
   if (err.error_code === 429) {
-    const retry = err.parameters?.retry_after;
+    const retry = err.parameters.retry_after;
     return {
       code: "RATE_LIMITED",
       message: `Rate limited by Telegram. Retry after ${retry ?? "a few"} seconds.`,
@@ -221,21 +220,12 @@ export function resetApi(): void {
 /**
  * ALLOWED_USER_ID  — Numeric Telegram user ID of the owner.
  *   When set, every inbound update whose sender is NOT this user is dropped.
+ *   Also used as the outbound chat target — for private 1-on-1 bots, chat.id === user.id.
  *   Prevents message-injection attacks from anyone who discovers the bot username.
- *
- * ALLOWED_CHAT_ID  — Chat ID (integer, may be negative for group/channel chats) that
- *   the bot is permitted to operate in.
- *   When set:
- *     • Inbound updates from other chats are dropped.
- *     • Outbound send calls targeting a different chat are rejected before
- *       hitting the Telegram API.
- *
- * Both are optional at runtime, but omitting ALLOWED_USER_ID is strongly
- * discouraged — a startup warning is emitted.
+ *   Optional at runtime, but strongly discouraged to omit — a startup warning is emitted.
  */
 export interface SecurityConfig {
   userId: number; // 0 — no filter
-  chatId: number; // 0 — no filter
 }
 
 let _securityConfig: SecurityConfig | null = null;
@@ -256,9 +246,8 @@ export function getSecurityConfig(): SecurityConfig {
   if (_securityConfig) return _securityConfig;
 
   const userId = parseEnvInt("ALLOWED_USER_ID");
-  const chatId = parseEnvInt("ALLOWED_CHAT_ID");
 
-  if (userId) return (_securityConfig = { userId, chatId });
+  if (userId) return (_securityConfig = { userId });
 
   if (process.env.ALLOW_ALL_USERS !== "true")
     throw new Error(
@@ -273,7 +262,7 @@ export function getSecurityConfig(): SecurityConfig {
       "Any Telegram user who messages the bot can inject updates."
   );
 
-  return (_securityConfig = { userId, chatId });
+  return (_securityConfig = { userId });
 }
 
 /** For testing only: resets the security config singleton so env vars are re-read. */
@@ -289,72 +278,44 @@ export function unauthorizedSenderError(fromId: number | undefined): TelegramErr
   };
 }
 
-/** Structured error for outbound sends targeting a disallowed chat. */
-export function unauthorizedChatError(chatId: string): TelegramError {
-  return {
-    code: "UNAUTHORIZED_CHAT",
-    message: `Operation rejected: chat ${chatId} is not the configured ALLOWED_CHAT_ID. This server is locked to a single conversation.`,
-  };
-}
-
 /**
- * Filters an update array to only those from the allowed user and/or chat.
+ * Filters an update array to only those from the allowed user.
  * Updates that fail the check are silently consumed (offset still advances)
  * to keep the Telegram queue clean — they are never surfaced to the agent.
  */
 export function filterAllowedUpdates(updates: Update[]): Update[] {
-  const { userId, chatId } = getSecurityConfig();
-  const hasUserFilter = userId > 0;
-  if (!hasUserFilter && !chatId) return updates;
+  const { userId } = getSecurityConfig();
+  if (!userId) return updates;
 
   return updates.filter((u) => {
     const senderId =
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- from is typed as required but absent on channel posts
       u.message?.from?.id ??
-      u.callback_query?.from?.id ??
+      u.callback_query?.from.id ??
       u.message_reaction?.user?.id ??
-      u.my_chat_member?.from?.id;
-    const updateChatId =
-      u.message?.chat?.id ??
-      u.callback_query?.message?.chat.id ??
-      u.message_reaction?.chat?.id ??
-      u.my_chat_member?.chat?.id ??
-      null;
-
-    if (hasUserFilter && (!senderId || senderId !== userId)) return false;
-    if (chatId && (!updateChatId || updateChatId !== chatId)) return false;
-    return true;
+      u.my_chat_member?.from.id;
+    return senderId !== undefined && senderId === userId;
   });
-}
-
-/**
- * Validates that an outbound target chat is permitted.
- * Returns a TelegramError if ALLOWED_CHAT_ID is set and the target differs.
- */
-export function validateTargetChat(chatId: string): TelegramError | null {
-  const { chatId: allowed } = getSecurityConfig();
-  if (!allowed) return null;
-  if (chatId.trim() === String(allowed)) return null;
-  return unauthorizedChatError(chatId);
 }
 
 /**
  * Resolves the target chat ID for all outbound tool calls.
  *
- * The server is designed for a single-user/single-chat workflow — the chat is
- * always fully determined by ALLOWED_CHAT_ID in the server config. Tools never
- * accept or expose chat_id as a parameter; it is resolved here transparently.
+ * Uses ALLOWED_USER_ID as the chat target — for private 1-on-1 bots,
+ * chat.id === user.id. Tools never accept or expose chat_id as a parameter;
+ * it is resolved here transparently.
  *
- * Returns the chat ID on success, or a TelegramError if ALLOWED_CHAT_ID
+ * Returns the chat ID on success, or a TelegramError if ALLOWED_USER_ID
  * has not been configured (use `typeof result !== "number"` to detect errors).
  */
 export function resolveChat(): number | TelegramError {
-  const { chatId } = getSecurityConfig();
-  if (chatId) return chatId;
+  const { userId } = getSecurityConfig();
+  if (userId) return userId;
   return {
     code: "UNAUTHORIZED_CHAT",
     message:
-      "ALLOWED_CHAT_ID is not configured. Set it in your .env or MCP server " +
-      "config to lock this server to its intended conversation.",
+      "ALLOWED_USER_ID is not configured. Set it in your .env or MCP server " +
+      "config so the server knows which conversation to target.",
   };
 }
 
@@ -390,8 +351,8 @@ export function fireHijackNotification(message: string): void {
   if (notify.console)
     console.error(`[telegram-bridge-mcp] WARNING: ${message}`);
   if (notify.telegram) {
-    const { chatId } = getSecurityConfig();
-    if (chatId)
+    const chatId = resolveChat();
+    if (typeof chatId === "number")
       getApi().sendMessage(chatId, message).catch(() => {}); // best-effort
   }
 }

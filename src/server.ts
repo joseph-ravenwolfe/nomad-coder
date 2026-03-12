@@ -3,7 +3,6 @@ import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
-// ── V3 new tools ──────────────────────────────────────────────────────────
 import { register as registerDequeueUpdate } from "./tools/dequeue_update.js";
 import { register as registerGetMessage } from "./tools/get_message.js";
 import { register as registerSendText } from "./tools/send_text.js";
@@ -11,8 +10,6 @@ import { register as registerSendFile } from "./tools/send_file.js";
 import { register as registerAppendText } from "./tools/append_text.js";
 import { register as registerShowAnimation } from "./tools/show_animation.js";
 import { register as registerCancelAnimation } from "./tools/cancel_animation.js";
-
-// ── Updated tools (V2→V3) ────────────────────────────────────────────────
 import { register as registerSendTextAsVoice } from "./tools/send_text_as_voice.js";
 import { register as registerNotify } from "./tools/notify.js";
 import { register as registerEditMessageText } from "./tools/edit_message_text.js";
@@ -123,11 +120,11 @@ export function createServer(): McpServer {
     "utf-8"
   );
 
-  server.resource(
+  server.registerResource(
     "agent-guide",
     "telegram-bridge-mcp://agent-guide",
     { mimeType: "text/markdown", description: "Agent behavior guide for this MCP server. Read this at session start to understand how to communicate with the user and which tools to use." },
-    async () => ({
+    () => ({
       contents: [
         {
           uri: "telegram-bridge-mcp://agent-guide",
@@ -138,11 +135,11 @@ export function createServer(): McpServer {
     })
   );
 
-  server.resource(
+  server.registerResource(
     "communication-guide",
     "telegram-bridge-mcp://communication-guide",
     { mimeType: "text/markdown", description: "Compact Telegram communication patterns: tool selection, hard rules, commit/push flow, multi-step tasks, and loop behavior." },
-    async () => ({
+    () => ({
       contents: [
         {
           uri: "telegram-bridge-mcp://communication-guide",
@@ -153,11 +150,11 @@ export function createServer(): McpServer {
     })
   );
 
-  server.resource(
+  server.registerResource(
     "quick-reference",
     "telegram-bridge-mcp://quick-reference",
     { mimeType: "text/markdown", description: "Hard rules + tool selection table for Telegram communication. Minimal injected rules card — full detail in communication-guide." },
-    async () => ({
+    () => ({
       contents: [
         {
           uri: "telegram-bridge-mcp://quick-reference",
@@ -168,11 +165,11 @@ export function createServer(): McpServer {
     })
   );
 
-  server.resource(
+  server.registerResource(
     "setup-guide",
     "telegram-bridge-mcp://setup-guide",
     { mimeType: "text/markdown", description: "Step-by-step guide to creating a Telegram bot and running pnpm pair to configure this MCP server." },
-    async () => ({
+    () => ({
       contents: [
         {
           uri: "telegram-bridge-mcp://setup-guide",
@@ -183,11 +180,11 @@ export function createServer(): McpServer {
     })
   );
 
-  server.resource(
+  server.registerResource(
     "formatting-guide",
     "telegram-bridge-mcp://formatting-guide",
     { mimeType: "text/markdown", description: "Reference for Markdown/HTML/MarkdownV2 formatting in Telegram messages. Consult this when unsure how to format text." },
-    async () => ({
+    () => ({
       contents: [
         {
           uri: "telegram-bridge-mcp://formatting-guide",

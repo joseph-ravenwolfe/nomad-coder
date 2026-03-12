@@ -19,20 +19,12 @@ Your numeric Telegram user ID. When set:
 - Updates from any other sender are **silently consumed and discarded** — they advance the offset so the queue stays clean, but the agent never sees them.
 - Without this, a second person messaging your bot could feed the agent arbitrary responses.
 
-### Layer 2 — Outbound + Inbound: `ALLOWED_CHAT_ID`
-
-The chat ID this bot is permitted to operate in. When set:
-
-- Any tool call targeting a **different chat is rejected** before the Telegram API is called. The agent receives an `UNAUTHORIZED_CHAT` error immediately.
-- Inbound updates from other chats are also discarded at the same filter as above.
-- This prevents the bot from being redirected to send messages to unintended recipients.
-
 ### Threat model summary
 
 | Threat | Mitigated by |
 |--------|--------------|
 | Stranger messages bot to inject replies | `ALLOWED_USER_ID` |
-| Agent redirected to message a different chat | `ALLOWED_CHAT_ID` |
+| Agent redirected to message a different chat | No `chat_id` parameter — target is always `ALLOWED_USER_ID` |
 | Token leak → someone sends messages as bot | Rotate via `/revoke` in BotFather |
 | Token in version control | `.env` is git-ignored; never put it in config files |
 
@@ -65,18 +57,15 @@ BOT_TOKEN=123456789:AABBCCDDEEFFaabbccddeeff-1234567890
 
 # Strongly recommended — see Security Model above
 ALLOWED_USER_ID=<your numeric user ID>
-ALLOWED_CHAT_ID=<your chat ID>
 ```
 
-Or pass all three as environment variables in your MCP host config (see Step 5).
+Or pass both as environment variables in your MCP host config (see Step 5).
 
 ---
 
-## Step 3 — Find Your Chat ID and User ID
+## Step 3 — Find Your User ID
 
-The bot needs two IDs from you: your **chat ID** (for `ALLOWED_CHAT_ID`) and your **user ID** (for `ALLOWED_USER_ID`). Both come from the same `getUpdates` call.
-
-### Option A — Message the bot first (DM)
+The bot needs your numeric Telegram user ID for `ALLOWED_USER_ID`. For private 1-on-1 bots, your chat ID equals your user ID — no separate config needed.
 
 1. Search for your bot by @username in Telegram and start a chat.
 2. Send any message (e.g. `/start`).
@@ -86,27 +75,19 @@ The bot needs two IDs from you: your **chat ID** (for `ALLOWED_CHAT_ID`) and you
    https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates
    ```
 
-4. In the JSON response, find this structure:
+4. In the JSON response, find:
+
    ```json
    {
      "message": {
-       "from": { "id": 123456789, ... },
-       "chat": { "id": 123456789, ... }
+       "from": { "id": 123456789 }
      }
    }
    ```
-   - `message.from.id` → your **user ID** → use as `ALLOWED_USER_ID`
-   - `message.chat.id` → your **chat ID** → use as `ALLOWED_CHAT_ID`
 
-   For a DM with yourself, these two values are usually identical.
+   `message.from.id` → your **user ID** → use as `ALLOWED_USER_ID`.
 
-### Option B — Add the bot to a group
-
-1. Add the bot to any group.
-2. Send a message in the group.
-3. Call `getUpdates` as above — group chat IDs are negative, e.g. `-1001234567890`.
-4. `message.from.id` is still your personal user ID.
-5. `message.chat.id` is the group's chat ID — use that as `ALLOWED_CHAT_ID`.
+> **Tip:** `pnpm pair` automates this step — it polls for the pairing code and writes `ALLOWED_USER_ID` to `.env` automatically.
 
 ---
 
@@ -133,8 +114,7 @@ Add to your `.vscode/mcp.json` (or user settings):
       "cwd": "/path/to/telegram-bridge-mcp",
       "env": {
         "BOT_TOKEN": "YOUR_TOKEN_HERE",
-        "ALLOWED_USER_ID": "123456789",
-        "ALLOWED_CHAT_ID": "123456789"
+        "ALLOWED_USER_ID": "123456789"
       }
     }
   }
@@ -153,8 +133,7 @@ Add to `claude_desktop_config.json`:
       "args": ["/absolute/path/to/telegram-bridge-mcp/dist/index.js"],
       "env": {
         "BOT_TOKEN": "YOUR_TOKEN_HERE",
-        "ALLOWED_USER_ID": "123456789",
-        "ALLOWED_CHAT_ID": "123456789"
+        "ALLOWED_USER_ID": "123456789"
       }
     }
   }
@@ -177,9 +156,7 @@ Add to `claude_desktop_config.json`:
 
 ### `UNAUTHORIZED_CHAT`
 
-- A tool tried to send to or receive from a chat that is not `ALLOWED_CHAT_ID`.
-- The agent may be passing the wrong `chat_id`. Verify the value matches the one in your config.
-- If you intentionally want to use a different chat, update `ALLOWED_CHAT_ID` in your env config.
+- `ALLOWED_USER_ID` is not configured. Set it in your `.env` or MCP host config.
 
 ### `CHAT_NOT_FOUND`
 

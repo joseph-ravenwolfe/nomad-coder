@@ -26,7 +26,7 @@ let _deadline = 0;
 
 const INTERVAL_MS = 4_000; // Telegram indicator expires in ~5 s; 4 s keeps it seamless
 
-function unrefTimer(t: ReturnType<typeof setInterval> | ReturnType<typeof setTimeout>): void {
+function unrefTimer(t: ReturnType<typeof setTimeout>): void {
   if (typeof t === "object" && "unref" in t) t.unref();
 }
 
@@ -67,8 +67,8 @@ export async function showTyping(timeoutSeconds: number, action: TypingAction = 
     _deadline = Math.max(_deadline, newDeadline);
     // Reset the safety timeout too
     if (_safety) clearTimeout(_safety);
-    _safety = setTimeout(() => cancelTyping(), Math.max(0, _deadline - Date.now()));
-    if (_safety) unrefTimer(_safety);
+    _safety = setTimeout(() => { cancelTyping(); }, Math.max(0, _deadline - Date.now()));
+    unrefTimer(_safety);
     return false; // extended, not newly started
   }
 
@@ -86,16 +86,14 @@ export async function showTyping(timeoutSeconds: number, action: TypingAction = 
     return false;
   }
 
-  _timer = setInterval(async () => {
+  _timer = setInterval(() => {
     if (Date.now() >= _deadline) {
       cancelTyping();
       return;
     }
-    try {
-      await getApi().sendChatAction(chatId, action);
-    } catch {
+    getApi().sendChatAction(chatId, action).catch(() => {
       cancelTyping();
-    }
+    });
   }, INTERVAL_MS);
 
   unrefTimer(_timer);

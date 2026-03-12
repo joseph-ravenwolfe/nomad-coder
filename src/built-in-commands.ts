@@ -298,22 +298,27 @@ async function doSessionDump(
     lines.push("(no updates captured)");
   } else {
     sanitized.forEach((u, i) => {
-      const from = String(u.from ?? "user");
+      const str = (v: unknown, fallback = ""): string =>
+        typeof v === "string" ? v
+          : typeof v === "number" || typeof v === "boolean" ? String(v)
+          : fallback;
+
+      const from = str(u.from, "user");
       const fromLabel = from === "bot" ? "[BOT]" : "[USER]";
-      const type = String(u.type ?? "unknown");
-      const msgId = u.message_id != null ? `msg_id: ${u.message_id}` : "";
+      const type = str(u.type, "unknown");
+      const msgId = u.message_id != null ? `msg_id: ${str(u.message_id)}` : "";
 
       if (from === "bot") {
-        lines.push(`[${i + 1}] ${fromLabel} ${u.content_type ?? "unknown"} | ${msgId}`);
-        if (u.text) lines.push(String(u.text));
+        lines.push(`[${i + 1}] ${fromLabel} ${str(u.content_type, "unknown")} | ${msgId}`);
+        if (u.text) lines.push(str(u.text));
       } else if (type === "message") {
-        lines.push(`[${i + 1}] ${fromLabel} message · ${u.content_type ?? "unknown"} | ${msgId}`);
-        if (u.text) lines.push(String(u.text));
-        if (u.caption) lines.push(`Caption: ${u.caption}`);
-        if (u.file_name) lines.push(`File: ${u.file_name}`);
+        lines.push(`[${i + 1}] ${fromLabel} message · ${str(u.content_type, "unknown")} | ${msgId}`);
+        if (u.text) lines.push(str(u.text));
+        if (u.caption) lines.push(`Caption: ${str(u.caption)}`);
+        if (u.file_name) lines.push(`File: ${str(u.file_name)}`);
       } else if (type === "callback_query") {
         lines.push(`[${i + 1}] ${fromLabel} callback_query | ${msgId}`);
-        if (u.data) lines.push(`data: ${u.data}`);
+        if (u.data) lines.push(`data: ${str(u.data)}`);
       } else {
         lines.push(`[${i + 1}] ${fromLabel} ${type}`);
       }

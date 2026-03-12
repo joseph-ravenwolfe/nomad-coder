@@ -145,7 +145,7 @@ export function register(server: McpServer) {
 
         // Button was pressed
         const chosen = options.find((o) => o.value === match.data);
-        const chosenLabel = chosen?.label ?? match.data ?? "";
+        const chosenLabel = chosen?.label ?? match.data;
         await ackAndEditSelection(chatId, sent.message_id, question, chosenLabel, match.callback_query_id);
 
         return toResult({

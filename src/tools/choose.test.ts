@@ -1,6 +1,6 @@
 import { vi, describe, it, expect, beforeEach } from "vitest";
 import { createMockServer, parseResult, isError, errorCode } from "./test-utils.js";
-import type { ButtonResult, TextResult, VoiceResult, ButtonOrTextResult } from "./button-helpers.js";
+import type { ButtonResult, TextResult, VoiceResult } from "./button-helpers.js";
 
 const mocks = vi.hoisted(() => ({
   sendMessage: vi.fn(),

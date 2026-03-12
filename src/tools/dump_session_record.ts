@@ -27,7 +27,7 @@ export function register(server: McpServer) {
           .describe("Max events to return (most recent). Default 100."),
       },
     },
-    async ({ limit }) => {
+    ({ limit }) => {
       try {
         const full = dumpTimeline();
         const timeline = full.length > limit ? full.slice(-limit) : full;

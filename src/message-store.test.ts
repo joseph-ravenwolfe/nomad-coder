@@ -343,7 +343,7 @@ describe("waitForEnqueue", () => {
     const promise = waitForEnqueue();
 
     // Enqueue after a tick
-    setTimeout(() => recordInbound(textUpdate(1, "wake up")), 10);
+    setTimeout(() => { recordInbound(textUpdate(1, "wake up")); }, 10);
 
     await promise; // should resolve
     expect(pendingCount()).toBe(1);

@@ -12,7 +12,7 @@ The current server is built around a strict single-user / single-chat contract:
 
 - Every inbound update is from *one* trusted operator.
 - Every outbound message goes to *one* configured chat.
-- `wait_for_message` blocks for the *next* message — no routing needed.
+- `dequeue_update` returns the *next* queued update from one trusted operator — no routing needed.
 
 Group chat breaks every one of those assumptions. Rather than bolt-on conditionals that weaken the 1-on-1 security story, this edition starts fresh with group-native assumptions.
 
@@ -73,9 +73,9 @@ A single group produces messages from multiple users at once. The agent needs to
 
 ---
 
-### 4. The `wait_for_message` Problem
+### 4. The `dequeue_update` Problem
 
-Currently `wait_for_message` returns *any* next message from the operator. In a group that contract is undefined.
+Currently `dequeue_update` returns the *next* update from the operator. In a group that contract is undefined.
 
 Group-native replacement must:
 
@@ -83,7 +83,7 @@ Group-native replacement must:
 2. Accept a `user_id` filter — optionally limit to the user who triggered the session.
 3. Include `from` in every returned update (who said it, their display name).
 
-A new `wait_for_reply` tool may be cleaner than patching `wait_for_message`.
+A new `wait_for_reply` tool may be cleaner than extending `dequeue_update` with thread-scoping.
 
 ---
 
@@ -130,7 +130,7 @@ In a group with multiple bots, one bot's reply can trigger another. Must filter 
 ### Phase 3 — Adapted Send Tools
 
 - [ ] All send tools accept `SessionContext` (or explicit `reply_to_message_id` + `chat_id`)
-- [ ] `show_typing` / `cancel_typing` scoped per session
+- [ ] `show_typing` (with `cancel: true` to stop) scoped per session
 - [ ] `send_confirmation` / `choose` / `ask` work within reply thread
 
 ### Phase 4 — Multi-Session Concurrency (deferred)
@@ -151,7 +151,7 @@ In a group with multiple bots, one bot's reply can trigger another. Must filter 
 | Aspect | 1-on-1 Edition | Group Edition |
 | --- | --- | --- |
 | Inbound trust | Single `ALLOWED_USER_ID` | Allowlist of `user_id`s |
-| Outbound targeting | Single `ALLOWED_CHAT_ID` | Locked to `ALLOWED_GROUP_ID` |
+| Outbound targeting | Single user ID (= chat target) | Locked to `ALLOWED_GROUP_ID` |
 | Session isolation | Implicit (only one conversation) | Explicit via reply thread or topic |
 | Bot loop risk | N/A | Must filter `from.is_bot` |
 | Authorization surface | 1 user | N users — larger attack surface |

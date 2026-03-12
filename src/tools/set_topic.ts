@@ -23,7 +23,7 @@ export function register(server: McpServer) {
         .describe("Short label to prepend to all outbound messages, e.g. \"Refactor Agent\". Pass empty string to clear."),
       },
     },
-    async ({ topic }) => {
+    ({ topic }) => {
       const previous = getTopic();
       if (topic.trim() === "") {
         clearTopic();

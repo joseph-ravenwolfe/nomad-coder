@@ -168,8 +168,8 @@ export function register(server: McpServer) {
             return toResult({
               message_id: msg.message_id,
               type: "video",
-              file_id: msg.video?.file_id,
-              duration: msg.video?.duration,
+              file_id: msg.video.file_id,
+              duration: msg.video.duration,
             });
           }
 
@@ -191,8 +191,8 @@ export function register(server: McpServer) {
             return toResult({
               message_id: msg.message_id,
               type: "audio",
-              file_id: msg.audio?.file_id,
-              title: msg.audio?.title,
+              file_id: msg.audio.file_id,
+              title: msg.audio.title,
             });
           }
 
@@ -210,7 +210,7 @@ export function register(server: McpServer) {
             return toResult({
               message_id: msg.message_id,
               type: "voice",
-              file_id: (msg.voice as Record<string, unknown> | undefined)?.file_id,
+              file_id: msg.voice?.file_id,
             });
           }
 
@@ -232,8 +232,8 @@ export function register(server: McpServer) {
             return toResult({
               message_id: msg.message_id,
               type: "document",
-              file_id: msg.document?.file_id,
-              file_name: msg.document?.file_name,
+              file_id: msg.document.file_id,
+              file_name: msg.document.file_name,
             });
           }
         }

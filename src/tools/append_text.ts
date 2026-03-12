@@ -35,7 +35,7 @@ export function register(server: McpServer) {
 
       // Read current text from the store
       const current = getMessage(message_id, CURRENT);
-      const currentText = current?.content?.text ?? "";
+      const currentText = current?.content.text ?? "";
 
       // Concatenate
       const accumulated = currentText
