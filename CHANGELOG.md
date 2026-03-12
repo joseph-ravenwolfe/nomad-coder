@@ -7,6 +7,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com).
 
 ### Fixed
 
+- **Callback query corrupted message index** — `recordInbound` now uses `_timeline.push` for callbacks instead of `pushEvent`, preventing callback events from overwriting bot-message CURRENT entries in the index (broke `append_text` after button presses)
+- **`append_text` broken on split messages** — `send_text` now stores the actual chunk content for split messages instead of the full original text, preventing accumulated-text overflow when `append_text` is called on a split chunk
+- **Non-null assertions removed** — replaced `!` assertions in `button-helpers.ts` (`qid!`, `data!`, `text!`) and `poller.ts` (`u.message!`, `voice!.file_id`) with explicit guards per project linting rules
+- **Stale tool descriptions** — removed references to deleted V2 tools (`wait_for_message`, `get_updates`, `wait_for_callback_query`) in `download_file`, `transcribe_voice`, `send_confirmation`, and `choose` descriptions
+- **`evictTimeline` GC pressure** — replaced `slice(length - MAX_TIMELINE)` (allocates new 1000-element array per event post-saturation) with `shift()` loop
+- **Poller JSDoc** — corrected emoji mismatch in three-phase lifecycle summary (`📝` → `😴`); marked `🫡` phase as not yet implemented in `dequeue_update`
+- **Animation frame cycling tests** — updated test expectations to include `{ parse_mode: "MarkdownV2" }` argument that `cycleFrame` passes after resolving through `resolveParseMode`
+
 - **Voice transcription timeout** — added 60s timeout to `transcribeVoice` calls in the poller; prevents ✍ reaction from sticking forever when transcription hangs
 - **Invalid reaction emoji** — changed poller queued-reaction from 📝 (not in Telegram's allowed set) to 😴
 - **Markdown backslash escaping** — `markdownToV2` now strips agent-escaped special chars (`\_` → `_`, `\*` → `*`, etc.) before applying MarkdownV2 escaping

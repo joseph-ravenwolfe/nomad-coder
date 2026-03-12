@@ -111,15 +111,15 @@ describe("animation-state", () => {
 
       // Advance past one interval
       await vi.advanceTimersByTimeAsync(2000);
-      expect(mocks.editMessageText).toHaveBeenCalledWith(123, 42, "B");
+      expect(mocks.editMessageText).toHaveBeenCalledWith(123, 42, "B", { parse_mode: "MarkdownV2" });
 
       // Second interval
       await vi.advanceTimersByTimeAsync(2000);
-      expect(mocks.editMessageText).toHaveBeenCalledWith(123, 42, "C");
+      expect(mocks.editMessageText).toHaveBeenCalledWith(123, 42, "C", { parse_mode: "MarkdownV2" });
 
       // Third interval wraps back to first
       await vi.advanceTimersByTimeAsync(2000);
-      expect(mocks.editMessageText).toHaveBeenCalledWith(123, 42, "A");
+      expect(mocks.editMessageText).toHaveBeenCalledWith(123, 42, "A", { parse_mode: "MarkdownV2" });
     });
 
     it("does not cycle with single frame", async () => {
@@ -139,7 +139,7 @@ describe("animation-state", () => {
 
       // At 1500ms — should cycle
       await vi.advanceTimersByTimeAsync(1000);
-      expect(mocks.editMessageText).toHaveBeenCalledWith(123, 42, "B");
+      expect(mocks.editMessageText).toHaveBeenCalledWith(123, 42, "B", { parse_mode: "MarkdownV2" });
     });
 
     it("swallows errors from editMessageText during cycling", async () => {

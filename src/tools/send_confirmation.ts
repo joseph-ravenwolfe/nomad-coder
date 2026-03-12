@@ -18,7 +18,7 @@ import { recordOutgoing } from "../message-store.js";
  *   4. Edits the message to show the chosen label (buttons removed)
  *   5. Returns { confirmed: true|false }
  *
- * Use `wait_for_callback_query` directly only when buttons must remain
+ * Use `answer_callback_query` directly only when buttons must remain
  * interactive across multiple presses (e.g. broadcast / persistent keyboards).
  */
 export function register(server: McpServer) {

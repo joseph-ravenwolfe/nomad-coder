@@ -3,10 +3,10 @@
  * them into the message store. Replaces the per-tool polling pattern in V2.
  *
  * Voice messages are transcribed in parallel before entering the store.
- * The three-phase reaction lifecycle (✍ → 📝 → 🫡) is managed here:
+ * The three-phase reaction lifecycle (✍ → � → 🫡) is managed across the pipeline:
  *   ✍  = transcribing (set by poller)
  *   😴 = queued, waiting for agent (set by poller after transcription)
- *   🫡 = acknowledged by agent (set by dequeue_update)
+ *   🫡 = acknowledged by agent (set by dequeue_update — not yet implemented)
  */
 
 import type { Update } from "grammy/types";
@@ -81,7 +81,8 @@ async function _pollLoop(): Promise<void> {
 }
 
 async function _transcribeAndRecord(u: Update): Promise<void> {
-  const msg = u.message!;
+  const msg = u.message;
+  if (!msg?.voice) return;
   const chatId = msg.chat.id;
   const messageId = msg.message_id;
 
@@ -91,7 +92,7 @@ async function _transcribeAndRecord(u: Update): Promise<void> {
     if (!setScribe) process.stderr.write(`[poller] failed to set ✍ on msg ${messageId}\n`);
 
     const text = await Promise.race([
-      transcribeVoice(msg.voice!.file_id),
+      transcribeVoice(msg.voice.file_id),
       new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error("transcription timed out (60s)")), 60_000),
       ),

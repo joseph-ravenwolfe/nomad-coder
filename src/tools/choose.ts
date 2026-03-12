@@ -16,7 +16,7 @@ import { recordOutgoing } from "../message-store.js";
  * Handles the full flow: send message → wait for callback_query → answer it
  * (to dismiss the spinner) → return the chosen option.
  *
- * Replaces the manual: send_message + wait_for_callback_query + answer_callback_query chain.
+ * Replaces the manual: send_text + answer_callback_query chain.
  */
 export function register(server: McpServer) {
   server.registerTool(
@@ -111,7 +111,7 @@ export function register(server: McpServer) {
 
         if (!match) {
           // Timeout — remove buttons so they can't be clicked with no listener.
-          // The agent can call wait_for_message next to capture a free-text reply.
+          // The agent can call dequeue_update next to capture a free-text reply.
           await editWithTimedOut(chatId, sent.message_id, question);
           return toResult({
             timed_out: true,

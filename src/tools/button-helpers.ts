@@ -52,12 +52,10 @@ export async function pollButtonPress(
   while (Date.now() < deadline) {
     const result = dequeueMatch((event: TimelineEvent) => {
       if (event.event === "callback" && event.content.target === messageId) {
-        return {
-          kind: "button" as const,
-          callback_query_id: event.content.qid!,
-          data: event.content.data!,
-          message_id: messageId,
-        };
+        const qid = event.content.qid;
+        const data = event.content.data;
+        if (!qid || !data) return undefined;
+        return { kind: "button" as const, callback_query_id: qid, data, message_id: messageId };
       }
       return undefined;
     });
@@ -89,21 +87,17 @@ export async function pollButtonOrTextOrVoice(
     const result = dequeueMatch((event: TimelineEvent) => {
       // Check for callback on the specific message
       if (event.event === "callback" && event.content.target === messageId) {
-        return {
-          kind: "button" as const,
-          callback_query_id: event.content.qid!,
-          data: event.content.data!,
-          message_id: messageId,
-        };
+        const qid = event.content.qid;
+        const data = event.content.data;
+        if (!qid || !data) return undefined;
+        return { kind: "button" as const, callback_query_id: qid, data, message_id: messageId };
       }
       // Check for text/voice message sent AFTER the question
       if (event.event === "message" && event.id > messageId) {
         if (event.content.type === "text") {
-          return {
-            kind: "text" as const,
-            message_id: event.id,
-            text: event.content.text!,
-          };
+          const text = event.content.text;
+          if (!text) return undefined;
+          return { kind: "text" as const, message_id: event.id, text };
         }
         if (event.content.type === "voice") {
           return {

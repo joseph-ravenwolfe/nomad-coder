@@ -60,9 +60,10 @@ function startTimeoutTimer(): void {
 async function cycleFrame(): Promise<void> {
   if (!_state) return;
   _state.frameIndex = (_state.frameIndex + 1) % _state.frames.length;
-  const text = _state.frames[_state.frameIndex];
+  const raw = _state.frames[_state.frameIndex];
+  const { text, parse_mode } = resolveParseMode(raw, "Markdown");
   try {
-    await getApi().editMessageText(_state.chatId, _state.messageId, text);
+    await getApi().editMessageText(_state.chatId, _state.messageId, text, { parse_mode });
   } catch {
     // Best-effort — animation is cosmetic; swallow failures
   }

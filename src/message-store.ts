@@ -122,8 +122,8 @@ function now(): string {
 
 /** Evict oldest timeline events when over capacity. */
 function evictTimeline(): void {
-  if (_timeline.length > MAX_TIMELINE) {
-    _timeline = _timeline.slice(_timeline.length - MAX_TIMELINE);
+  while (_timeline.length > MAX_TIMELINE) {
+    _timeline.shift();
   }
 }
 
@@ -222,7 +222,11 @@ export function recordInbound(update: Update, transcribedText?: string): void {
       },
       _update: update,
     };
-    pushEvent(evt);
+    // Don't call pushEvent — that would overwrite the bot message's CURRENT
+    // slot in the index, breaking append_text and get_message on that message.
+    // Callbacks are indexed by their own position in the queue, not by target.
+    _timeline.push(evt);
+    evictTimeline();
     _responseLane.enqueue({ event: evt, lane: "response" });
     notifyWaiters();
     return;

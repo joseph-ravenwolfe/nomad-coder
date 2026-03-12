@@ -70,7 +70,10 @@ export function register(server: McpServer) {
             }),
           );
           message_ids.push(msg.message_id);
-          recordOutgoing(msg.message_id, "text", text);
+          // Single message: store raw markdown (compatible with append_text re-conversion).
+          // Split messages: store the chunk content actually sent — prevents append_text
+          // from reading the full original text and exceeding Telegram's 4096-char limit.
+          recordOutgoing(msg.message_id, "text", chunks.length === 1 ? text : chunk);
         }
 
         if (message_ids.length === 1) {

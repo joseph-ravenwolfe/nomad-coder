@@ -1,10 +1,21 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { toResult } from "../telegram.js";
+import { toResult, trySetMessageReaction, resolveChat, type ReactionEmoji } from "../telegram.js";
 import {
   dequeue, pendingCount, waitForEnqueue,
   type TimelineEvent,
 } from "../message-store.js";
+
+const REACT_SALUTE = "\uD83E\uDEE1" as ReactionEmoji; // 🫡
+
+/** Auto-salute voice messages on dequeue so the user knows we received them. */
+function ackVoice(event: TimelineEvent): void {
+  if (event.from !== "user" || event.content.type !== "voice") return;
+  const chatId = typeof resolveChat() === "number" ? resolveChat() as number : undefined;
+  if (!chatId) return;
+  trySetMessageReaction(chatId, event.id, REACT_SALUTE)
+    .then((ok) => { if (!ok) process.stderr.write(`[dequeue] ack 🫡 failed for voice msg ${event.id}\n`); });
+}
 
 /** Strip _update and timestamp for the compact dequeue format. */
 function compactEvent(event: TimelineEvent): Record<string, unknown> {
@@ -37,6 +48,7 @@ export function register(server: McpServer) {
       // Try immediate dequeue
       let event = dequeue();
       if (event) {
+        ackVoice(event);
         const pending = pendingCount();
         const result = compactEvent(event);
         if (pending > 0) result.pending = pending;
@@ -60,6 +72,7 @@ export function register(server: McpServer) {
 
         event = dequeue();
         if (event) {
+          ackVoice(event);
           const pending = pendingCount();
           const result = compactEvent(event);
           if (pending > 0) result.pending = pending;
