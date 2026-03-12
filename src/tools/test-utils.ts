@@ -51,5 +51,5 @@ export function isError(result: unknown): boolean {
 }
 
 export function errorCode(result: unknown): string {
-  return (parseResult(result) as TelegramError).code;
+  return (parseResult(result) as unknown as TelegramError).code;
 }

@@ -131,7 +131,7 @@ export async function transcribeVoice(fileId: string): Promise<string> {
 }
 
 /**
- * Reacts to the voice message with 📝, transcribes it, then swaps the
+ * Reacts to the voice message with ✍, transcribes it, then swaps the
  * reaction to 🫡. Returns the transcribed text.
  * If reactions fail, transcription still proceeds.
  */

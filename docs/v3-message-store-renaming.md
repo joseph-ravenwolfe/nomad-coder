@@ -13,13 +13,13 @@ Telegram Bot API
        │
        ▼  getUpdates (background poller)
        │
-       ├─ voice? ─→ ✍ react → transcribe → 📝 react
+       ├─ voice? ─→ ✍ react → transcribe → � react
        │             result: { type: "voice", text: "..." }
        │
        ▼  recordInbound(update, transcribedText?)
 ┌──────────────────────────────────────────────────┐
 │               MessageStore                       │
-│          (all FIFO via @tsdotnet/queue)           │
+│          (all FIFO via SimpleQueue<T>)             │
 │                                                  │
 │  Timeline: Queue<TimelineEvent>      (max 1000)  │
 │                ↑         ↑                       │
@@ -216,11 +216,11 @@ Voice message arrives
        ▼  react ✍ (transcribing)
    transcribeVoice(file_id)
        │
-       ▼  swap to 📝 (transcribed, queued)
+       ▼  swap to � (transcribed, queued)
    recordInbound() with { type: "voice", text: "..." }
        │
        ▼  agent dequeues
-   swap 📝 → 🫡 (acknowledged)
+   swap 😴 → 🫡 (acknowledged)
 ```
 
 **Three-phase reaction lifecycle:**
@@ -228,13 +228,13 @@ Voice message arrives
 | Phase | Emoji | Meaning |
 | --- | --- | --- |
 | Transcribing | ✍ | Audio is being processed |
-| Queued | 📝 | Transcription complete, waiting for agent |
+| Queued | � | Transcription complete, waiting for agent |
 | Acknowledged | 🫡 | Agent has dequeued and will act on it |
 
 **Why preemptive?**
 
 - **Zero latency for the agent.** By the time `dequeue_update` returns, the voice is already text. The agent never blocks on transcription.
-- **Faster interaction.** The user sends a voice note, sees ✍ immediately, then 📝 within seconds. The transcription happens in parallel with whatever the agent is currently doing.
+- **Faster interaction.** The user sends a voice note, sees ✍ immediately, then � within seconds. The transcription happens in parallel with whatever the agent is currently doing.
 - **Simpler agent code.** Voice messages arrive as `{ type: "voice", text: "..." }` — same shape as text messages, just with a different type tag. No special handling needed.
 - **Audio discarded.** After transcription, the voice audio is not retained. No `file_id` on the content, no `_update` stored. The event is pure text. See [File Retention Policy](#file-retention-policy).
 
@@ -265,7 +265,7 @@ for (const update of batch) {
 - Multiple simultaneous voice notes transcribe in parallel via `Promise.all`-style concurrency — wall-clock time equals the slowest transcription, not the sum.
 - Non-voice messages are **never blocked** by an ongoing transcription. Text arrives instantly regardless of pending voice work.
 - Voice messages may enter the queue slightly out of order relative to surrounding text messages (a slow transcription might finish after a fast one). This is acceptable — each voice note is self-contained.
-- The ✍ reaction appears immediately on all voice messages in the batch. As each finishes, it individually swaps to 📝.
+- The ✍ reaction appears immediately on all voice messages in the batch. As each finishes, it individually swaps to �.
 
 ### Queue Lanes
 
@@ -350,7 +350,7 @@ V2 has **40 tools**. V3 targets **29** — a 28% reduction.
 3. **Keep semantic tools that save tokens.** `notify` formats a severity-prefixed notification in one call. Without it, the agent would build `"ℹ️ **Title**\n\nbody"` every time — wasted tokens and formatting bugs. Keep it.
 4. **Compound tools stay.** `ask`, `choose`, `send_confirmation` handle the full send→wait→cleanup cycle internally. The alternative is 3–5 tool calls. Keep them.
 
-### Removed (13 tools)
+### Removed (12 tools)
 
 | Tool | Reason |
 | --- | --- |
@@ -366,7 +366,6 @@ V2 has **40 tools**. V3 targets **29** — a 28% reduction.
 | `cancel_typing` | → `show_typing` with `cancel: true` |
 | `unpin_message` | → `pin_message` with `unpin: true` |
 | `send_message_draft` | → `show_animation` (replaced by animation system) |
-| `send_text_as_voice` | → `speak` (renamed) |
 
 ### Added (5 tools)
 
@@ -378,12 +377,11 @@ V2 has **40 tools**. V3 targets **29** — a 28% reduction.
 | `cancel_animation` | `text?, parse_mode?` | Stop animation. Optionally replace placeholder with a real message. |
 | `append_text` | `message_id, text, parse_mode?` | Delta-append text to an existing message. Server-side concatenation — agent sends only the new chunk. |
 
-### Renamed (2 tools)
+### Renamed (1 tool)
 
 | Old Name | New Name | Why |
 | --- | --- | --- |
-| `send_message` | `send_text` | Clearer intent. Voice mode removed — use `speak` for TTS. |
-| `send_text_as_voice` | `speak` | Shorter, verb-first. Synthesizes text → OGG voice note. |
+| `send_message` | `send_text` | Clearer intent. Voice mode removed — use `send_text_as_voice` for TTS. |
 
 ### Consolidated: Media Tools (5 → 1)
 
@@ -445,7 +443,7 @@ These consume from the queue internally — the agent never sees the raw callbac
 | 1 | `dequeue_update` | **Polling** | Universal consumption — replaces 4 tools |
 | 2 | `get_message` | **Polling** | Random-access lookup by message_id + version |
 | 3 | `send_text` | **Send** | Text messages. Always logged. |
-| 4 | `speak` | **Send** | TTS → voice note |
+| 4 | `send_text_as_voice` | **Send** | TTS → voice note |
 | 5 | `send_file` | **Send** | All file types — replaces 5 tools |
 | 6 | `notify` | **Send** | Severity-prefixed notification |
 | 7 | `edit_message_text` | **Send** | Edit in-place |
@@ -543,7 +541,7 @@ show_animation({
 
 | Resets timeout | Doesn't reset timeout |
 | --- | --- |
-| `send_text`, `notify`, `send_file`, `speak` | `get_me`, `get_chat`, `get_agent_guide` |
+| `send_text`, `notify`, `send_file`, `send_text_as_voice` | `get_me`, `get_chat`, `get_agent_guide` |
 | `edit_message_text`, `append_text` | `set_commands`, `set_topic` |
 | `delete_message`, `forward_message` | `download_file`, `transcribe_voice` |
 | `set_reaction`, `pin_message` | `dequeue_update`, `get_message` |
@@ -803,9 +801,9 @@ human-readable `.log` or `.txt` file for archival.
 
 ---
 
-## Internal Queue Architecture (`@tsdotnet/queue`)
+## Internal Queue Architecture (`SimpleQueue<T>`)
 
-All rolling FIFO structures use `Queue<T>` from `@tsdotnet/queue` — a circular buffer with O(1) enqueue/dequeue and non-destructive iteration.
+All rolling FIFO structures use an inline `SimpleQueue<T>` — a circular buffer with O(1) enqueue/dequeue and non-destructive iteration.
 
 ### Five Queues
 
@@ -884,9 +882,9 @@ function _scanAndRemove<T>(
 
 This is O(n) in the worst case, but the queue is typically small (< 10 items) and `dequeueMatch` is rare (only for compound tools).
 
-### `@tsdotnet/queue` Compatibility
+### Iteration
 
-`Queue<T>` extends `IterableCollectionBase<T>`, which is compatible with `@tsdotnet/linq` for future pipeline-style queries over the timeline or queue contents.
+`SimpleQueue<T>` implements `Iterable<T>`, supporting spread, `Array.from`, and `for…of` over the timeline or queue contents.
 
 ---
 
@@ -1027,7 +1025,6 @@ One optional question at startup: auto-dump frequency (or set via `AUTO_DUMP_THR
 - `src/tools/dequeue_update.ts` — Universal consumption tool
 - `src/tools/get_message.ts` — Random-access lookup tool
 - `src/tools/send_text.ts` — Replaces `send_message.ts` (renamed, voice mode removed)
-- `src/tools/speak.ts` — Replaces `send_text_as_voice.ts` (renamed)
 - `src/tools/send_file.ts` — Consolidates 5 media tools into one
 - `src/tools/show_animation.ts` — Server-managed cycling placeholder (replaces `send_message_draft.ts`)
 - `src/tools/cancel_animation.ts` — Stop animation; optionally replace with real message
@@ -1045,7 +1042,6 @@ One optional question at startup: auto-dump frequency (or set via `AUTO_DUMP_THR
 - `src/tools/wait_for_message.ts`
 - `src/tools/wait_for_callback_query.ts`
 - `src/tools/send_message.ts` — Replaced by `send_text.ts`
-- `src/tools/send_text_as_voice.ts` — Replaced by `speak.ts`
 - `src/tools/send_message_draft.ts` — Replaced by `show_animation.ts`
 - `src/tools/send_photo.ts` — Consolidated into `send_file.ts`
 - `src/tools/send_document.ts` — Consolidated into `send_file.ts`

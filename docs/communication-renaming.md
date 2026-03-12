@@ -93,11 +93,11 @@ Always `disable_notification: true`. Unpin when content is no longer relevant.
 
 ## Loop
 
-Call `wait_for_message` again after every task, timeout, or error — loop forever.  
+Call `dequeue_update` again after every task, timeout, or error — loop forever.  
 Only `exit` from the operator ends the loop.  
 When unsure whether to stop, ask via Telegram and wait for the operator's answer.
 
-On timeout (`{ timed_out: true }`): call `wait_for_message` again immediately. Normal idle behavior.
+On timeout (`{ timed_out: true }`): call `dequeue_update` again immediately. Normal idle behavior.
 
 ---
 

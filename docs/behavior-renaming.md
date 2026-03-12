@@ -111,10 +111,10 @@ Never treat a pre-existing message as an answer to a question you just asked.
 
 ## Tool usage: always use `choose` for confirmations
 
-**Never** ask a finite-answer question using `notify`/`send_message` + `wait_for_message` or `ask`.  
+**Never** ask a finite-answer question using `notify`/`send_text` + `dequeue_update` or `ask`.  
 Whenever the user's response can be one of a predictable set of options — yes/no, proceed/cancel, option A/B/C, skip/build, etc. — use `choose` with labeled buttons.
 
-Only use `ask` or `wait_for_message` for truly open-ended free-text input where choices cannot be enumerated.
+Only use `ask` or `dequeue_update` for truly open-ended free-text input where choices cannot be enumerated.
 
 ---
 
@@ -130,7 +130,7 @@ set_commands([
 ])
 ```
 
-When the operator taps a command, `wait_for_message` delivers it as:
+When the operator taps a command, `dequeue_update` delivers it as:
 
 ```json
 { "type": "command", "command": "status", "args": "optional rest text" }
@@ -288,7 +288,7 @@ Never call `send_file(type: "voice")` to speak text — it only delivers pre-exi
 
 ### TTS delivery error: "user restricted receiving of voice note messages"
 
-If `send_message` (or `send_voice`) returns:
+If `send_text` (or `send_file(type: "voice")`) returns:
 
 ```text
 Bad Request: user restricted receiving of voice note messages
@@ -321,8 +321,8 @@ Once the exception is added, retry the voice send — no server restart needed.
 
 `DEFAULT_ALLOWED_UPDATES` includes `"message_reaction"` so user reactions come through.
 
-- `wait_for_message` returns a `reactions[]` array alongside each message, containing any `message_reaction` updates seen during the polling window. Never silently loses reactions.
-- `get_updates` returns `{ type: "message_reaction", message_id, user, emoji_added, emoji_removed }` for reaction updates.
+- `dequeue_update` returns reaction events with `content.type: "reaction"` containing `added` and `removed` emoji arrays.
+- Reactions arrive on the response lane (higher priority than messages) so they're processed promptly.
 
 Use this to acknowledge what the user reacted to and adapt behavior accordingly.
 
@@ -330,23 +330,23 @@ Use this to acknowledge what the user reacted to and adapt behavior accordingly.
 
 ## Received file handling
 
-When `wait_for_message` or `get_updates` returns a message with a non-text `type`, **always ask the user what to do — never read or process the file automatically.**
+When `dequeue_update` returns an event with a non-text `content.type`, **always ask the user what to do — never read or process the file automatically.**
 
 React with 👀 immediately on receipt, then use `choose` with inferred action buttons based on file type.
 
 ### Core rule: always ask first, download only when needed
 
-Do **not** call `download_file` until the user has selected an action that requires it. The metadata returned by `wait_for_message` (file name, MIME type, size) is sufficient to ask the question — no download needed to present the choice.
+Do **not** call `download_file` until the user has selected an action that requires it. The metadata returned by `dequeue_update` (file name, MIME type) is sufficient to ask the question — no download needed to present the choice.
 
 Never silently download, read, or process a received file without explicit instruction. The user may have sent it for a purpose you can't know — always confirm intent first.
 
 ### Handling batched file uploads
 
-Users may send multiple files at once (e.g., drag-drop in Telegram desktop). The server processes one message at a time, so each file arrives as a separate `wait_for_message` result.
+Users may send multiple files at once (e.g., drag-drop in Telegram desktop). The server processes one message at a time, so each file arrives as a separate `dequeue_update` result.
 
-**No special handling needed** — just process each file and return to the loop. The next `wait_for_message` call will naturally pick up the next queued file.
+**No special handling needed** — just process each file and return to the loop. The next `dequeue_update` call will naturally pick up the next queued file.
 
-Do **not** call `get_updates` between files — it advances the offset and can consume queued messages before the loop reaches them.
+Do **not** call `dequeue_update` in a tight loop between files — process one, respond, then call `dequeue_update` again.
 
 **Format for the `choose` prompt:**
 
@@ -441,4 +441,4 @@ After calling `restart_server` (or the server restarts for any reason):
 
 1. Drain stale messages: call `dequeue_update(timeout: 0)` in a loop until `pending == 0`
 2. Send a "back online" message via `notify` describing what changed
-3. Return to `wait_for_message` loop
+3. Return to `dequeue_update` loop

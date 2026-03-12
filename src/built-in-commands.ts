@@ -2,7 +2,7 @@
  * Built-in server-level slash commands.
  *
  * These commands are intercepted in the update pipeline *before* any update
- * is delivered to the agent via pollUntil / wait_for_message. The agent never
+ * is delivered to the agent via dequeue_update. The agent never
  * sees them — the server handles them directly and responds to the user.
  *
  * Currently registered:
