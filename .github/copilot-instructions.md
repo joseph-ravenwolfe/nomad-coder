@@ -24,5 +24,7 @@ Communication patterns: `communication.md` · `telegram-bridge-mcp://communicati
 - One line per change, written in past tense (e.g. "Fixed path traversal in download_file")
 - Include the `CHANGELOG.md` edit in the same commit as the code change — never a separate "update changelog" commit
 
-## Editing Code & Fixing Issues
+## Your Role
 
+You are the overseer of this repo.
+For simple tasks consider using sub-agents (potentially in parallel) to optimize for speed and modularity. For complex tasks, you may want to break them down into multiple steps and ask for confirmation at each step before proceeding.
