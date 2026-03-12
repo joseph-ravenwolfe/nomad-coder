@@ -3,8 +3,6 @@ import type { ApiError, ReactionTypeEmoji, Update } from "grammy/types";
 import { readFileSync, existsSync } from "fs";
 import path, { resolve } from "path";
 import { tmpdir } from "os";
-import { enqueueUpdates, dequeueMatch } from "./update-buffer.js";
-import { recordUpdate } from "./session-recording.js";
 import { handleIfBuiltIn, isBuiltInPanelQuery } from "./built-in-commands.js";
 
 /** Directory where downloaded files are stored — only local paths under this dir are allowed for file uploads. */
@@ -417,7 +415,6 @@ export function advanceOffset(updates: Update[]): string | null {
     fireHijackNotification(warning);
   }
   _offset = Math.max(...updates.map((u) => u.update_id)) + 1;
-  for (const u of updates) recordUpdate(u);
   return warning;
 }
 
@@ -647,61 +644,3 @@ export function toError(err: unknown) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// Shared polling helper — 1 s ticks for responsive waiting
-// ---------------------------------------------------------------------------
-
-/**
- * Polls `getUpdates` with 1-second ticks until `matcher` returns a truthy
- * value from the allowed updates, or `timeoutSeconds` expires.
- *
- * Returns `{ match, missed }` — `match` is the matcher result (or undefined
- * on timeout), `missed` collects all non-matching allowed updates so the
- * caller can surface them (e.g. text messages during a `choose`).
- */
-export async function pollUntil<T>(
-  matcher: (updates: Update[]) => T | undefined,
-  timeoutSeconds: number,
-): Promise<{ match: T | undefined; missed: Update[] }> {
-  const deadline = Date.now() + timeoutSeconds * 1000;
-
-  // 1. Check the shared buffer — a previous poll may have already fetched the
-  //    update we need. Consume it from the buffer without hitting Telegram.
-  const buffered = dequeueMatch((u) => matcher([u]));
-  if (buffered !== undefined) {
-    return { match: buffered, missed: [] };
-  }
-
-  while (Date.now() < deadline) {
-    const updates = await getApi().getUpdates({
-      offset: getOffset(),
-      limit: 1,   // one at a time — prevents batch-drop when multiple messages arrive simultaneously
-      timeout: 25,
-      allowed_updates: [...DEFAULT_ALLOWED_UPDATES] as ReadonlyArray<Exclude<keyof Update, "update_id">>,
-    });
-
-    advanceOffset(updates);
-    const allowed = filterAllowedUpdates(updates);
-
-    // Intercept built-in commands and panel callback queries — never deliver to agent
-    const forwarded: Update[] = [];
-    for (const u of allowed) {
-      const consumed = await handleIfBuiltIn(u);
-      if (!consumed) forwarded.push(u);
-    }
-
-    const result = matcher(forwarded);
-    if (result !== undefined) {
-      // Buffer any non-matching updates from the same batch — nothing is dropped.
-      const rest = forwarded.filter((u) => matcher([u]) === undefined);
-      if (rest.length > 0) enqueueUpdates(rest);
-      return { match: result, missed: [] };
-    }
-
-    // No match — buffer these updates so other tools can consume them later.
-    // Nothing is ever dropped.
-    if (forwarded.length > 0) enqueueUpdates(forwarded);
-  }
-
-  return { match: undefined, missed: [] };
-}

@@ -4,11 +4,12 @@ import { toResult, toError, validateText, resolveChat, splitMessage, sendVoiceDi
 import { cancelTyping, showTyping } from "../typing-state.js";
 import { clearPendingTemp } from "../temp-message.js";
 import { isTtsEnabled, stripForTts, synthesizeToOgg } from "../tts.js";
-import { recordBotMessage } from "../session-recording.js";
+import { recordOutgoing } from "../message-store.js";
+import { resetAnimationTimeout } from "../animation-state.js";
 
 export function register(server: McpServer) {
   server.registerTool(
-    "send_text_as_voice",
+    "speak",
     {
       description:
         "Synthesizes plain text to speech and sends it as a Telegram voice note. " +
@@ -47,6 +48,7 @@ export function register(server: McpServer) {
       try {
         const typingSeconds = Math.min(120, Math.max(5, Math.ceil(plainText.length / 20)));
         await showTyping(typingSeconds, "record_voice");
+        resetAnimationTimeout();
         const message_ids: number[] = [];
         for (let i = 0; i < voiceChunks.length; i++) {
           const ogg = await synthesizeToOgg(voiceChunks[i]);
@@ -58,10 +60,10 @@ export function register(server: McpServer) {
         }
         cancelTyping();
         if (message_ids.length === 1) {
-          recordBotMessage({ content_type: "voice", text: plainText, message_id: message_ids[0] });
+          recordOutgoing(message_ids[0], "voice", plainText);
           return toResult({ message_id: message_ids[0], voice: true });
         }
-        recordBotMessage({ content_type: "voice", text: plainText, message_ids });
+        recordOutgoing(message_ids[0], "voice", plainText);
         return toResult({ message_ids, chunks: message_ids.length, split: true, voice: true });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);

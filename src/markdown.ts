@@ -66,10 +66,13 @@ export function markdownToV2(input: string, partial = true): string {
   //   \n  (two chars) → real newline
   //   \"  (two chars) → real double-quote  (agents JSON-escape quotes before passing)
   //   \\  (two chars) → real backslash     (agents double-escape backslashes)
+  //   \X  (where X is a Markdown-special char) → X  (agents escape _ * etc.)
   text = text
     .replace(/\\n/g, "\n")
     .replace(/\\"/g, '"')
-    .replace(/\\\\/g, "\\");
+    .replace(/\\\\/g, "\x00BS\x00")       // stash real backslashes
+    .replace(/\\([_*~`[\]()>#+\-=|{}.!])/g, "$1")
+    .replace(/\x00BS\x00/g, "\\");
 
   // ── 1b. Extract blockquote lines so > is never re-escaped ───────────────
   const blockquotes: string[] = [];

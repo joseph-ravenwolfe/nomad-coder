@@ -1,0 +1,42 @@
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { z } from "zod";
+import { toResult, toError } from "../telegram.js";
+import { getMessage, getVersions, CURRENT } from "../message-store.js";
+
+export function register(server: McpServer) {
+  server.registerTool(
+    "get_message",
+    {
+      description:
+        "Look up a message by ID and optional version. Returns detail including " +
+        "text/caption, file_id, media metadata, and edit history. " +
+        "version=-1 (default) = latest; 0 = original; 1+ = edit history (bot messages only). " +
+        "Returns all available version keys so the agent knows what history exists.",
+      inputSchema: {
+        message_id: z.number().int().describe("Message ID to look up"),
+        version: z
+          .number()
+          .int()
+          .default(CURRENT)
+          .describe("Version: -1 = current/latest (default), 0 = original, 1+ = edit history"),
+      },
+    },
+    async ({ message_id, version }) => {
+      const event = getMessage(message_id, version);
+      if (!event) {
+        return toError({
+          code: "MESSAGE_NOT_FOUND" as const,
+          message: `Message ${message_id} (version ${version}) not found in store. It may have been evicted or was never recorded.`,
+        });
+      }
+
+      const versions = getVersions(message_id);
+      const { _update: _, ...rest } = event;
+
+      return toResult({
+        ...rest,
+        versions,
+      });
+    },
+  );
+}

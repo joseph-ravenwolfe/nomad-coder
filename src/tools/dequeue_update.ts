@@ -1,0 +1,73 @@
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { z } from "zod";
+import { toResult } from "../telegram.js";
+import {
+  dequeue, pendingCount, waitForEnqueue,
+  type TimelineEvent,
+} from "../message-store.js";
+
+/** Strip _update and timestamp for the compact dequeue format. */
+function compactEvent(event: TimelineEvent): Record<string, unknown> {
+  const { _update: _, timestamp: __, ...rest } = event;
+  return rest;
+}
+
+export function register(server: McpServer) {
+  server.registerTool(
+    "dequeue_update",
+    {
+      description:
+        "Consume the next update from the queue. Response lane (reactions, callbacks) " +
+        "drains before message lane (new messages, commands, media). " +
+        "Blocks up to timeout seconds if the queue is empty. " +
+        "Returns compact format: { id, event, from, content }. " +
+        "pending > 0 means more updates waiting — call again before blocking. " +
+        "Voice messages arrive pre-transcribed as { type: \"voice\", text: \"...\" }.",
+      inputSchema: {
+        timeout: z
+          .number()
+          .int()
+          .min(0)
+          .max(300)
+          .default(60)
+          .describe("Seconds to block when queue is empty (0 = instant poll, default 60)"),
+      },
+    },
+    async ({ timeout }) => {
+      // Try immediate dequeue
+      let event = dequeue();
+      if (event) {
+        const pending = pendingCount();
+        const result = compactEvent(event);
+        if (pending > 0) result.pending = pending;
+        return toResult(result);
+      }
+
+      if (timeout === 0) {
+        return toResult({ empty: true, pending: 0 });
+      }
+
+      // Block until something arrives or timeout expires
+      const deadline = Date.now() + timeout * 1000;
+      while (Date.now() < deadline) {
+        const remaining = deadline - Date.now();
+        if (remaining <= 0) break;
+
+        await Promise.race([
+          waitForEnqueue(),
+          new Promise<void>((r) => setTimeout(r, remaining)),
+        ]);
+
+        event = dequeue();
+        if (event) {
+          const pending = pendingCount();
+          const result = compactEvent(event);
+          if (pending > 0) result.pending = pending;
+          return toResult(result);
+        }
+      }
+
+      return toResult({ empty: true, pending: 0 });
+    },
+  );
+}

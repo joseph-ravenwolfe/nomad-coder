@@ -1,30 +1,42 @@
 import { vi, describe, it, expect, beforeEach } from "vitest";
-import type { Update } from "grammy/types";
 import { createMockServer, parseResult, isError } from "./test-utils.js";
+import type { ButtonResult, TextResult, VoiceResult } from "./button-helpers.js";
 
 const mocks = vi.hoisted(() => ({
   sendMessage: vi.fn(),
-  getUpdates: vi.fn(),
   answerCallbackQuery: vi.fn(),
   editMessageText: vi.fn(),
+  pollButtonOrTextOrVoice: vi.fn(),
+  ackAndEditSelection: vi.fn(),
+  editWithTimedOut: vi.fn(),
+  editWithSkipped: vi.fn(),
 }));
 
 vi.mock("../telegram.js", async (importActual) => {
   const actual = await importActual<typeof import("../telegram.js")>();
   return {
     ...actual,
-    getApi: () => mocks,
-    getOffset: () => 0,
-    advanceOffset: vi.fn(),
+    getApi: () => ({
+      sendMessage: mocks.sendMessage,
+      answerCallbackQuery: mocks.answerCallbackQuery,
+      editMessageText: mocks.editMessageText,
+    }),
     resolveChat: () => 42,
-    pollUntil: async (matcher: (updates: Update[]) => unknown, _timeout: number) => {
-      const updates = (await mocks.getUpdates()) as Update[];
-      const result = matcher(updates);
-      const missed = result !== undefined
-        ? updates.filter(u => matcher([u]) === undefined)
-        : [...updates];
-      return { match: result, missed };
-    },
+  };
+});
+
+vi.mock("../message-store.js", () => ({
+  recordOutgoing: vi.fn(),
+}));
+
+vi.mock("./button-helpers.js", async (importActual) => {
+  const actual = await importActual<typeof import("./button-helpers.js")>();
+  return {
+    ...actual,
+    pollButtonOrTextOrVoice: (...args: unknown[]) => mocks.pollButtonOrTextOrVoice(...args),
+    ackAndEditSelection: (...args: unknown[]) => mocks.ackAndEditSelection(...args),
+    editWithTimedOut: (...args: unknown[]) => mocks.editWithTimedOut(...args),
+    editWithSkipped: (...args: unknown[]) => mocks.editWithSkipped(...args),
   };
 });
 
@@ -32,23 +44,18 @@ import { register } from "./send_confirmation.js";
 
 const SENT_MSG = { message_id: 5, chat: { id: 42 }, date: 0 };
 
-const makeCallbackUpdate = (data: string) => ({
-  update_id: 1,
-  callback_query: {
-    id: "cq1",
-    data,
-    from: { id: 1, first_name: "Alice", username: "alice" },
-    message: { message_id: 5, chat: { id: 42 } },
-  },
-});
+function makeButtonResult(data: string): ButtonResult {
+  return { kind: "button", callback_query_id: "cq1", data, message_id: 5 };
+}
 
 describe("send_confirmation tool", () => {
   let call: (args: Record<string, unknown>) => Promise<unknown>;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.answerCallbackQuery.mockResolvedValue(true);
-    mocks.editMessageText.mockResolvedValue(true);
+    mocks.ackAndEditSelection.mockResolvedValue(undefined);
+    mocks.editWithTimedOut.mockResolvedValue(undefined);
+    mocks.editWithSkipped.mockResolvedValue(undefined);
     const server = createMockServer();
     register(server);
     call = server.getHandler("send_confirmation");
@@ -56,7 +63,7 @@ describe("send_confirmation tool", () => {
 
   it("returns confirmed:true when Yes is pressed", async () => {
     mocks.sendMessage.mockResolvedValue(SENT_MSG);
-    mocks.getUpdates.mockResolvedValue([makeCallbackUpdate("confirm_yes")]);
+    mocks.pollButtonOrTextOrVoice.mockResolvedValue(makeButtonResult("confirm_yes"));
     const result = await call({ text: "Proceed?" });
     expect(isError(result)).toBe(false);
     const data = parseResult(result);
@@ -68,7 +75,7 @@ describe("send_confirmation tool", () => {
 
   it("returns confirmed:false when No is pressed", async () => {
     mocks.sendMessage.mockResolvedValue(SENT_MSG);
-    mocks.getUpdates.mockResolvedValue([makeCallbackUpdate("confirm_no")]);
+    mocks.pollButtonOrTextOrVoice.mockResolvedValue(makeButtonResult("confirm_no"));
     const result = await call({ text: "Delete everything?" });
     expect(isError(result)).toBe(false);
     const data = parseResult(result);
@@ -76,78 +83,70 @@ describe("send_confirmation tool", () => {
     expect(data.value).toBe("confirm_no");
   });
 
-  it("answers the callback_query automatically", async () => {
+  it("calls ackAndEditSelection with callback_query_id", async () => {
     mocks.sendMessage.mockResolvedValue(SENT_MSG);
-    mocks.getUpdates.mockResolvedValue([makeCallbackUpdate("confirm_yes")]);
+    mocks.pollButtonOrTextOrVoice.mockResolvedValue(makeButtonResult("confirm_yes"));
     await call({ text: "Proceed?" });
-    expect(mocks.answerCallbackQuery).toHaveBeenCalledWith("cq1");
-  });
-
-  it("edits message to show chosen label with ▸ and removes buttons", async () => {
-    mocks.sendMessage.mockResolvedValue(SENT_MSG);
-    mocks.getUpdates.mockResolvedValue([makeCallbackUpdate("confirm_yes")]);
-    await call({ text: "Proceed?" });
-    expect(mocks.editMessageText).toHaveBeenCalledWith(
-      42,
-      5,
-      expect.stringContaining("▸"),
-      expect.objectContaining({ reply_markup: { inline_keyboard: [] } }),
+    expect(mocks.ackAndEditSelection).toHaveBeenCalledWith(
+      42, 5, "Proceed?", "🟢 Yes", "cq1",
     );
   });
 
-  it("shows the No label in the edit when No is pressed", async () => {
+  it("calls editWithTimedOut on timeout", async () => {
     mocks.sendMessage.mockResolvedValue(SENT_MSG);
-    mocks.getUpdates.mockResolvedValue([makeCallbackUpdate("confirm_no")]);
+    mocks.pollButtonOrTextOrVoice.mockResolvedValue(null);
+    await call({ text: "Proceed?" });
+    expect(mocks.editWithTimedOut).toHaveBeenCalledWith(42, 5, "Proceed?");
+  });
+
+  it("shows the No label in the ack when No is pressed", async () => {
+    mocks.sendMessage.mockResolvedValue(SENT_MSG);
+    mocks.pollButtonOrTextOrVoice.mockResolvedValue(makeButtonResult("confirm_no"));
     await call({ text: "Proceed?", yes_text: "✔️ Yes", no_text: "✖️ No" });
-    const [, , editedText] = mocks.editMessageText.mock.calls[0];
-    expect(editedText).toContain("✖️ No");
-    expect(editedText).not.toContain("✔️ Yes");
+    expect(mocks.ackAndEditSelection).toHaveBeenCalledWith(
+      42, 5, "Proceed?", "✖️ No", "cq1",
+    );
   });
 
   it("respects custom yes_data and no_data", async () => {
     mocks.sendMessage.mockResolvedValue(SENT_MSG);
-    mocks.getUpdates.mockResolvedValue([makeCallbackUpdate("approve")]);
+    mocks.pollButtonOrTextOrVoice.mockResolvedValue(makeButtonResult("approve"));
     const result = await call({ text: "Approve?", yes_data: "approve", no_data: "reject" });
     const data = parseResult(result);
     expect(data.confirmed).toBe(true);
     expect(data.value).toBe("approve");
   });
 
-  it("returns timed_out:true when no button is pressed", async () => {
+  it("returns timed_out:true when no response arrives", async () => {
     mocks.sendMessage.mockResolvedValue(SENT_MSG);
-    mocks.getUpdates.mockResolvedValue([]);
+    mocks.pollButtonOrTextOrVoice.mockResolvedValue(null);
     const result = await call({ text: "Proceed?" });
     const data = parseResult(result);
     expect(data.timed_out).toBe(true);
-    expect(mocks.answerCallbackQuery).not.toHaveBeenCalled();
-    expect(mocks.editMessageText).toHaveBeenCalledWith(
-      42,
-      5,
-      expect.stringContaining("Timed out"),
-      expect.objectContaining({ reply_markup: { inline_keyboard: [] } }),
-    );
+    expect(mocks.ackAndEditSelection).not.toHaveBeenCalled();
+    expect(mocks.editWithTimedOut).toHaveBeenCalledWith(42, 5, "Proceed?");
   });
 
-  it("ignores callbacks from a different message_id", async () => {
+  it("returns skipped when user sends text instead of pressing a button", async () => {
+    const textResult: TextResult = { kind: "text", message_id: 10, text: "just do it" };
     mocks.sendMessage.mockResolvedValue(SENT_MSG);
-    mocks.getUpdates.mockResolvedValue([{
-      update_id: 1,
-      callback_query: {
-        id: "cq2",
-        data: "confirm_yes",
-        from: { id: 1, first_name: "Alice" },
-        message: { message_id: 999, chat: { id: 42 } }, // different message
-      },
-    }]);
+    mocks.pollButtonOrTextOrVoice.mockResolvedValue(textResult);
     const result = await call({ text: "Proceed?" });
     const data = parseResult(result);
-    expect(data.timed_out).toBe(true);
-    expect(mocks.editMessageText).toHaveBeenCalledWith(
-      42,
-      5,
-      expect.stringContaining("Timed out"),
-      expect.objectContaining({ reply_markup: { inline_keyboard: [] } }),
-    );
+    expect(data.skipped).toBe(true);
+    expect(data.text_response).toBe("just do it");
+    expect(data.text_message_id).toBe(10);
+    expect(mocks.editWithSkipped).toHaveBeenCalledWith(42, 5, "Proceed?");
+  });
+
+  it("returns skipped when user sends voice instead of pressing a button", async () => {
+    const voiceResult: VoiceResult = { kind: "voice", message_id: 11, text: "yes do it" };
+    mocks.sendMessage.mockResolvedValue(SENT_MSG);
+    mocks.pollButtonOrTextOrVoice.mockResolvedValue(voiceResult);
+    const result = await call({ text: "Proceed?" });
+    const data = parseResult(result);
+    expect(data.skipped).toBe(true);
+    expect(data.text_response).toBe("yes do it");
   });
 
   it("returns error when sendMessage throws", async () => {
@@ -158,7 +157,7 @@ describe("send_confirmation tool", () => {
 
   it("sends with a reply_to_message_id when provided", async () => {
     mocks.sendMessage.mockResolvedValue(SENT_MSG);
-    mocks.getUpdates.mockResolvedValue([makeCallbackUpdate("confirm_yes")]);
+    mocks.pollButtonOrTextOrVoice.mockResolvedValue(makeButtonResult("confirm_yes"));
     await call({ text: "Proceed?", reply_to_message_id: 3 });
     const sendOpts = mocks.sendMessage.mock.calls[0][2];
     expect(sendOpts.reply_parameters).toEqual({ message_id: 3 });

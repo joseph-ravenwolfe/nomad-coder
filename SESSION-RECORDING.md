@@ -22,12 +22,12 @@ Session recording solves this by keeping a copy of every update that passes thro
 
 Starts (or restarts) recording. Clears any existing buffer and begins capturing from this point forward.
 
-```
+```text
 start_session_recording(max_updates?: number)
 ```
 
 | Parameter | Default | Max | Description |
-|-----------|---------|-----|-------------|
+| --- | --- | --- | --- |
 | `max_updates` | 50 | 500 | Ring buffer capacity. Oldest entries are dropped when full. |
 
 Returns: `{ recording: true, reset: boolean, max_updates, captured }`
@@ -40,7 +40,7 @@ Returns: `{ recording: true, reset: boolean, max_updates, captured }`
 
 Stops recording **and discards the buffer**. Call `dump_session_record` or `get_session_updates` first if you want to keep the captured data.
 
-```
+```text
 cancel_session_recording()
 ```
 
@@ -52,12 +52,12 @@ Returns: `{ recording: false, was_active: boolean }`
 
 Returns updates from the buffer as structured objects, newest-first by default.
 
-```
+```text
 get_session_updates(messages?: number, oldest_first?: boolean)
 ```
 
 | Parameter | Default | Description |
-|-----------|---------|-------------|
+| --- | --- | --- |
 | `messages` | all | Max number of updates to return |
 | `oldest_first` | false | Return oldest entries first |
 
@@ -71,18 +71,18 @@ Each update in `updates` is a sanitized object with a `type` and `content_type` 
 
 Formats the entire buffer as a human-readable log string and returns it directly to the agent. No file is written; the content is returned as plain text for the agent to read, forward, or save as needed.
 
-```
+```text
 dump_session_record(clean?: boolean, stop?: boolean)
 ```
 
 | Parameter | Description |
-|-----------|-------------|
+| --- | --- |
 | `clean` | If `true`, clear the buffer after a successful dump. Recording stays active. |
 | `stop` | If `true`, stop recording and clear the buffer after dumping. Implies `clean`. |
 
 Returns a text log like:
 
-```
+```text
 # Session Recording Log
 Generated: 2025-01-15T14:32:00.000Z
 Recording: inactive
@@ -117,7 +117,7 @@ End of log
 
 When a task runs long and earlier context falls out of view, session recording lets you catch up on what happened:
 
-```
+```text
 1. start_session_recording()           — begin capturing
 2. ... do work, exchange messages ...
 3. get_session_updates(oldest_first: true)   — review the conversation
@@ -128,14 +128,14 @@ When a task runs long and earlier context falls out of view, session recording l
 
 At the end of a session, dump and summarize what was discussed:
 
-```
+```text
 1. dump_session_record(stop: true)     — export formatted log, stop recording, clear buffer
 2. Summarize the log content and send via notify
 ```
 
 ### Exporting a conversation to a file
 
-```
+```text
 1. dump_session_record(clean: false)
 2. send_document(localPath: ...) or save the returned text via a write tool
 ```
@@ -144,7 +144,7 @@ At the end of a session, dump and summarize what was discussed:
 
 If your context compacts mid-session and you lose track of what the user was working on:
 
-```
+```text
 1. get_session_updates(messages: 10)   — review recent activity
 2. Resume from where you left off
 ```

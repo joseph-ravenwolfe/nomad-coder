@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ReactionType } from "grammy/types";
 import { z } from "zod";
 import { getApi, toResult, toError, resolveChat, type ReactionEmoji } from "../telegram.js";
+import { recordBotReaction } from "../message-store.js";
 
 /**
  * Allowed emoji reactions from the Telegram Bot API.
@@ -108,6 +109,7 @@ export function register(server: McpServer) {
         
         const reaction: ReactionType[] = resolved ? [{ type: "emoji" as const, emoji: resolved as ReactionEmoji }] : [];
         await getApi().setMessageReaction(chatId, message_id, reaction, { is_big });
+        if (resolved) recordBotReaction(message_id, resolved);
         return toResult({ ok: true, message_id, emoji: resolved || null });
       } catch (err) {
         return toError(err);

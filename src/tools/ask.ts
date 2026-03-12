@@ -1,17 +1,16 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getApi, resolveChat, toResult, toError, validateText, pollUntil } from "../telegram.js";
+import { getApi, resolveChat, toResult, toError, validateText } from "../telegram.js";
 import { markdownToV2 } from "../markdown.js";
-import { transcribeWithIndicator } from "../transcribe.js";
 import { cancelTyping } from "../typing-state.js";
 import { clearPendingTemp } from "../temp-message.js";
 import { applyTopicToText } from "../topic-state.js";
-import { recordBotMessage } from "../session-recording.js";
+import { recordOutgoing, dequeueMatch, waitForEnqueue, type TimelineEvent } from "../message-store.js";
 
 /**
  * Sends a question and blocks until the user types a reply.
- * Combines send_message + wait_for_message in a single call with automatic
- * chat_id matching so the agent only gets the reply from the same chat.
+ * V3: polls from the message store queue instead of calling Telegram API.
+ * Voice messages arrive pre-transcribed by the background poller.
  */
 export function register(server: McpServer) {
   server.registerTool(
@@ -48,47 +47,48 @@ export function register(server: McpServer) {
           parse_mode: "MarkdownV2",
           reply_parameters: reply_to_message_id ? { message_id: reply_to_message_id } : undefined,
         });
-        recordBotMessage({ content_type: "text", text: question, message_id: sent.message_id });
+        recordOutgoing(sent.message_id, "text", question);
 
-        // Poll with 1 s ticks for the reply (text or voice).
-        // Only match messages sent AFTER our question (message_id > sent.message_id)
-        // so that a voice message the user sent before we asked is not treated as the answer.
-        const { match } = await pollUntil(
-          (updates) => {
-            const msg = updates.find(
-              (u) =>
-                u.message &&
-                (u.message.text || u.message.voice) &&
-                u.message.chat.id === chatId &&
-                u.message.message_id > sent.message_id
-            );
-            return msg?.message;
-          },
-          timeout_seconds,
-        );
+        // Poll from the store queue for text or voice messages after our question.
+        // Voice messages arrive pre-transcribed by the background poller.
+        const deadline = Date.now() + timeout_seconds * 1000;
 
-        if (!match) {
-          return toResult({ timed_out: true });
-        }
-
-        if (match.voice) {
-          const text = await transcribeWithIndicator(match.voice.file_id, match.message_id)
-            .catch((e) => `[transcription failed: ${e.message}]`);
-          return toResult({
-            timed_out: false,
-            text,
-            message_id: match.message_id,
-            voice: true,
-            reply_to_message_id: match.reply_to_message?.message_id,
+        while (Date.now() < deadline) {
+          const match = dequeueMatch((event: TimelineEvent) => {
+            if (event.event === "message" && event.id > sent.message_id) {
+              if (event.content.type === "text" || event.content.type === "voice") {
+                return event;
+              }
+            }
+            return undefined;
           });
+
+          if (match) {
+            if (match.content.type === "voice") {
+              return toResult({
+                timed_out: false,
+                text: match.content.text ?? "[no transcription]",
+                message_id: match.id,
+                voice: true,
+              });
+            }
+            return toResult({
+              timed_out: false,
+              text: match.content.text,
+              message_id: match.id,
+            });
+          }
+
+          const remaining = deadline - Date.now();
+          if (remaining <= 0) break;
+
+          await Promise.race([
+            waitForEnqueue(),
+            new Promise<void>((r) => setTimeout(r, Math.min(remaining, 5000))),
+          ]);
         }
 
-        return toResult({
-          timed_out: false,
-          text: match.text,
-          message_id: match.message_id,
-          reply_to_message_id: match.reply_to_message?.message_id,
-        });
+        return toResult({ timed_out: true });
       } catch (err) {
         return toError(err);
       }

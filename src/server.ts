@@ -3,109 +3,101 @@ import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
-// Low-level tools
-import { register as registerGetMe } from "./tools/get_me.js";
-import { register as registerSendMessage } from "./tools/send_message.js";
-import { register as registerSendMessageDraft } from "./tools/send_message_draft.js";
-import { register as registerGetUpdates } from "./tools/get_updates.js";
-import { register as registerGetUpdate } from "./tools/get_update.js";
-import { register as registerAnswerCallbackQuery } from "./tools/answer_callback_query.js";
-import { register as registerEditMessageText } from "./tools/edit_message_text.js";
-import { register as registerGetChat } from "./tools/get_chat.js";
-import { register as registerSetReaction } from "./tools/set_reaction.js";
-import { register as registerSendPhoto } from "./tools/send_photo.js";
-import { register as registerSendDocument } from "./tools/send_document.js";
-import { register as registerSendVideo } from "./tools/send_video.js";
-import { register as registerSendAudio } from "./tools/send_audio.js";
-import { register as registerSendVoiceTool } from "./tools/send_voice.js";
-import { register as registerSendTextAsVoice } from "./tools/speak.js";
-import { register as registerDownloadFile } from "./tools/download_file.js";
-import { register as registerTranscribeVoice } from "./tools/transcribe_voice.js";
-import { register as registerPinMessage } from "./tools/pin_message.js";
-import { register as registerUnpinMessage } from "./tools/unpin_message.js";
-import { register as registerDeleteMessage } from "./tools/delete_message.js";
-import { register as registerSendChatAction } from "./tools/send_chat_action.js";
-import { register as registerShowTyping } from "./tools/show_typing.js";
-import { register as registerCancelTyping } from "./tools/cancel_typing.js";
-import { register as registerRestartServer } from "./tools/restart_server.js";
-import { register as registerSetCommands } from "./tools/set_commands.js";
-import { register as registerWaitForCallbackQuery } from "./tools/wait_for_callback_query.js";
-import { register as registerWaitForMessage } from "./tools/wait_for_message.js";
+// ── V3 new tools ──────────────────────────────────────────────────────────
+import { register as registerDequeueUpdate } from "./tools/dequeue_update.js";
+import { register as registerGetMessage } from "./tools/get_message.js";
+import { register as registerSendText } from "./tools/send_text.js";
+import { register as registerSendFile } from "./tools/send_file.js";
+import { register as registerAppendText } from "./tools/append_text.js";
+import { register as registerShowAnimation } from "./tools/show_animation.js";
+import { register as registerCancelAnimation } from "./tools/cancel_animation.js";
 
-// High-level agent tools
+// ── Updated tools (V2→V3) ────────────────────────────────────────────────
+import { register as registerSpeak } from "./tools/speak.js";
 import { register as registerNotify } from "./tools/notify.js";
+import { register as registerEditMessageText } from "./tools/edit_message_text.js";
+import { register as registerDeleteMessage } from "./tools/delete_message.js";
 import { register as registerAsk } from "./tools/ask.js";
 import { register as registerChoose } from "./tools/choose.js";
-import { register as registerUpdateStatus } from "./tools/update_status.js";
-import { register as registerGetAgentGuide } from "./tools/get_agent_guide.js";
 import { register as registerSendConfirmation } from "./tools/send_confirmation.js";
+import { register as registerAnswerCallbackQuery } from "./tools/answer_callback_query.js";
+import { register as registerShowTyping } from "./tools/show_typing.js";
+import { register as registerSendChatAction } from "./tools/send_chat_action.js";
+import { register as registerUpdateStatus } from "./tools/update_status.js";
+import { register as registerSetReaction } from "./tools/set_reaction.js";
+import { register as registerPinMessage } from "./tools/pin_message.js";
+import { register as registerDownloadFile } from "./tools/download_file.js";
+import { register as registerTranscribeVoice } from "./tools/transcribe_voice.js";
+import { register as registerSetCommands } from "./tools/set_commands.js";
 import { register as registerSetTopic } from "./tools/set_topic.js";
-import { register as registerSendTempMessage } from "./tools/send_temp_message.js";
-import { register as registerStartSessionRecording } from "./tools/start_session_recording.js";
-import { register as registerCancelSessionRecording } from "./tools/cancel_session_recording.js";
-import { register as registerGetSessionUpdates } from "./tools/get_session_updates.js";
+import { register as registerGetMe } from "./tools/get_me.js";
+import { register as registerGetChat } from "./tools/get_chat.js";
+import { register as registerGetAgentGuide } from "./tools/get_agent_guide.js";
 import { register as registerDumpSessionRecord } from "./tools/dump_session_record.js";
+import { register as registerRestartServer } from "./tools/restart_server.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export function createServer(): McpServer {
   const server = new McpServer({
     name: "telegram-bridge-mcp",
-    version: "2.1.2",
+    version: "3.0.0",
   });
 
   // ── High-level agent tools (use these 99% of the time) ─────────────────
   registerGetAgentGuide(server);
   registerSetTopic(server);
   registerNotify(server);
-  registerSendTempMessage(server);
   registerAsk(server);
   registerChoose(server);
   registerUpdateStatus(server);
   registerSendConfirmation(server);
 
-  // ── Interaction primitives ───────────────────────────────────────────────
-  registerWaitForCallbackQuery(server);
-  registerWaitForMessage(server);
-  registerAnswerCallbackQuery(server);
+  // ── Polling (V3: dequeue from store) ───────────────────────────────────
+  registerDequeueUpdate(server);
+  registerGetMessage(server);
 
   // ── Messaging ───────────────────────────────────────────────────────────
-  registerSendChatAction(server);
-  registerShowTyping(server);
-  registerCancelTyping(server);
-  registerRestartServer(server);
-  registerSendMessage(server);
-  registerSendMessageDraft(server);
+  registerSendText(server);
+  registerSpeak(server);
+  registerSendFile(server);
   registerEditMessageText(server);
-  registerSendPhoto(server);
-  registerSendDocument(server);
-  registerSendVideo(server);
-  registerSendAudio(server);
-  registerSendVoiceTool(server);
-  registerSendTextAsVoice(server);
-  registerDownloadFile(server);
-  registerTranscribeVoice(server);
+  registerAppendText(server);
   registerDeleteMessage(server);
-  registerPinMessage(server);
-  registerUnpinMessage(server);
 
-  // ── Bot / chat info ──────────────────────────────────────────────────────
-  registerGetMe(server);
-  registerGetChat(server);
-  registerSetCommands(server);
+  // ── Visual (animations) ────────────────────────────────────────────────
+  registerShowAnimation(server);
+  registerCancelAnimation(server);
 
-  // ── Reactions ────────────────────────────────────────────────────────────
+  // ── Interaction primitives ─────────────────────────────────────────────
+  registerAnswerCallbackQuery(server);
+
+  // ── Status ─────────────────────────────────────────────────────────────
+  registerShowTyping(server);
+  registerSendChatAction(server);
+
+  // ── Reactions ──────────────────────────────────────────────────────────
   registerSetReaction(server);
 
-  // ── Polling ──────────────────────────────────────────────────────────────
-  registerGetUpdate(server);
-  registerGetUpdates(server);
+  // ── Pin ────────────────────────────────────────────────────────────────
+  registerPinMessage(server);
 
-  // ── Session recording ───────────────────────────────────────────
-  registerStartSessionRecording(server);
-  registerCancelSessionRecording(server);
-  registerGetSessionUpdates(server);
+  // ── File operations ────────────────────────────────────────────────────
+  registerDownloadFile(server);
+  registerTranscribeVoice(server);
+
+  // ── Config ─────────────────────────────────────────────────────────────
+  registerSetCommands(server);
+
+  // ── Info ───────────────────────────────────────────────────────────────
+  registerGetMe(server);
+  registerGetChat(server);
+
+  // ── Session ────────────────────────────────────────────────────────────
   registerDumpSessionRecord(server);
+
+  // ── System ─────────────────────────────────────────────────────────────
+  registerRestartServer(server);
 
   // ── Resources ────────────────────────────────────────────────────────────
   const agentGuideContent = readFileSync(

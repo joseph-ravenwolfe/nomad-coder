@@ -5,6 +5,59 @@ Format follows [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Voice transcription timeout** — added 60s timeout to `transcribeVoice` calls in the poller; prevents ✍ reaction from sticking forever when transcription hangs
+- **Invalid reaction emoji** — changed poller queued-reaction from 📝 (not in Telegram's allowed set) to 😴
+- **Markdown backslash escaping** — `markdownToV2` now strips agent-escaped special chars (`\_` → `_`, `\*` → `*`, etc.) before applying MarkdownV2 escaping
+- **send\_confirmation skip flow** — switched from `pollButtonPress` to `pollButtonOrTextOrVoice`; voice/text replies now return `{ skipped: true, text_response }` instead of timing out
+- **Context bloat in get\_message** — removed `raw` field that leaked full Telegram Message/CallbackQuery objects (2–5 KB each)
+- **Context bloat in dump\_session\_record** — added `limit` parameter (default 100, max 1000) and compact JSON output; prevents unbounded 500 KB responses
+
+### Added
+
+- **Message store** (`message-store.ts`) — always-on store replacing both `session-recording.ts` and `update-buffer.ts`; provides `recordInbound`, `recordOutgoing`, `recordOutgoingEdit`, `recordBotReaction`, `dequeue`, `dequeueMatch`, `waitForEnqueue`, `getMessage` (random-access with version history), `dumpTimeline`
+- **Background poller** (`poller.ts`) — continuously calls `getUpdates`, feeds `recordInbound` into the store, auto-transcribes voice messages with ✍→📝 reaction feedback
+- **Animation state** (`animation-state.ts`) — manages typing/thinking animations via edit-not-delete mechanism with `startAnimation`, `cancelAnimation`, `resetAnimationTimeout`
+- **`send_text` tool** — replaces `send_message` with `recordOutgoing` integration and `resetAnimationTimeout`
+- **`send_file` tool** — consolidates `send_photo`, `send_document`, `send_video`, `send_audio`, `send_voice` into one tool with auto-detection by file extension
+- **`dequeue_update` tool** — universal update consumption; blocks via `waitForEnqueue` with configurable timeout and filter predicate
+- **`get_message` tool** — random-access lookup by `message_id` with optional version history
+- **`append_text` tool** — delta-append using `getMessage` + `editMessageText` + `recordOutgoingEdit`
+- **`show_animation` tool** — starts a typing/thinking animation via `startAnimation`
+- **`cancel_animation` tool** — cancels active animation with optional replacement text
+- **`reply_to` field in message store** — `EventContent` now captures `reply_to_message.message_id` from inbound messages
+
+### Changed
+
+- **Version bumped to 3.0.0** — major architecture change from polling-per-tool to background-poller + message-store
+- **`server.ts` rewrite** — registers 29 tools (down from 40+); removed all V2 polling tool imports
+- **`choose.ts`** — uses `pollButtonOrTextOrVoice` from button-helpers instead of `pollUntil`; voice arrives pre-transcribed from poller
+- **`ask.ts`** — complete rewrite using `dequeueMatch`/`waitForEnqueue` loop from message-store
+- **`button-helpers.ts`** — rewritten with V3 types (`ButtonResult`, `TextResult`, `VoiceResult`); uses store-based polling instead of `pollUntil`
+- **`send_confirmation.ts`** — uses `recordOutgoing` and V3 `ButtonResult.callback_query_id`
+- **`notify.ts`** — uses `recordOutgoing` and `resetAnimationTimeout`
+- **`edit_message_text.ts`** — adds `recordOutgoingEdit` and `resetAnimationTimeout`
+- **`speak.ts`** — renamed from `send_text_as_voice`; uses `recordOutgoing` and `resetAnimationTimeout`
+- **`update_status.ts`** — uses `recordOutgoing` and `resetAnimationTimeout`
+- **`show_typing.ts`** — absorbed `cancel_typing` via `cancel: boolean` parameter
+- **`pin_message.ts`** — absorbed `unpin_message` via `unpin: boolean` parameter; `message_id` optional for unpin
+- **`dump_session_record.ts`** — complete rewrite; returns JSON from `dumpTimeline`/`timelineSize`/`storeSize` (no recording needed)
+- **`set_reaction.ts`** — adds `recordBotReaction` call
+- **`index.ts`** — starts/stops background poller; removed `sendSessionPrefsPrompt`
+- **`telegram.ts`** — removed `recordUpdate` from `advanceOffset` (poller handles recording)
+
+### Removed
+
+- **17 dead V2 tool files** and **14 associated test files** — replaced by consolidated V3 tools
+- **`send_message` / `send_message_draft`** — replaced by `send_text`
+- **`send_photo` / `send_document` / `send_video` / `send_audio` / `send_voice`** — replaced by `send_file`
+- **`get_updates` / `get_update` / `wait_for_message` / `wait_for_callback_query`** — replaced by `dequeue_update`
+- **`cancel_typing`** — absorbed into `show_typing`
+- **`unpin_message`** — absorbed into `pin_message`
+- **`send_temp_message`** — removed (animation system replaces ephemeral messages)
+- **`start_session_recording` / `cancel_session_recording` / `get_session_updates`** — replaced by always-on message store
+
 ## [2.1.2] — 2026-03-11
 
 ### Added

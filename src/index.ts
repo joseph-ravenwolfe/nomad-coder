@@ -6,7 +6,8 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { createServer } from "./server.js";
 import { getSecurityConfig, getApi, resolveChat } from "./telegram.js";
 import { clearCommandsOnShutdown } from "./shutdown.js";
-import { BUILT_IN_COMMANDS, sendSessionPrefsPrompt } from "./built-in-commands.js";
+import { BUILT_IN_COMMANDS } from "./built-in-commands.js";
+import { startPoller, stopPoller } from "./poller.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(join(__dirname, "..", "package.json"), "utf-8")) as { name: string; version: string };
@@ -25,6 +26,7 @@ if (process.env.STT_HOST && !process.env.STT_HOST.startsWith("https://")) {
 
 for (const sig of ["SIGTERM", "SIGINT"] as const) {
   process.on(sig, () => {
+    stopPoller();
     void clearCommandsOnShutdown().finally(() => process.exit(0));
   });
 }
@@ -34,8 +36,8 @@ const transport = new StdioServerTransport();
 
 await server.connect(transport);
 
-// Register built-in commands in the Telegram menu and ask session-recording
-// prefs after connecting. Both are best-effort — don't block startup.
+// Register built-in commands and start the background poller after connecting.
+// Both are best-effort — don't block startup.
 void (async () => {
   const chatId = resolveChat();
   if (typeof chatId !== "number") return;
@@ -44,5 +46,8 @@ void (async () => {
       scope: { type: "chat", chat_id: chatId },
     });
   } catch { /* ignore */ }
-  await sendSessionPrefsPrompt();
 })();
+
+// V3: Start the background poller — feeds all updates into the message store.
+startPoller();
+process.stderr.write("[info] background poller started\n");

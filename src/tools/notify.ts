@@ -5,7 +5,8 @@ import { markdownToV2, escapeV2, escapeHtml } from "../markdown.js";
 import { cancelTyping } from "../typing-state.js";
 import { clearPendingTemp } from "../temp-message.js";
 import { applyTopicToTitle } from "../topic-state.js";
-import { recordBotMessage } from "../session-recording.js";
+import { recordOutgoing } from "../message-store.js";
+import { resetAnimationTimeout } from "../animation-state.js";
 
 const SEVERITY_PREFIX: Record<string, string> = {
   info: "ℹ️",
@@ -66,6 +67,7 @@ export function register(server: McpServer) {
         const err = validateText(text);
         if (err) return toError(err);
         cancelTyping();
+        resetAnimationTimeout();
         await clearPendingTemp();
 
         const msg = await getApi().sendMessage(chatId, text, {
@@ -73,7 +75,7 @@ export function register(server: McpServer) {
           disable_notification,
           reply_parameters: reply_to_message_id ? { message_id: reply_to_message_id } : undefined,
         });
-        recordBotMessage({ content_type: "text", text: `${title}${body ? "\n" + body : ""}`, message_id: msg.message_id });
+        recordOutgoing(msg.message_id, "text", `${title}${body ? "\n" + body : ""}`);
         return toResult({ message_id: msg.message_id });
       } catch (err) {
         return toError(err);

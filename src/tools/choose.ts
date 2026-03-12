@@ -5,12 +5,11 @@ import {
   toResult, toError, validateText, validateCallbackData, LIMITS,
 } from "../telegram.js";
 import { markdownToV2 } from "../markdown.js";
-import { transcribeWithIndicator } from "../transcribe.js";
 import { cancelTyping } from "../typing-state.js";
 import { clearPendingTemp } from "../temp-message.js";
 import { applyTopicToText } from "../topic-state.js";
 import { pollButtonOrTextOrVoice, ackAndEditSelection, editWithSkipped, editWithTimedOut } from "./button-helpers.js";
-import { recordBotMessage } from "../session-recording.js";
+import { recordOutgoing } from "../message-store.js";
 
 /**
  * Sends a question with labeled option buttons and blocks until one is pressed.
@@ -106,7 +105,7 @@ export function register(server: McpServer) {
           reply_markup: { inline_keyboard: rows },
           reply_parameters: reply_to_message_id ? { message_id: reply_to_message_id } : undefined,
         });
-        recordBotMessage({ content_type: "text", text: question, message_id: sent.message_id });
+        recordOutgoing(sent.message_id, "text", question);
 
         const match = await pollButtonOrTextOrVoice(chatId, sent.message_id, timeout_seconds);
 
@@ -126,34 +125,30 @@ export function register(server: McpServer) {
             skipped: true,
             text_response: match.text,
             text_message_id: match.message_id,
-            reply_to_message_id: match.reply_to_message_id,
             message_id: sent.message_id,
           });
         }
 
         if (match.kind === "voice") {
-          const text = await transcribeWithIndicator(match.fileId, match.message_id)
-            .catch((e) => `[transcription failed: ${e.message}]`);
           await editWithSkipped(chatId, sent.message_id, question);
           return toResult({
             skipped: true,
-            text_response: text,
+            text_response: match.text ?? "[no transcription]",
             text_message_id: match.message_id,
-            reply_to_message_id: match.reply_to_message_id,
             message_id: sent.message_id,
             voice: true,
           });
         }
 
         // Button was pressed
-        const chosen = options.find((o) => o.value === match.cq.data);
-        const chosenLabel = chosen?.label ?? match.cq.data ?? "";
-        await ackAndEditSelection(chatId, sent.message_id, question, chosenLabel, match.cq.id);
+        const chosen = options.find((o) => o.value === match.data);
+        const chosenLabel = chosen?.label ?? match.data ?? "";
+        await ackAndEditSelection(chatId, sent.message_id, question, chosenLabel, match.callback_query_id);
 
         return toResult({
           timed_out: false,
           label: chosenLabel,
-          value: match.cq.data,
+          value: match.data,
           message_id: sent.message_id,
         });
       } catch (err) {

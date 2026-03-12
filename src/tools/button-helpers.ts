@@ -1,93 +1,131 @@
 /**
  * Shared helpers for button-based interaction tools (choose, send_confirmation).
  *
- * Extracts the repeated: poll → ack → edit lifecycle so individual tools
- * only contain their schema definitions and result-mapping logic.
+ * V3: Polls from the message store queue instead of calling Telegram API directly.
+ * The background poller feeds updates into the store; these helpers consume them.
  */
 
-import type { Update } from "grammy/types";
-import { getApi, pollUntil } from "../telegram.js";
+import { getApi } from "../telegram.js";
 import { markdownToV2 } from "../markdown.js";
+import { dequeueMatch, waitForEnqueue, type TimelineEvent } from "../message-store.js";
 
 // ---------------------------------------------------------------------------
 // Result types
 // ---------------------------------------------------------------------------
 
-export type ButtonOrTextResult =
-  | { kind: "button"; cq: NonNullable<Update["callback_query"]> }
-  | { kind: "text";   message_id: number; text: string;   reply_to_message_id?: number }
-  | { kind: "voice";  message_id: number; fileId: string; reply_to_message_id?: number };
+export interface ButtonResult {
+  kind: "button";
+  callback_query_id: string;
+  data: string;
+  message_id: number;
+}
+
+export interface TextResult {
+  kind: "text";
+  message_id: number;
+  text: string;
+}
+
+export interface VoiceResult {
+  kind: "voice";
+  message_id: number;
+  text?: string;
+}
+
+export type ButtonOrTextResult = ButtonResult | TextResult | VoiceResult;
 
 // ---------------------------------------------------------------------------
-// Polling helpers
+// Store-based polling helpers
 // ---------------------------------------------------------------------------
 
 /**
- * Polls until a callback_query arrives for a specific message, or times out.
+ * Wait for a callback_query on a specific message from the store queue.
  * Used by send_confirmation (button-only response expected).
  */
 export async function pollButtonPress(
-  chatId: number,
+  _chatId: number,
   messageId: number,
   timeoutSeconds: number,
-): Promise<NonNullable<Update["callback_query"]> | null> {
-  const { match } = await pollUntil<NonNullable<Update["callback_query"]>>(
-    (updates) => {
-      const cq = updates.find(
-        (u) =>
-          u.callback_query &&
-          u.callback_query.message?.message_id === messageId &&
-          u.callback_query.message?.chat.id === chatId,
-      );
-      return cq?.callback_query;
-    },
-    timeoutSeconds,
-  );
-  return match ?? null;
+): Promise<ButtonResult | null> {
+  const deadline = Date.now() + timeoutSeconds * 1000;
+
+  while (Date.now() < deadline) {
+    const result = dequeueMatch((event: TimelineEvent) => {
+      if (event.event === "callback" && event.content.target === messageId) {
+        return {
+          kind: "button" as const,
+          callback_query_id: event.content.qid!,
+          data: event.content.data!,
+          message_id: messageId,
+        };
+      }
+      return undefined;
+    });
+    if (result) return result;
+
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) break;
+
+    await Promise.race([
+      waitForEnqueue(),
+      new Promise<void>((r) => setTimeout(r, Math.min(remaining, 5000))),
+    ]);
+  }
+  return null;
 }
 
 /**
- * Polls until EITHER a callback_query on the given message OR a text/voice
- * message arrives (whichever comes first). Used by choose, where the user
- * may type or speak instead of pressing a button.
+ * Wait for EITHER a callback_query on the given message OR a text/voice
+ * message from the store queue. Used by choose.
  */
 export async function pollButtonOrTextOrVoice(
-  chatId: number,
+  _chatId: number,
   messageId: number,
   timeoutSeconds: number,
 ): Promise<ButtonOrTextResult | null> {
-  const { match } = await pollUntil<ButtonOrTextResult>(
-    (updates) => {
-      const cq = updates.find(
-        (u) =>
-          u.callback_query &&
-          u.callback_query.message?.message_id === messageId &&
-          u.callback_query.message?.chat.id === chatId,
-      );
-      if (cq?.callback_query) return { kind: "button", cq: cq.callback_query };
+  const deadline = Date.now() + timeoutSeconds * 1000;
 
-      // Only match messages sent AFTER the question (stale-message guard)
-      const tm = updates.find((u) => u.message?.text && u.message.message_id > messageId);
-      if (tm?.message?.text) return {
-        kind: "text",
-        message_id: tm.message.message_id,
-        text: tm.message.text,
-        reply_to_message_id: tm.message.reply_to_message?.message_id,
-      };
-
-      const vm = updates.find((u) => u.message?.voice && u.message.message_id > messageId);
-      if (vm?.message?.voice) return {
-        kind: "voice",
-        message_id: vm.message.message_id,
-        fileId: vm.message.voice.file_id,
-        reply_to_message_id: vm.message.reply_to_message?.message_id,
-      };
-
+  while (Date.now() < deadline) {
+    const result = dequeueMatch((event: TimelineEvent) => {
+      // Check for callback on the specific message
+      if (event.event === "callback" && event.content.target === messageId) {
+        return {
+          kind: "button" as const,
+          callback_query_id: event.content.qid!,
+          data: event.content.data!,
+          message_id: messageId,
+        };
+      }
+      // Check for text/voice message sent AFTER the question
+      if (event.event === "message" && event.id > messageId) {
+        if (event.content.type === "text") {
+          return {
+            kind: "text" as const,
+            message_id: event.id,
+            text: event.content.text!,
+          };
+        }
+        if (event.content.type === "voice") {
+          return {
+            kind: "voice" as const,
+            message_id: event.id,
+            text: event.content.text,
+          };
+        }
+      }
       return undefined;
-    },
-    timeoutSeconds,
-  );
-  return match ?? null;
+    });
+    if (result) return result;
+
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) break;
+
+    await Promise.race([
+      waitForEnqueue(),
+      new Promise<void>((r) => setTimeout(r, Math.min(remaining, 5000))),
+    ]);
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------

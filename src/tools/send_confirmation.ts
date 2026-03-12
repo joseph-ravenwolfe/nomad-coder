@@ -5,8 +5,8 @@ import { markdownToV2 } from "../markdown.js";
 import { cancelTyping } from "../typing-state.js";
 import { clearPendingTemp } from "../temp-message.js";
 import { applyTopicToText } from "../topic-state.js";
-import { pollButtonPress, ackAndEditSelection, editWithTimedOut } from "./button-helpers.js";
-import { recordBotMessage } from "../session-recording.js";
+import { pollButtonOrTextOrVoice, ackAndEditSelection, editWithTimedOut, editWithSkipped } from "./button-helpers.js";
+import { recordOutgoing } from "../message-store.js";
 
 /**
  * Convenience tool for agent→human Yes/No confirmation flows.
@@ -91,23 +91,34 @@ export function register(server: McpServer) {
             ]],
           },
         });
-        recordBotMessage({ content_type: "text", text, message_id: sent.message_id });
+        recordOutgoing(sent.message_id, "text", text);
 
-        const cq = await pollButtonPress(chatId, sent.message_id, timeout_seconds);
+        const result = await pollButtonOrTextOrVoice(chatId, sent.message_id, timeout_seconds);
 
-        if (!cq) {
+        if (!result) {
           await editWithTimedOut(chatId, sent.message_id, text);
           return toResult({ timed_out: true, message_id: sent.message_id });
         }
 
-        const confirmed = cq.data === yes_data;
+        // User typed or spoke instead of pressing a button — mark as skipped
+        if (result.kind === "text" || result.kind === "voice") {
+          await editWithSkipped(chatId, sent.message_id, text);
+          return toResult({
+            skipped: true,
+            text_response: result.text,
+            text_message_id: result.message_id,
+            message_id: sent.message_id,
+          });
+        }
+
+        const confirmed = result.data === yes_data;
         const chosenLabel = confirmed ? yes_text : no_text;
-        await ackAndEditSelection(chatId, sent.message_id, text, chosenLabel, cq.id);
+        await ackAndEditSelection(chatId, sent.message_id, text, chosenLabel, result.callback_query_id);
 
         return toResult({
           timed_out: false,
           confirmed,
-          value: cq.data,
+          value: result.data,
           message_id: sent.message_id,
         });
       } catch (err) {

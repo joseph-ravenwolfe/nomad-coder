@@ -21,12 +21,13 @@ Group chat breaks every one of those assumptions. Rather than bolt-on conditiona
 ## Core Design Problems to Solve
 
 ### 1. Authorization Model
+
 Who is allowed to address the bot?
 
 **Decision required:** Choose one or a combination of:
 
 | Model | Description | Notes |
-|---|---|---|
+| --- | --- | --- |
 | Group membership | Any member of the allowed group | Open, easy to abuse |
 | Allowlist | Explicit `user_id` whitelist in config | Easiest to audit |
 | Admin-only | Only group admins can issue tasks | Good for managed deployments |
@@ -37,12 +38,13 @@ Starting recommendation: **allowlist** for v1, admin-only as an alternative flag
 ---
 
 ### 2. Trigger Model
+
 How does the bot know it's being addressed?
 
 In a group, the bot sees *all* messages. It must filter for intentional ones:
 
 | Trigger | Reliability | UX |
-|---|---|---|
+| --- | --- | --- |
 | `@bot_username` mention | High | Natural, easy to forget |
 | Reply to bot message | High | Great for follow-ups, awkward cold-start |
 | Slash command (`/ask ...`) | High | Feels clunky but unambiguous |
@@ -53,6 +55,7 @@ In a group, the bot sees *all* messages. It must filter for intentional ones:
 ---
 
 ### 3. Session / Context Boundaries
+
 How are concurrent conversations tracked?
 
 A single group produces messages from multiple users at once. The agent needs to know *which conversation* each message belongs to.
@@ -60,7 +63,7 @@ A single group produces messages from multiple users at once. The agent needs to
 **Options:**
 
 | Strategy | Isolation | Complexity |
-|---|---|---|
+| --- | --- | --- |
 | Reply thread (chain from first bot message) | Per conversation | Low — Telegram does the threading |
 | Forum topic per user | Per user | Medium — requires forum-enabled supergroup |
 | Active session lock | One at a time, queued | Low — simple but users wait |
@@ -71,9 +74,11 @@ A single group produces messages from multiple users at once. The agent needs to
 ---
 
 ### 4. The `wait_for_message` Problem
+
 Currently `wait_for_message` returns *any* next message from the operator. In a group that contract is undefined.
 
 Group-native replacement must:
+
 1. Accept a `thread_root_message_id` — listen only for replies in that chain.
 2. Accept a `user_id` filter — optionally limit to the user who triggered the session.
 3. Include `from` in every returned update (who said it, their display name).
@@ -83,9 +88,11 @@ A new `wait_for_reply` tool may be cleaner than patching `wait_for_message`.
 ---
 
 ### 5. Outbound Targeting
+
 Sending must be scoped to the right thread so replies appear in context.
 
 All send tools need:
+
 - `reply_to_message_id` for threading (already supported on most tools, but not always passed)
 - `chat_id` as a passable param (already exists on most tools)
 - A conversation context object the agent can pass through rather than tracking manually
@@ -95,7 +102,9 @@ A **session context** struct — `{ chat_id, thread_root_message_id, user_id }` 
 ---
 
 ### 6. Bot-vs-Bot Loop Prevention
+
 In a group with multiple bots, one bot's reply can trigger another. Must filter out:
+
 - Messages where `from.is_bot === true`
 - Our own messages (match against `get_me()` result)
 
@@ -104,6 +113,7 @@ In a group with multiple bots, one bot's reply can trigger another. Must filter 
 ## Implementation Plan
 
 ### Phase 1 — Foundation (no new tools yet)
+
 - [ ] New entry point / package config
 - [ ] Group-aware config: `ALLOWED_GROUP_ID`, `ALLOWED_USER_IDS` (array), `TRIGGER_MODE` (`mention` | `reply` | `command` | `any`)
 - [ ] `isAuthorized(update)` helper — user allowlist + bot filter
@@ -111,21 +121,25 @@ In a group with multiple bots, one bot's reply can trigger another. Must filter 
 - [ ] Update filter pipeline: incoming updates pass through `isAuthorized` → `isTrigger` → buffer
 
 ### Phase 2 — Session Model
+
 - [ ] `SessionContext` type: `{ chat_id, trigger_message_id, user_id, username }`
 - [ ] `wait_for_trigger` tool — long-polls for next authorized trigger message, returns `SessionContext`
 - [ ] `wait_for_reply` tool — long-polls for next reply in a session's thread, returns message + `from`
 - [ ] Session recording keyed by `(chat_id, trigger_message_id)`
 
 ### Phase 3 — Adapted Send Tools
+
 - [ ] All send tools accept `SessionContext` (or explicit `reply_to_message_id` + `chat_id`)
 - [ ] `show_typing` / `cancel_typing` scoped per session
 - [ ] `send_confirmation` / `choose` / `ask` work within reply thread
 
 ### Phase 4 — Multi-Session Concurrency (deferred)
+
 - [ ] Multiple simultaneous `wait_for_trigger` loops (one per pending session)
 - [ ] Agent architecture guidance for concurrent sessions
 
 ### Phase 5 — Forum Topic Mode (deferred)
+
 - [ ] Optional `ISOLATION_MODE=topic` — creates/reuses a forum topic per user on first contact
 - [ ] Topic ID tracked in session context
 - [ ] All session messages go to user's dedicated topic
@@ -135,7 +149,7 @@ In a group with multiple bots, one bot's reply can trigger another. Must filter 
 ## Security Model Differences
 
 | Aspect | 1-on-1 Edition | Group Edition |
-|---|---|---|
+| --- | --- | --- |
 | Inbound trust | Single `ALLOWED_USER_ID` | Allowlist of `user_id`s |
 | Outbound targeting | Single `ALLOWED_CHAT_ID` | Locked to `ALLOWED_GROUP_ID` |
 | Session isolation | Implicit (only one conversation) | Explicit via reply thread or topic |
@@ -149,7 +163,7 @@ The group security model will be documented in a separate `GROUP-SECURITY-MODEL.
 ## Open Questions
 
 1. **Package structure** — Same repo (separate entry point/config) or new repo? Current lean: same repo, different entry point, shared `src/` utilities.
-2. **Config format** — `ALLOWED_USER_IDS=123,456,789` env var string, or a config file (`group-config.json`)? 
+2. **Config format** — `ALLOWED_USER_IDS=123,456,789` env var string, or a config file (`group-config.json`)?
 3. **Trigger mode default** — `mention` only, or `mention + reply`? Affects how conversational the bot feels.
 4. **Multi-agent groups** — What if two AI agents share one group? Out of scope for now but worth flagging.
 5. **Rate limiting per user** — Should each user in the group get their own rate-limit bucket?

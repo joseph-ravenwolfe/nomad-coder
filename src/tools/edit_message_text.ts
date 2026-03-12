@@ -4,6 +4,8 @@ import { z } from "zod";
 import { getApi, toResult, toError, resolveChat, validateText } from "../telegram.js";
 import { resolveParseMode } from "../markdown.js";
 import { cancelTyping } from "../typing-state.js";
+import { recordOutgoingEdit } from "../message-store.js";
+import { resetAnimationTimeout } from "../animation-state.js";
 
 export function register(server: McpServer) {
   server.registerTool(
@@ -42,6 +44,7 @@ export function register(server: McpServer) {
       const textErr = validateText(resolved.text);
       if (textErr) return toError(textErr);
       cancelTyping();
+      resetAnimationTimeout();
       try {
         const result = await getApi().editMessageText(
           chatId,
@@ -52,6 +55,7 @@ export function register(server: McpServer) {
           { parse_mode: resolved.parse_mode, reply_markup: reply_markup as unknown as InlineKeyboardMarkup | undefined },
         );
         const editedId = typeof result === "boolean" ? message_id : result.message_id;
+        recordOutgoingEdit(editedId, "text", text);
         return toResult({ message_id: editedId });
       } catch (err) {
         return toError(err);
