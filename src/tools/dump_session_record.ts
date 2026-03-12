@@ -8,9 +8,13 @@ export function register(server: McpServer) {
     "dump_session_record",
     {
       description:
-        "Returns the message-store timeline as compact JSON. Always-on — no recording " +
-        "needs to be started. The timeline contains all inbound and outbound events " +
-        "since server start (rolling limit of 1000 events). Use limit to control output size.",
+        "Returns the full conversation timeline as compact JSON — all inbound and outbound " +
+        "events since server start (rolling limit of 1000 events), including user messages, " +
+        "voice transcriptions, file metadata, locations, and contacts. " +
+        "This is a broad history dump containing sensitive user content. " +
+        "Only call when the user explicitly requests session history, context recovery, or an audit. " +
+        "Do not call speculatively or to discover prior context without user consent. " +
+        "Use limit to control output size.",
       inputSchema: {
         limit: z
           .number()

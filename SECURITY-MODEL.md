@@ -23,11 +23,27 @@ This prevents message injection from unknown Telegram users and prevents misdire
 
 ---
 
+## User Privacy & PII
+
+The operator's personal information (real name, Telegram username, chat description) is **not** exposed to the agent by default. Tools that could leak PII without user consent apply the following controls:
+
+| Tool | PII risk | Control |
+| --- | --- | --- |
+| `get_chat` | Returns username, first/last name, description for DM chats | Consent gate: agent must request, user must approve via Telegram button before PII is returned |
+| `dump_session_record` | Dumps full conversation history including voice transcripts, file metadata, locations, and contacts | Description explicitly restricts use to user-requested history dumps; must not be called speculatively |
+| `get_message` | Allows lookup of any stored message by ID | Description restricts calls to message IDs already known to the agent session |
+| `update-sanitizer` (reaction events) | Raw Telegram reactions include reactor name and username | Name and username are stripped; only the numeric user ID is forwarded |
+
+**Agent guidance:** Tools in the `Agent Guide` (`BEHAVIOR.md`) instruct agents not to call identity-exposing tools without explicit operator request.
+
+---
+
 ## What This Server DOES Protect
 
 - Inbound message authenticity within Telegram (only the configured user is accepted).
 - Outbound message targeting (only the configured chat is allowed).
 - Telegram API errors are surfaced as structured errors with clear remediation.
+- User PII is not exposed to agents without explicit operator consent (see User Privacy table above).
 
 ---
 

@@ -5,6 +5,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+### Security
+
+- **`get_chat` consent gate** — tool now sends an inline keyboard confirmation to the user before returning any chat info; agent cannot access chat metadata (including username, first/last name, description) without explicit approval
+- **`dump_session_record` PII warning** — description now explicitly states the tool dumps full conversation history including voice transcripts, file metadata, locations, and contacts; instructs agents not to call speculatively
+- **`get_message` speculative probe warning** — description now restricts calls to message IDs already known to the agent session
+- **Reaction PII stripped** — `update-sanitizer.ts` no longer includes `name` or `username` in `message_reaction` user objects; only the numeric user ID is forwarded to the agent
+- **SECURITY-MODEL.md** — added User Privacy & PII section documenting all privacy controls and the consent model
+
 ### Fixed
 
 - **Callback query corrupted message index** — `recordInbound` now uses `_timeline.push` for callbacks instead of `pushEvent`, preventing callback events from overwriting bot-message CURRENT entries in the index (broke `append_text` after button presses)
@@ -46,7 +54,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com).
 - **`send_confirmation.ts`** — uses `recordOutgoing` and V3 `ButtonResult.callback_query_id`
 - **`notify.ts`** — uses `recordOutgoing` and `resetAnimationTimeout`
 - **`edit_message_text.ts`** — adds `recordOutgoingEdit` and `resetAnimationTimeout`
-- **`speak.ts`** — renamed from `send_text_as_voice`; uses `recordOutgoing` and `resetAnimationTimeout`
+- **`send_text_as_voice.ts`** — uses `recordOutgoing` and `resetAnimationTimeout`
 - **`update_status.ts`** — uses `recordOutgoing` and `resetAnimationTimeout`
 - **`show_typing.ts`** — absorbed `cancel_typing` via `cancel: boolean` parameter
 - **`pin_message.ts`** — absorbed `unpin_message` via `unpin: boolean` parameter; `message_id` optional for unpin

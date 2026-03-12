@@ -10,9 +10,13 @@ vi.mock("../telegram.js", async (importActual) => {
   return { ...actual, resolveChat: () => 42 };
 });
 
-vi.mock("../animation-state.js", () => ({
-  startAnimation: mocks.startAnimation,
-}));
+vi.mock("../animation-state.js", async (importActual) => {
+  const actual = await importActual<typeof import("../animation-state.js")>();
+  return {
+    ...actual,
+    startAnimation: mocks.startAnimation,
+  };
+});
 
 import { register } from "./show_animation.js";
 
@@ -38,8 +42,8 @@ describe("show_animation tool", () => {
     mocks.startAnimation.mockResolvedValue(51);
     await call({});
     expect(mocks.startAnimation).toHaveBeenCalledWith(
-      ["⏳", "⌛"],
-      2000,
+      ["`...`", "` ..`", "`. .`", "`.. `", "`...`", "`...`"],
+      1000,
       30,
     );
   });

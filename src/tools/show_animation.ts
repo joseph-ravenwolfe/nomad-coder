@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { toResult, toError, resolveChat } from "../telegram.js";
-import { startAnimation } from "../animation-state.js";
+import { startAnimation, DEFAULT_FRAMES } from "../animation-state.js";
 
 export function register(server: McpServer) {
   server.registerTool(
@@ -10,21 +10,22 @@ export function register(server: McpServer) {
       description:
         "Start a server-managed cycling visual placeholder message. The animation " +
         "auto-cancels after timeout seconds of inactivity. One frame = static placeholder. " +
-        "Multiple frames = cycling animation (min 1500ms interval). " +
+        "Multiple frames = cycling animation (min 1000ms interval). " +
         "Only one animation at a time — starting a new one cancels the previous. " +
-        "Cancel with cancel_animation, or let it auto-clean on timeout.",
+        "Cancel with cancel_animation, or let it auto-clean on timeout. " +
+        "Avoid emoji-only frames — Telegram renders solo emoji as large animated stickers.",
       inputSchema: {
         frames: z
           .array(z.string())
-          .default(["⏳", "⌛"])
-          .describe("Animation frames. Single frame = static placeholder. Default: [\"⏳\", \"⌛\"]"),
+          .default([...DEFAULT_FRAMES])
+          .describe("Animation frames. Single frame = static placeholder. Default: [\".\", \"..\", \"...\"]. Avoid emoji-only frames (Telegram renders them as animated stickers)."),
         interval: z
           .number()
           .int()
-          .min(1500)
+          .min(1000)
           .max(10000)
-          .default(2000)
-          .describe("Milliseconds between frames (min 1500, default 2000). Ignored if single frame."),
+          .default(1000)
+          .describe("Milliseconds between frames (min 1000, default 1000). Ignored if single frame."),
         timeout: z
           .number()
           .int()

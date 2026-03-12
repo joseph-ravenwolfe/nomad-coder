@@ -18,10 +18,13 @@ import { recordOutgoing } from "./message-store.js";
 // State
 // ---------------------------------------------------------------------------
 
+export const DEFAULT_FRAMES: readonly string[] = Object.freeze(["`...`", "`·..`", "`.·.`", "`..·`", "`...`"]);
+
 interface AnimationState {
   chatId: number;
   messageId: number;
-  frames: string[];
+  frames: string[];          // pre-processed MarkdownV2 text
+  parseMode: "HTML" | "MarkdownV2" | undefined;
   intervalMs: number;
   timeoutMs: number;
   frameIndex: number;
@@ -59,11 +62,13 @@ function startTimeoutTimer(): void {
 
 async function cycleFrame(): Promise<void> {
   if (!_state) return;
+  const prevText = _state.frames[_state.frameIndex];
   _state.frameIndex = (_state.frameIndex + 1) % _state.frames.length;
-  const raw = _state.frames[_state.frameIndex];
-  const { text, parse_mode } = resolveParseMode(raw, "Markdown");
+  const text = _state.frames[_state.frameIndex];
+  // Identical consecutive frames act as a timing delay — skip the API call
+  if (text === prevText) return;
   try {
-    await getApi().editMessageText(_state.chatId, _state.messageId, text, { parse_mode });
+    await getApi().editMessageText(_state.chatId, _state.messageId, text, { parse_mode: _state.parseMode });
   } catch {
     // Best-effort — animation is cosmetic; swallow failures
   }
@@ -78,8 +83,8 @@ async function cycleFrame(): Promise<void> {
  * Returns the message_id of the animation placeholder.
  */
 export async function startAnimation(
-  frames: string[] = ["⏳", "⌛"],
-  intervalMs = 2000,
+  frames: string[] = [...DEFAULT_FRAMES],
+  intervalMs = 1000,
   timeoutSeconds = 30,
 ): Promise<number> {
   // Cancel any existing animation
@@ -88,14 +93,20 @@ export async function startAnimation(
   const chatId = resolveChat();
   if (typeof chatId !== "number") throw new Error("ALLOWED_CHAT_ID not configured");
 
-  const firstFrame = frames[0] ?? "⏳";
-  const msg = await getApi().sendMessage(chatId, firstFrame);
+  // Pre-process all frames through Markdown→MarkdownV2 once
+  const processed = frames.map((f) => resolveParseMode(f, "Markdown"));
+  const processedFrames = processed.map((p) => p.text);
+  const parseMode = processed[0]?.parse_mode;
+
+  const firstFrame = processedFrames[0] ?? "⏳";
+  const msg = await getApi().sendMessage(chatId, firstFrame, { parse_mode: parseMode });
 
   _state = {
     chatId,
     messageId: msg.message_id,
-    frames,
-    intervalMs: Math.max(intervalMs, 1500), // Telegram rate limit floor
+    frames: processedFrames,
+    parseMode,
+    intervalMs: Math.max(intervalMs, 1000), // Telegram rate limit floor
     timeoutMs: Math.min(timeoutSeconds, 600) * 1000,
     frameIndex: 0,
     cycleTimer: null,

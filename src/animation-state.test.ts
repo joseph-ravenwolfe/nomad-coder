@@ -63,7 +63,7 @@ describe("animation-state", () => {
     it("sends the first frame as a message", async () => {
       await startAnimation(["🔄", "🔃"]);
 
-      expect(mocks.sendMessage).toHaveBeenCalledWith(123, "🔄");
+      expect(mocks.sendMessage).toHaveBeenCalledWith(123, "🔄", { parse_mode: "MarkdownV2" });
     });
 
     it("returns the message_id of the sent message", async () => {
@@ -79,7 +79,7 @@ describe("animation-state", () => {
 
     it("uses default frames when none provided", async () => {
       await startAnimation();
-      expect(mocks.sendMessage).toHaveBeenCalledWith(123, "⏳");
+      expect(mocks.sendMessage).toHaveBeenCalledWith(123, "`\.\.\.`", { parse_mode: "MarkdownV2" });
     });
 
     it("cancels previous animation before starting new one", async () => {
@@ -130,15 +130,32 @@ describe("animation-state", () => {
       expect(mocks.editMessageText).not.toHaveBeenCalled();
     });
 
-    it("enforces minimum interval of 1500ms", async () => {
-      await startAnimation(["A", "B"], 500);
+    it("enforces minimum interval of 1000ms", async () => {
+      await startAnimation(["A", "B"], 200);
 
-      // At 500ms — should not have cycled yet
-      await vi.advanceTimersByTimeAsync(500);
+      // At 200ms — should not have cycled yet
+      await vi.advanceTimersByTimeAsync(200);
       expect(mocks.editMessageText).not.toHaveBeenCalled();
 
-      // At 1500ms — should cycle
-      await vi.advanceTimersByTimeAsync(1000);
+      // At 1000ms — should cycle
+      await vi.advanceTimersByTimeAsync(800);
+      expect(mocks.editMessageText).toHaveBeenCalledWith(123, 42, "B", { parse_mode: "MarkdownV2" });
+    });
+
+    it("skips API call for identical consecutive frames", async () => {
+      await startAnimation(["A", "A", "A", "B"], 2000);
+
+      // A→A: skip (no edit)
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(mocks.editMessageText).not.toHaveBeenCalled();
+
+      // A→A: skip again
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(mocks.editMessageText).not.toHaveBeenCalled();
+
+      // A→B: sends
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(mocks.editMessageText).toHaveBeenCalledOnce();
       expect(mocks.editMessageText).toHaveBeenCalledWith(123, 42, "B", { parse_mode: "MarkdownV2" });
     });
 

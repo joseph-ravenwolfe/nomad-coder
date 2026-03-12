@@ -13,7 +13,7 @@ import { register as registerShowAnimation } from "./tools/show_animation.js";
 import { register as registerCancelAnimation } from "./tools/cancel_animation.js";
 
 // ── Updated tools (V2→V3) ────────────────────────────────────────────────
-import { register as registerSpeak } from "./tools/speak.js";
+import { register as registerSendTextAsVoice } from "./tools/send_text_as_voice.js";
 import { register as registerNotify } from "./tools/notify.js";
 import { register as registerEditMessageText } from "./tools/edit_message_text.js";
 import { register as registerDeleteMessage } from "./tools/delete_message.js";
@@ -59,7 +59,7 @@ export function createServer(): McpServer {
 
   // ── Messaging ───────────────────────────────────────────────────────────
   registerSendText(server);
-  registerSpeak(server);
+  registerSendTextAsVoice(server);
   registerSendFile(server);
   registerEditMessageText(server);
   registerAppendText(server);

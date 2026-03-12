@@ -16,7 +16,7 @@ export function register(server: McpServer) {
         "Sends a text message to the Telegram chat. Default parse_mode is Markdown — " +
         "write standard Markdown (*bold*, _italic_, `code`, [links](url)) and it is " +
         "auto-converted. Messages longer than 4096 characters are automatically split. " +
-        "For voice/TTS, use `speak` instead.",
+        "For voice/TTS, use `send_text_as_voice` instead.",
       inputSchema: {
         text: z
           .string()

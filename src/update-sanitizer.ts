@@ -127,9 +127,9 @@ export async function sanitizeUpdate(u: Update): Promise<Record<string, unknown>
     const mr = u.message_reaction;
     const newEmoji = mr.new_reaction.filter((r): r is ReactionTypeEmoji => r.type === "emoji").map(r => r.emoji);
     const oldEmoji = mr.old_reaction.filter((r): r is ReactionTypeEmoji => r.type === "emoji").map(r => r.emoji);
-    const user = mr.user
-      ? { id: mr.user.id, name: [mr.user.first_name, mr.user.last_name].filter(Boolean).join(" "), username: mr.user.username }
-      : undefined;
+    // Expose only the user's numeric ID — name and username are PII the user
+    // has not explicitly shared and must not be revealed without consent.
+    const user = mr.user ? { id: mr.user.id } : undefined;
     return {
       type: "message_reaction",
       message_id: mr.message_id,

@@ -8,10 +8,12 @@ export function register(server: McpServer) {
     "get_message",
     {
       description:
-        "Look up a message by ID and optional version. Returns detail including " +
+        "Look up a stored message by ID and optional version. Returns detail including " +
         "text/caption, file_id, media metadata, and edit history. " +
         "version=-1 (default) = latest; 0 = original; 1+ = edit history (bot messages only). " +
-        "Returns all available version keys so the agent knows what history exists.",
+        "Returns all available version keys so the agent knows what history exists. " +
+        "Only call for message IDs already known to this agent session (e.g. delivered via dequeue_update " +
+        "or referenced by the user). Do not probe arbitrary IDs to discover conversation history.",
       inputSchema: {
         message_id: z.number().int().describe("Message ID to look up"),
         version: z

@@ -9,11 +9,10 @@ import { resetAnimationTimeout } from "../animation-state.js";
 
 export function register(server: McpServer) {
   server.registerTool(
-    "speak",
+    "send_text_as_voice",
     {
       description:
         "Synthesizes plain text to speech and sends it as a Telegram voice note. " +
-        "Alias for send_message with voice:true. " +
         "Requires TTS_HOST or OPENAI_API_KEY to be configured. " +
         "IMPORTANT: All Markdown formatting and special symbols are stripped before synthesis — " +
         "asterisks, underscores, backticks, brackets, and similar characters become noise in audio. " +
@@ -33,7 +32,7 @@ export function register(server: McpServer) {
       if (!isTtsEnabled()) {
         return toError({
           code: "TTS_NOT_CONFIGURED",
-          message: "TTS is not configured. Set TTS_HOST or OPENAI_API_KEY to use speak.",
+          message: "TTS is not configured. Set TTS_HOST or OPENAI_API_KEY to use send_text_as_voice.",
         } as const);
       }
 
