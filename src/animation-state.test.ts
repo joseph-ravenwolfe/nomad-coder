@@ -47,6 +47,9 @@ import {
   isAnimationActive,
   isAnimationPersistent,
   resetAnimationForTest,
+  getPreset,
+  listBuiltinPresets,
+  BUILTIN_PRESETS,
 } from "./animation-state.js";
 
 // ---------------------------------------------------------------------------
@@ -778,6 +781,72 @@ describe("animation-state", () => {
       // At 600 seconds it should auto-cancel
       await vi.advanceTimersByTimeAsync(600_000);
       expect(isAnimationActive()).toBe(false);
+    });
+  });
+
+  // -- Space normalisation --------------------------------------------------
+
+  describe("space normalisation", () => {
+    it("replaces regular spaces with NBSP in frame text by default", async () => {
+      await startAnimation(["A B"]);
+      // U+00A0 (NBSP) replaces the space before MarkdownV2 processing
+      expect(mocks.sendMessage).toHaveBeenCalledWith(
+        123,
+        "A\u00A0B",
+        { parse_mode: "MarkdownV2" },
+      );
+    });
+
+    it("leaves spaces unchanged when allowBreakingSpaces is true", async () => {
+      await startAnimation(["A B"], 1000, 120, false, true);
+      expect(mocks.sendMessage).toHaveBeenCalledWith(
+        123,
+        "A B",
+        { parse_mode: "MarkdownV2" },
+      );
+    });
+
+    it("normalises spaces before computing padding lengths", async () => {
+      // "A " vs "AB" — after normalisation both become len 2, no padding added
+      await startAnimation(["A ", "AB"], 1000, 120, false, false);
+      expect(mocks.sendMessage).toHaveBeenCalledWith(
+        123,
+        "A\u00A0",
+        { parse_mode: "MarkdownV2" },
+      );
+    });
+  });
+
+  // -- Built-in presets -----------------------------------------------------
+
+  describe("built-in presets", () => {
+    it("getPreset returns frames for built-in keys", () => {
+      expect(getPreset("bounce")).toBeDefined();
+      expect(getPreset("dots")).toBeDefined();
+      expect(getPreset("working")).toBeDefined();
+      expect(getPreset("thinking")).toBeDefined();
+      expect(getPreset("loading")).toBeDefined();
+    });
+
+    it("getPreset returns undefined for unknown key", () => {
+      expect(getPreset("nonexistent_preset_xyz")).toBeUndefined();
+    });
+
+    it("listBuiltinPresets returns all built-in keys", () => {
+      const keys = listBuiltinPresets();
+      expect(keys).toContain("bounce");
+      expect(keys).toContain("dots");
+      expect(keys).toContain("working");
+      expect(keys).toContain("thinking");
+      expect(keys).toContain("loading");
+      expect(keys).toHaveLength(BUILTIN_PRESETS.size);
+    });
+
+    it("getPreset session preset shadows built-in with same key", async () => {
+      const { registerPreset } = await import("./animation-state.js");
+      const customFrames = ["custom1", "custom2"];
+      registerPreset("bounce", customFrames);
+      expect(getPreset("bounce")).toEqual(customFrames);
     });
   });
 });

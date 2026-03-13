@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   registerPreset: vi.fn(),
   getDefaultFrames: vi.fn(),
   listPresets: vi.fn(),
+  listBuiltinPresets: vi.fn(),
 }));
 
 vi.mock("../telegram.js", async (importActual) => {
@@ -23,6 +24,7 @@ vi.mock("../animation-state.js", async (importActual) => {
     registerPreset: mocks.registerPreset,
     getDefaultFrames: mocks.getDefaultFrames,
     listPresets: mocks.listPresets,
+    listBuiltinPresets: mocks.listBuiltinPresets,
   };
 });
 
@@ -35,6 +37,7 @@ describe("set_default_animation tool", () => {
     vi.clearAllMocks();
     mocks.getDefaultFrames.mockReturnValue(["`...`", "`·..`"]);
     mocks.listPresets.mockReturnValue([]);
+    mocks.listBuiltinPresets.mockReturnValue(["bounce", "dots", "working", "thinking", "loading"]);
     const server = createMockServer();
     register(server);
     call = server.getHandler("set_default_animation");
@@ -47,7 +50,8 @@ describe("set_default_animation tool", () => {
     expect(isError(result)).toBe(false);
     const data = parseResult(result);
     expect(data.default_frames).toEqual(["a", "b"]);
-    expect(data.presets).toEqual(["thinking"]);
+    expect(data.session_presets).toEqual(["thinking"]);
+    expect(data.builtin_presets).toEqual(["bounce", "dots", "working", "thinking", "loading"]);
   });
 
   it("sets session default frames", async () => {

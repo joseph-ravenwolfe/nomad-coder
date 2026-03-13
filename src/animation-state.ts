@@ -28,6 +28,18 @@ import { recordOutgoing, getHighestMessageId, trackMessageId } from "./message-s
 
 export const DEFAULT_FRAMES: readonly string[] = Object.freeze(["`...`", "`·..`", "`.·.`", "`..·`", "`...`"]);
 
+/**
+ * Built-in animation presets always available by name.
+ * Use `getPreset(key)` — session presets shadow built-ins with the same key.
+ */
+export const BUILTIN_PRESETS: ReadonlyMap<string, readonly string[]> = new Map([
+  ["bounce",    DEFAULT_FRAMES],
+  ["dots",      ["`·`",       "`··`",       "`···`"]],
+  ["working",   ["`working`", "`working·`", "`working··`", "`working···`"]],
+  ["thinking",  ["`thinking`","`thinking·`","`thinking··`","`thinking···`"]],
+  ["loading",   ["`loading`", "`loading·`", "`loading··`", "`loading···`"]],
+]);
+
 /** Named animation presets registered during this session. */
 const _presets = new Map<string, readonly string[]>();
 
@@ -54,14 +66,19 @@ export function registerPreset(key: string, frames: readonly string[]): void {
   _presets.set(key, frames);
 }
 
-/** Look up a named animation preset. Returns undefined if not found. */
+/** Look up a named animation preset. Session presets shadow built-ins with the same key. */
 export function getPreset(key: string): readonly string[] | undefined {
-  return _presets.get(key);
+  return _presets.get(key) ?? BUILTIN_PRESETS.get(key);
 }
 
-/** List all registered preset keys. */
+/** List all registered session preset keys (custom only, not built-ins). */
 export function listPresets(): string[] {
   return [..._presets.keys()];
+}
+
+/** List all built-in preset keys. */
+export function listBuiltinPresets(): string[] {
+  return [...BUILTIN_PRESETS.keys()];
 }
 
 interface AnimationState {
@@ -139,6 +156,7 @@ export async function startAnimation(
   intervalMs = 1000,
   timeoutSeconds = 120,
   persistent = false,
+  allowBreakingSpaces = false,
 ): Promise<number> {
   // Cancel any existing animation
   await cancelAnimation();
@@ -146,12 +164,18 @@ export async function startAnimation(
   const chatId = resolveChat();
   if (typeof chatId !== "number") throw new Error("ALLOWED_USER_ID not configured");
 
+  // Normalize regular spaces → NBSP (U+00A0) so Telegram doesn't trim them.
+  // When allowBreakingSpaces is true the caller opts out of this normalisation.
+  const normalizedFrames = allowBreakingSpaces
+    ? frames
+    : frames.map((f) => f.replace(/ /g, "\u00A0"));
+
   // Pad all frames to equal length with non-breaking spaces (U+00A0) so
   // cycling frames don't shift the message layout in Telegram.
   // For backtick code spans, insert NBSP inside the closing ` so Telegram
   // preserves them in the monospace run (outside-backtick NBSP gets trimmed).
-  const maxLen = Math.max(...frames.map((f) => f.length));
-  const paddedFrames = frames.map((f) => {
+  const maxLen = Math.max(...normalizedFrames.map((f) => f.length));
+  const paddedFrames = normalizedFrames.map((f) => {
     const pad = "\u00A0".repeat(maxLen - f.length);
     if (pad.length === 0) return f;
     if (f.startsWith("`") && f.endsWith("`") && f.length >= 2) {

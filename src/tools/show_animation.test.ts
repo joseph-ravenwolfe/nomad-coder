@@ -51,6 +51,7 @@ describe("show_animation tool", () => {
       1000,
       120,
       false,
+      false,
     );
   });
 
@@ -66,6 +67,7 @@ describe("show_animation tool", () => {
       3000,
       60,
       false,
+      false,
     );
   });
 
@@ -79,6 +81,7 @@ describe("show_animation tool", () => {
       1000,
       120,
       false,
+      false,
     );
   });
 
@@ -90,6 +93,7 @@ describe("show_animation tool", () => {
       ["preset."],
       1000,
       120,
+      false,
       false,
     );
   });
@@ -121,6 +125,7 @@ describe("show_animation tool", () => {
       1000,
       120,
       true,
+      false,
     );
     const data = parseResult(result);
     expect(data.persistent).toBe(true);

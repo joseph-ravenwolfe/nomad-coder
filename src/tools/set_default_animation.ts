@@ -7,6 +7,7 @@ import {
   registerPreset,
   getDefaultFrames,
   listPresets,
+  listBuiltinPresets,
   DEFAULT_FRAMES,
 } from "../animation-state.js";
 
@@ -53,7 +54,8 @@ export function register(server: McpServer) {
       if (!frames) {
         return toResult({
           default_frames: [...getDefaultFrames()],
-          presets: listPresets(),
+          session_presets: listPresets(),
+          builtin_presets: listBuiltinPresets(),
         });
       }
 

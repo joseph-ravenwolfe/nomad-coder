@@ -11,9 +11,12 @@ const DESCRIPTION =
   "Cancel with cancel_animation, or let it auto-clean on timeout. " +
   "A single emoji works well as a static placeholder (e.g. [\"🤔\"] or [\"⏳\"]). " +
   "Avoid cycling multiple emoji-only frames — Telegram renders solo emoji as large animated stickers, so rapid edits look jarring. " +
-  "Pass a preset name (registered via set_default_animation) to recall saved frames without re-specifying them. " +
+  "Pass a preset name to recall saved or built-in frames without re-specifying them. " +
+  "Built-in presets: bounce (default tracer), dots, working, thinking, loading. " +
   "Two modes: temporary (default) = one-shot, disappears on next bot message or show_typing. " +
-  "Persistent = continuous, restarts after each bot message until explicitly cancelled.";
+  "Persistent = continuous, restarts after each bot message until explicitly cancelled. " +
+  "By default all regular spaces in frames are replaced with non-breaking spaces to prevent layout shift; " +
+  "set allow_breaking_spaces: true to opt out.";
 
 export function register(server: McpServer) {
   server.registerTool(
@@ -47,9 +50,13 @@ export function register(server: McpServer) {
           .boolean()
           .default(false)
           .describe("If true, the animation restarts after each bot message (continuous streaming). Default false = one-shot, disappears on next message or show_typing."),
+        allow_breaking_spaces: z
+          .boolean()
+          .default(false)
+          .describe("If true, regular spaces in frames are kept as-is (not converted to non-breaking spaces). Default false converts spaces to NBSP for stable layout."),
       },
     },
-    async ({ preset, frames, interval, timeout, persistent }) => {
+    async ({ preset, frames, interval, timeout, persistent, allow_breaking_spaces }) => {
       const chatId = resolveChat();
       if (typeof chatId !== "number") return toError(chatId);
 
@@ -65,7 +72,7 @@ export function register(server: McpServer) {
       // undefined → startAnimation uses getDefaultFrames() internally
 
       try {
-        const message_id = await startAnimation(resolvedFrames, interval, timeout, persistent);
+        const message_id = await startAnimation(resolvedFrames, interval, timeout, persistent, allow_breaking_spaces);
         return toResult({ message_id, persistent });
       } catch (err) {
         return toError(err);
