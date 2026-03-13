@@ -8,6 +8,14 @@ vi.mock("../telegram.js", async (importActual) => {
   return { ...actual, getApi: () => mocks };
 });
 
+vi.mock("module", async (importActual) => {
+  const actual = await importActual<typeof import("module")>();
+  return {
+    ...actual,
+    createRequire: () => (_path: string) => ({ version: "0.0.0-test" }),
+  };
+});
+
 import { register } from "./get_me.js";
 
 describe("get_me tool", () => {
@@ -20,12 +28,12 @@ describe("get_me tool", () => {
     call = server.getHandler("get_me");
   });
 
-  it("returns bot info", async () => {
+  it("returns bot info with mcp_version", async () => {
     const bot = { id: 1, is_bot: true, first_name: "Bot", username: "test_bot" };
     mocks.getMe.mockResolvedValue(bot);
     const result = await call({});
     expect(isError(result)).toBe(false);
-    expect(parseResult(result)).toEqual(bot);
+    expect(parseResult(result)).toEqual({ mcp_version: "0.0.0-test", ...bot });
   });
 
   it("returns error on API failure", async () => {
