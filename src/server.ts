@@ -26,6 +26,7 @@ import { register as registerShowTyping } from "./tools/show_typing.js";
 import { register as registerSendChatAction } from "./tools/send_chat_action.js";
 import { register as registerSendNewChecklist } from "./tools/send_new_checklist.js";
 import { register as registerSetReaction } from "./tools/set_reaction.js";
+import { register as registerSetTemporaryReaction } from "./tools/set_temporary_reaction.js";
 import { register as registerPinMessage } from "./tools/pin_message.js";
 import { register as registerDownloadFile } from "./tools/download_file.js";
 import { register as registerTranscribeVoice } from "./tools/transcribe_voice.js";
@@ -82,6 +83,7 @@ export function createServer(): McpServer {
 
   // ── Reactions ──────────────────────────────────────────────────────────
   registerSetReaction(server);
+  registerSetTemporaryReaction(server);
 
   // ── Pin ────────────────────────────────────────────────────────────────
   registerPinMessage(server);

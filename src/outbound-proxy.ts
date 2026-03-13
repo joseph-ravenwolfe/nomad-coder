@@ -14,6 +14,7 @@ import type { Api } from "grammy";
 import { cancelTyping } from "./typing-state.js";
 import { clearPendingTemp } from "./temp-message.js";
 import { recordOutgoing } from "./message-store.js";
+import { fireTempReactionRestore } from "./temp-reaction.js";
 
 // ---------------------------------------------------------------------------
 // Animation interceptor — pluggable slot
@@ -80,6 +81,7 @@ export async function notifyBeforeFileSend(): Promise<void> {
   if (_bypassing) return;
   cancelTyping();
   clearPendingTemp();
+  await fireTempReactionRestore();
   if (_interceptor) await _interceptor.beforeFileSend();
 }
 
@@ -131,6 +133,7 @@ export function createOutboundProxy(realApi: Api): Api {
 
           cancelTyping();
           clearPendingTemp();
+          await fireTempReactionRestore();
 
           // Extract optional raw text for recording (tools can attach _rawText)
           const rawText = opts?._rawText as string | undefined;
@@ -169,6 +172,7 @@ export function createOutboundProxy(realApi: Api): Api {
 
           cancelTyping();
           clearPendingTemp();
+          await fireTempReactionRestore();
 
           // Suspend animation (delete placeholder)
           const hadInterceptor = _interceptor != null;
@@ -197,6 +201,7 @@ export function createOutboundProxy(realApi: Api): Api {
         return async function proxiedEditMessageText(...args: unknown[]) {
           if (_bypassing) return fn(...args);
           cancelTyping();
+          await fireTempReactionRestore();
           const result = await fn(...args);
           if (_interceptor) _interceptor.onEdit();
           return result;
@@ -217,3 +222,6 @@ export function resetOutboundProxyForTest(): void {
   _interceptor = null;
   _bypassing = false;
 }
+
+/** Re-export for tests that need to assert temp-reaction interplay. */
+export { fireTempReactionRestore } from "./temp-reaction.js";

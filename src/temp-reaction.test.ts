@@ -1,0 +1,82 @@
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
+
+const mocks = vi.hoisted(() => ({
+  setMessageReaction: vi.fn(),
+  trySetMessageReaction: vi.fn(),
+}));
+
+vi.mock("./telegram.js", async (importActual) => {
+  const actual = await importActual<typeof import("./telegram.js")>();
+  return {
+    ...actual,
+    resolveChat: () => 42,
+    getApi: () => ({ setMessageReaction: mocks.setMessageReaction }),
+    trySetMessageReaction: mocks.trySetMessageReaction,
+  };
+});
+
+import {
+  setTempReaction,
+  fireTempReactionRestore,
+  hasTempReaction,
+  resetTempReactionForTest,
+} from "./temp-reaction.js";
+
+describe("temp-reaction", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.clearAllMocks();
+    resetTempReactionForTest();
+    mocks.trySetMessageReaction.mockResolvedValue(true);
+    mocks.setMessageReaction.mockResolvedValue(true);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    resetTempReactionForTest();
+  });
+
+  it("sets a reaction and records the slot", async () => {
+    const ok = await setTempReaction(100, "👀");
+    expect(ok).toBe(true);
+    expect(hasTempReaction()).toBe(true);
+    expect(mocks.trySetMessageReaction).toHaveBeenCalledWith(42, 100, "👀");
+  });
+
+  it("restore fires restore_emoji on next outbound", async () => {
+    await setTempReaction(100, "👀", "🫡" as never);
+    await fireTempReactionRestore();
+    expect(mocks.trySetMessageReaction).toHaveBeenLastCalledWith(42, 100, "🫡");
+    expect(hasTempReaction()).toBe(false);
+  });
+
+  it("restore removes reaction (empty array) when no restore_emoji", async () => {
+    await setTempReaction(100, "👀");
+    await fireTempReactionRestore();
+    expect(mocks.setMessageReaction).toHaveBeenCalledWith(42, 100, []);
+    expect(hasTempReaction()).toBe(false);
+  });
+
+  it("is a no-op when no slot is active", async () => {
+    await fireTempReactionRestore();
+    expect(mocks.trySetMessageReaction).not.toHaveBeenCalled();
+  });
+
+  it("auto-reverts after timeout_seconds", async () => {
+    await setTempReaction(100, "👀", "🫡" as never, 30);
+    expect(hasTempReaction()).toBe(true);
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(mocks.trySetMessageReaction).toHaveBeenLastCalledWith(42, 100, "🫡");
+    expect(hasTempReaction()).toBe(false);
+  });
+
+  it("replacing slot cancels previous without restoring", async () => {
+    await setTempReaction(100, "👀", "🫡" as never);
+    vi.clearAllMocks();
+    await setTempReaction(200, "🤔", "✅" as never);
+    // Should NOT have fired the 🫡 restore for the first slot
+    expect(mocks.trySetMessageReaction).toHaveBeenCalledTimes(1);
+    expect(mocks.trySetMessageReaction).toHaveBeenCalledWith(42, 200, "🤔");
+    expect(hasTempReaction()).toBe(true);
+  });
+});

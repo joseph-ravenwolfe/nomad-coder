@@ -107,7 +107,7 @@ progress_bar(title, 100, "Done in 4.2s", message_id)
 
 ## Planned: Reaction Tools
 
-### `set_temporary_reaction`
+### `set_temporary_reaction` *(implemented, v3)*
 
 Set a reaction that **auto-reverts** when the agent takes any outbound action.
 
