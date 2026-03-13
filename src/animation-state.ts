@@ -146,8 +146,13 @@ export async function startAnimation(
   const chatId = resolveChat();
   if (typeof chatId !== "number") throw new Error("ALLOWED_USER_ID not configured");
 
+  // Pad all frames to equal length with non-breaking spaces (U+00A0) so
+  // cycling frames don't shift the message layout in Telegram.
+  const maxLen = Math.max(...frames.map((f) => f.length));
+  const paddedFrames = frames.map((f) => f + "\u00A0".repeat(maxLen - f.length));
+
   // Pre-process all frames through Markdown→MarkdownV2 once
-  const processed = frames.map((f) => resolveParseMode(f, "Markdown"));
+  const processed = paddedFrames.map((f) => resolveParseMode(f, "Markdown"));
   const processedFrames = processed.map((p) => p.text);
   const parseMode = processed[0]?.parse_mode;
 
@@ -163,7 +168,7 @@ export async function startAnimation(
     chatId,
     messageId: msg.message_id,
     persistent,
-    rawFrames: frames,
+    rawFrames: paddedFrames,
     frames: processedFrames,
     parseMode,
     intervalMs: Math.max(intervalMs, 1000), // Telegram rate limit floor
@@ -174,7 +179,7 @@ export async function startAnimation(
   };
 
   // Start cycling if multiple frames
-  if (frames.length > 1) {
+  if (paddedFrames.length > 1) {
     _state.cycleTimer = setInterval(() => void cycleFrame(), _state.intervalMs);
     unrefTimer(_state.cycleTimer);
   }
