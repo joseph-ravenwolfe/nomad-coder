@@ -2,7 +2,7 @@
 
 ## Added
 
-- **`get_me` version field** — response now includes `mcp_version` (from `package.json`) alongside the Telegram bot info, making it easy to confirm which build is running after a restart
+- **`get_me` version + build fingerprint** — response now includes `mcp_version` (semver from `package.json`), `mcp_commit` (short git SHA), and `mcp_build_time` (ISO timestamp) alongside the Telegram bot info; `scripts/gen-build-info.mjs` runs as part of `pnpm build` and writes `src/build-info.json` (gitignored), making it easy to confirm exactly which build is running after a restart
 - **`send_choice` tool** — non-blocking one-shot keyboard; sends a message with 2–8 labeled option buttons and returns `{ message_id }` immediately; on the first button press the keyboard is automatically removed and the spinner dismissed (auto-lock), while the `callback_query` event still appears in `dequeue_update` for the agent to read; use `choose` when blocking is acceptable, `send_message` for persistent keyboards
 - **`keyboard-interactions.md`** — new doc formalising the four keyboard primitives (`send_message`, `send_choice`, `choose`, `send_confirmation`), the hierarchy, button types (momentary/toggle/rotary), implementation notes; linked from `behavior.md`
 - **`send_message` tool** — core send primitive; sends a message with optional inline keyboard and returns `{ message_id }` immediately (fire-and-forget); keyboard buttons arrive as `callback_query` events via `dequeue_update`; supports per-button styles, `reply_to_message_id`, `disable_notification`, and all parse modes; the foundation on which `choose` and `send_confirmation` are built

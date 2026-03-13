@@ -12,7 +12,12 @@ vi.mock("module", async (importActual) => {
   const actual = await importActual<typeof import("module")>();
   return {
     ...actual,
-    createRequire: () => (_path: string) => ({ version: "0.0.0-test" }),
+    createRequire: () => (path: string) => {
+      if (path.endsWith("package.json")) return { version: "0.0.0-test" };
+      if (path.endsWith("build-info.json"))
+        return { BUILD_COMMIT: "t3stc0mm", BUILD_TIME: "2025-01-01T00:00:00.000Z" };
+      throw new Error(`Unexpected require: ${path}`);
+    },
   };
 });
 
@@ -28,12 +33,17 @@ describe("get_me tool", () => {
     call = server.getHandler("get_me");
   });
 
-  it("returns bot info with mcp_version", async () => {
+  it("returns bot info with mcp_version and build fingerprint", async () => {
     const bot = { id: 1, is_bot: true, first_name: "Bot", username: "test_bot" };
     mocks.getMe.mockResolvedValue(bot);
     const result = await call({});
     expect(isError(result)).toBe(false);
-    expect(parseResult(result)).toEqual({ mcp_version: "0.0.0-test", ...bot });
+    expect(parseResult(result)).toEqual({
+      mcp_version: "0.0.0-test",
+      mcp_commit: "t3stc0mm",
+      mcp_build_time: "2025-01-01T00:00:00.000Z",
+      ...bot,
+    });
   });
 
   it("returns error on API failure", async () => {
