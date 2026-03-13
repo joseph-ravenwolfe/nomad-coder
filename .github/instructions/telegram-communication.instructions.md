@@ -14,8 +14,8 @@ Full guide: `communication.md` · MCP resource: `telegram-bridge-mcp://communica
 3. **`choose`** for all multi-option questions — always buttons.
 4. **`wait_for_message`** for all input waiting — long-polls correctly.
 5. **`reply_to_message_id`** on every reply — threads messages visually.
-6. **`show_typing`** immediately after receiving a message, before starting work.
-7. **React then acknowledge.** After reacting (🫡 👀 etc.), always follow up with a brief text saying what you understood and what you're about to do. Never react and go silent.
+6. **`show_typing`** when a text reply is imminent — this is the "I'm about to respond" signal, not a generic receipt acknowledgement. Points the operator's eyes at the chat.
+7. **Reactions have specific meanings.** 👀 = "I'm processing this" — set IMMEDIATELY when a message arrives, before any other action. 🫡 = "got it / acknowledged" (receipt resolved). 👍 / ❤ = done / great. Update 👀 to 🫡 or 👍 once work is complete. Never leave 👀 unresolved.
 8. **`notify` (silent) before committing.** Get explicit approval before pushing.
 9. **`wait_for_message` again** after every task, timeout, or error — loop forever.
 10. **Ask via Telegram** when unsure whether to stop. Wait for the answer.

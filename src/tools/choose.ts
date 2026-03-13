@@ -8,7 +8,7 @@ import { markdownToV2 } from "../markdown.js";
 import { applyTopicToText } from "../topic-state.js";
 import {
   pollButtonOrTextOrVoice, ackAndEditSelection, editWithSkipped, editWithTimedOut,
-  applyButtonStyle, type ButtonStyle,
+  type ButtonStyle,
 } from "./button-helpers.js";
 
 const DESCRIPTION =
@@ -93,7 +93,7 @@ export function register(server: McpServer) {
       for (let i = 0; i < options.length; i += columns) {
         rows.push(
           options.slice(i, i + columns).map((o) => ({
-            text: applyButtonStyle(o.label, o.style as ButtonStyle | undefined),
+            text: o.label,
             callback_data: o.value,
             ...(o.style ? { style: o.style as ButtonStyle } : {}),
           }))

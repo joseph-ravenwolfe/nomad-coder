@@ -70,14 +70,14 @@ describe("set_reaction tool", () => {
     // 💀 is not in ALLOWED_EMOJI and not an alias
     const result = await call({ message_id: 1, emoji: "💀" });
     expect(isError(result)).toBe(true);
-    expect(errorCode(result)).toBe("BUTTON_DATA_INVALID");
+    expect(errorCode(result)).toBe("REACTION_EMOJI_INVALID");
     expect(mocks.setMessageReaction).not.toHaveBeenCalled();
   });
 
   it("rejects an arbitrary string that is not an emoji or alias (returns error)", async () => {
     const result = await call({ message_id: 1, emoji: "notanemoji" });
     expect(isError(result)).toBe(true);
-    expect(errorCode(result)).toBe("BUTTON_DATA_INVALID");
+    expect(errorCode(result)).toBe("REACTION_EMOJI_INVALID");
     expect(mocks.setMessageReaction).not.toHaveBeenCalled();
   });
 

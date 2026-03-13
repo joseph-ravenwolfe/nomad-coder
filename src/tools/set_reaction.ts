@@ -109,7 +109,7 @@ export function register(server: McpServer) {
         // Validate the resolved emoji
         if (resolved && !(ALLOWED_EMOJI as readonly string[]).includes(resolved)) {
           return toError({
-            code: "BUTTON_DATA_INVALID" as const,
+            code: "REACTION_EMOJI_INVALID" as const,
             message: `"${emoji}" → "${resolved}" is not an allowed reaction emoji.`,
           });
         }

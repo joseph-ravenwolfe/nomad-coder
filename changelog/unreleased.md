@@ -2,6 +2,9 @@
 
 ## Added
 
+- **`send_message` tool** — core send primitive; sends a message with optional inline keyboard and returns `{ message_id }` immediately (fire-and-forget); keyboard buttons arrive as `callback_query` events via `dequeue_update`; supports per-button styles, `reply_to_message_id`, `disable_notification`, and all parse modes; the foundation on which `choose` and `send_confirmation` are built
+- **`edit_message` tool** — core edit primitive; updates text, keyboard, or both on an existing message; pass `keyboard: null` to remove buttons; omit `text` to update keyboard only (calls `editMessageReplyMarkup` internally); omit `keyboard` to update text while preserving existing buttons
+
 - **Outbound proxy** — transparent JS Proxy wrapping Grammy `Api` that handles all cross-cutting concerns (cancel typing, clear pending temp messages, animation promotion, outgoing message recording) so tool files never import those utilities directly
 - **Animation promotion via proxy** — when an animation is active, text sends are intercepted: the animation placeholder is edited to show the real content and a new animation starts below; file sends use suspend/resume (delete → send → restart)
 - **`set_default_animation` tool** — set session-level default frames, register named presets, reset to built-in, or query current state
@@ -24,7 +27,8 @@
 ## Fixed
 
 - **🫡 ack on voice messages in `ask`, `choose`, `send_confirmation`** — only `dequeue_update` was setting the 🫡 reaction after consuming a voice message; the other dequeue paths (`ask` via `dequeueMatch`, `choose`/`send_confirmation` via `pollButtonOrTextOrVoice`) skipped the ack, leaving ✍ stuck on the message when a waiter was pending (since the poller also skips 😴 in that case); added shared `ackVoiceMessage` to `telegram.ts` and wired it into all voice dequeue paths
-- **Button style colors now actually work** — `style: "success" | "primary" | "danger"` on `choose` options and `yes_style`/`no_style` on `send_confirmation` was not being forwarded to the Telegram Bot API; the `style` field IS a real `AbstractInlineKeyboardButton` field in grammy types (red/green/blue native button background); restored the `style` pass-through on the Telegram payload and added `applyButtonStyle()` in `button-helpers.ts` that also prepends 🟢/🔵/🔴 emoji to the label as a visual fallback
+- **Button style colors now actually work** — `style: "success" | "primary" | "danger"` on `choose` options and `yes_style`/`no_style` on `send_confirmation` was not being forwarded to the Telegram Bot API; `style` IS a real `AbstractInlineKeyboardButton` field in grammy/Telegram types for native button background color; restored `style` pass-through; label text is now fully caller-controlled (no forced emoji injection)
+- **`REACTION_EMOJI_INVALID` error code** — `set_reaction` was incorrectly returning `BUTTON_DATA_INVALID` when the emoji wasn't in the allowed reaction set; replaced with the correct `REACTION_EMOJI_INVALID` code; `MISSING_MESSAGE_ID` (used in `pin_message`) was also missing from the `TelegramErrorCode` union — both added; `pin_message` tests expanded to cover the missing-message-id guard and unpin paths
 
 ## Changed
 

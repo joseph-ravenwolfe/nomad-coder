@@ -6,6 +6,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { register as registerDequeueUpdate } from "./tools/dequeue_update.js";
 import { register as registerGetMessage } from "./tools/get_message.js";
 import { register as registerSendText } from "./tools/send_text.js";
+import { register as registerSendMessage } from "./tools/send_message.js";
 import { register as registerSendFile } from "./tools/send_file.js";
 import { register as registerAppendText } from "./tools/append_text.js";
 import { register as registerShowAnimation } from "./tools/show_animation.js";
@@ -14,6 +15,7 @@ import { register as registerSetDefaultAnimation } from "./tools/set_default_ani
 import { register as registerSendTextAsVoice } from "./tools/send_text_as_voice.js";
 import { register as registerNotify } from "./tools/notify.js";
 import { register as registerEditMessageText } from "./tools/edit_message_text.js";
+import { register as registerEditMessage } from "./tools/edit_message.js";
 import { register as registerDeleteMessage } from "./tools/delete_message.js";
 import { register as registerAsk } from "./tools/ask.js";
 import { register as registerChoose } from "./tools/choose.js";
@@ -57,6 +59,8 @@ export function createServer(): McpServer {
   registerGetMessage(server);
 
   // ── Messaging ───────────────────────────────────────────────────────────
+  registerSendMessage(server);
+  registerEditMessage(server);
   registerSendText(server);
   registerSendTextAsVoice(server);
   registerSendFile(server);

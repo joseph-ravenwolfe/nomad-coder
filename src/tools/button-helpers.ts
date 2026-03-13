@@ -43,26 +43,11 @@ export type ButtonOrTextResult =
   | CommandResult;
 
 // ---------------------------------------------------------------------------
-// Button style helpers
+// Button style type
 // ---------------------------------------------------------------------------
 
+/** Native Telegram inline button background color. */
 export type ButtonStyle = "success" | "primary" | "danger";
-
-const STYLE_EMOJI: Record<ButtonStyle, string> = {
-  success: "🟢",
-  primary: "🔵",
-  danger: "🔴",
-};
-
-/**
- * Prepends a colored circle emoji to the button label based on the style.
- * Returns the original text unchanged when no style is provided.
- * This is the only reliable way to achieve colored buttons in Telegram.
- */
-export function applyButtonStyle(text: string, style?: ButtonStyle): string {
-  if (!style) return text;
-  return `${STYLE_EMOJI[style]} ${text}`;
-}
 
 // ---------------------------------------------------------------------------
 // Store-based polling helpers

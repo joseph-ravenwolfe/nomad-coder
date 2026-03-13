@@ -13,9 +13,9 @@ MCP resources: `telegram-bridge-mcp://communication-guide` (full) · `telegram-b
 3. **`dequeue_update`** — all update waiting. Blocks up to timeout with `pending` count.
 4. **`reply_to_message_id`** — include on every reply to thread messages visually.
 5. **Commit/push** — get explicit operator approval first. Send a `notify` summary before committing.
-6. **`show_typing`** — call immediately after receiving a message, before starting work.
-7. **React 🫡** when starting multi-step work. Update to 👍 or ❤ when done.
-8. **Drain before you speak** — before sending any message, drain pending updates with `dequeue_update(timeout=0)` until empty. Never talk over the operator; always hear them out first. Responding without draining makes it look like you dismissed what they said.
+6. **`show_typing`** — call when you are actively composing a reply. This is the "I'm about to respond" signal — not a generic receipt acknowledgement. It tells the operator a response is imminent.
+7. **React 👀 immediately on receive.** The moment a message arrives, `set_reaction(👀)` — this is the first action, before any processing. Update to 🫡 (acknowledged) or 👍 (task complete) when done. Never leave 👀 without resolving it.
+8. **Drain before you speak** — before sending any message, drain pending updates with `dequeue_update(timeout=0)` until empty. Never talk over the operator; always hear them out first. Responding without draining makes it look like you dismissed what they said. When `pending > 0`, show a typing indicator while continuing to drain — the operator can see you're reading through their messages.
 
 ---
 
@@ -38,11 +38,15 @@ MCP resources: `telegram-bridge-mcp://communication-guide` (full) · `telegram-b
 ## Reactions
 
 ```txt
-🫡 = starting multi-step work
-👍 = confirmed / done
-👀 = noted
-❤  = great
+👀 = I'm processing this right now (set IMMEDIATELY on receive — the "eyes are on it" signal)
+🫡 = got it / acknowledged / understood (receipt of a simple statement or instruction)
+👍 = task complete / confirmed done
+❤  = great / love it
 ```
+
+**Lifecycle pattern:** React 👀 the moment you receive a message — this is the first thing you do, before any processing. Once you've responded or completed work, update the reaction to 🫡 (acknowledgement) or 👍 (task done). This gives the operator a live status indicator: 👀 = still in progress, resolved emoji = done.
+
+`show_typing` = I'm composing a reply right now — use this when a text response is imminent, not as a generic "received" signal. The order should be: receive → 👀 reaction → do work → `show_typing` → send reply → update reaction to 🫡/👍.
 
 ---
 

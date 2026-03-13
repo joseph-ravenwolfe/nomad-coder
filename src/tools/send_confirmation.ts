@@ -5,7 +5,7 @@ import { markdownToV2 } from "../markdown.js";
 import { applyTopicToText } from "../topic-state.js";
 import {
   pollButtonOrTextOrVoice, ackAndEditSelection, editWithTimedOut, editWithSkipped,
-  applyButtonStyle, type ButtonStyle,
+  type ButtonStyle,
 } from "./button-helpers.js";
 
 const DESCRIPTION =
@@ -77,8 +77,8 @@ export function register(server: McpServer) {
           reply_parameters: reply_to_message_id ? { message_id: reply_to_message_id } : undefined,
           reply_markup: {
             inline_keyboard: [[
-              { text: applyButtonStyle(yes_text, yes_style as ButtonStyle | undefined), callback_data: yes_data, ...(yes_style ? { style: yes_style as ButtonStyle } : {}) },
-              { text: applyButtonStyle(no_text, no_style as ButtonStyle | undefined), callback_data: no_data, ...(no_style ? { style: no_style as ButtonStyle } : {}) },
+              { text: yes_text, callback_data: yes_data, ...(yes_style ? { style: yes_style as ButtonStyle } : {}) },
+              { text: no_text, callback_data: no_data, ...(no_style ? { style: no_style as ButtonStyle } : {}) },
             ]],
           },
           _rawText: text,
