@@ -12,8 +12,25 @@
  * always appear in autocomplete regardless of what the agent has registered.
  */
 
+import { createRequire } from "module";
 import type { Update } from "grammy/types";
-import { getApi, resolveChat } from "./telegram.js";
+import { getApi, resolveChat, sendServiceMessage } from "./telegram.js";
+import { clearCommandsOnShutdown } from "./shutdown.js";
+import { stopPoller } from "./poller.js";
+
+const require = createRequire(import.meta.url);
+const { version: MCP_VERSION } = require("../package.json") as { version: string };
+let _mcpCommit = "dev";
+let _mcpBuildTime = "unknown";
+try {
+  const info = require("./tools/build-info.json") as { BUILD_COMMIT: string; BUILD_TIME: string };
+  _mcpCommit = info.BUILD_COMMIT;
+  _mcpBuildTime = info.BUILD_TIME;
+} catch { /* build-info.json not generated yet */ }
+
+export function getVersionString(): string {
+  return `v${MCP_VERSION} (${_mcpCommit} ${_mcpBuildTime})`;
+}
 import {
   isRecording,
   startRecording,
@@ -106,6 +123,8 @@ function buildPrefsStep2Keyboard(): { text: string; callback_data: string }[][] 
 /** Built-in command metadata (for merging into set_commands menus). */
 export const BUILT_IN_COMMANDS = [
   { command: "session", description: "Session recording controls" },
+  { command: "version", description: "Show server version and build info" },
+  { command: "shutdown", description: "Shut down the MCP server" },
 ] as const;
 
 /**
@@ -124,6 +143,14 @@ export async function handleIfBuiltIn(update: Update): Promise<boolean> {
         await handleSessionCommand();
         return true;
       }
+      if (raw === "version") {
+        await handleVersionCommand();
+        return true;
+      }
+      if (raw === "shutdown") {
+        handleShutdownCommand();
+        return true;
+      }
     }
   }
 
@@ -137,6 +164,39 @@ export async function handleIfBuiltIn(update: Update): Promise<boolean> {
   }
 
   return false;
+}
+
+// ---------------------------------------------------------------------------
+// /version
+// ---------------------------------------------------------------------------
+
+async function handleVersionCommand(): Promise<void> {
+  const chatId = resolveChat();
+  if (typeof chatId !== "number") return;
+  const buildTimeDisplay = _mcpBuildTime.replace("T", " ").replace("Z", " UTC");
+  const lines = [
+    "📦 *Telegram Bridge MCP*",
+    "",
+    `*Version:* \`${MCP_VERSION}\``,
+    `*Commit:* \`${_mcpCommit}\``,
+    `*Built:* \`${buildTimeDisplay}\``,
+  ];
+  try {
+    await getApi().sendMessage(chatId, lines.join("\n"), { parse_mode: "Markdown" });
+  } catch { /* ignore */ }
+}
+
+// ---------------------------------------------------------------------------
+// /shutdown — shuts down the MCP server from Telegram
+// ---------------------------------------------------------------------------
+
+function handleShutdownCommand(): void {
+  stopPoller();
+  const notifyShutdown = Promise.race([
+    sendServiceMessage("⛔️ Shutting down…").catch(() => {}),
+    new Promise<void>((r) => setTimeout(r, 5000)),
+  ]);
+  void notifyShutdown.finally(() => clearCommandsOnShutdown().finally(() => process.exit(0)));
 }
 
 // ---------------------------------------------------------------------------

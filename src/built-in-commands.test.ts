@@ -12,7 +12,11 @@ const mocks = vi.hoisted(() => ({
   answerCallbackQuery: vi.fn(),
   sendDocument: vi.fn(),
   setMyCommands: vi.fn(),
+  rawSendMessage: vi.fn(),
+  sendServiceMessage: vi.fn((): Promise<void> => Promise.resolve()),
   resolveChat: vi.fn((): number | string => 123),
+  clearCommandsOnShutdown: vi.fn((): Promise<void> => Promise.resolve()),
+  stopPoller: vi.fn(),
   isRecording: vi.fn((): boolean => false),
   startRecording: vi.fn(),
   stopRecording: vi.fn(),
@@ -34,7 +38,19 @@ vi.mock("./telegram.js", () => ({
     sendDocument: mocks.sendDocument,
     setMyCommands: mocks.setMyCommands,
   }),
+  getRawApi: () => ({
+    sendMessage: mocks.rawSendMessage,
+  }),
+  sendServiceMessage: mocks.sendServiceMessage,
   resolveChat: mocks.resolveChat,
+}));
+
+vi.mock("./shutdown.js", () => ({
+  clearCommandsOnShutdown: mocks.clearCommandsOnShutdown,
+}));
+
+vi.mock("./poller.js", () => ({
+  stopPoller: mocks.stopPoller,
 }));
 
 vi.mock("./session-recording.js", () => ({
@@ -115,9 +131,11 @@ describe("built-in-commands", () => {
 
   // -- BUILT_IN_COMMANDS constant ------------------------------------------
 
-  it("exports /session command metadata", () => {
+  it("exports /session, /version, and /shutdown command metadata", () => {
     expect(BUILT_IN_COMMANDS).toEqual([
       { command: "session", description: "Session recording controls" },
+      { command: "version", description: "Show server version and build info" },
+      { command: "shutdown", description: "Shut down the MCP server" },
     ]);
   });
 

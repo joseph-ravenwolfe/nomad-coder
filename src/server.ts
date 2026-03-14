@@ -35,7 +35,7 @@ import { register as registerGetMe } from "./tools/get_me.js";
 import { register as registerGetChat } from "./tools/get_chat.js";
 import { register as registerGetAgentGuide } from "./tools/get_agent_guide.js";
 import { register as registerDumpSessionRecord } from "./tools/dump_session_record.js";
-import { register as registerRestartServer } from "./tools/restart_server.js";
+import { register as registerShutdownServer } from "./tools/shutdown.js";
 import { register as registerSessionStart } from "./tools/session_start.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -102,7 +102,7 @@ export function createServer(): McpServer {
   registerDumpSessionRecord(server);
 
   // ── System ─────────────────────────────────────────────────────────────
-  registerRestartServer(server);
+  registerShutdownServer(server);
 
   // ── Resources ────────────────────────────────────────────────────────────
   const agentGuideContent = readFileSync(
