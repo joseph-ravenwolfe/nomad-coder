@@ -6,9 +6,10 @@ import { resolveParseMode } from "../markdown.js";
 import { recordOutgoingEdit } from "../message-store.js";
 
 const DESCRIPTION =
-  "Edits the text of a previously sent message. Supports Markdown " +
-  "auto-conversion (default), MarkdownV2, and HTML. Can optionally " +
-  "update or clear the inline keyboard.";
+  "Legacy — use edit_message instead, which handles both text and keyboard " +
+  "edits in one call. Edits the text of a previously sent message. " +
+  "Supports Markdown auto-conversion (default), MarkdownV2, and HTML. " +
+  "Can optionally update or clear the inline keyboard.";
 
 export function register(server: McpServer) {
   server.registerTool(

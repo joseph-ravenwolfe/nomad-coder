@@ -41,10 +41,12 @@ const STEPS_INPUT = z
 const TITLE_INPUT = z.string().describe("Bold heading for the status block, e.g. \"Refactoring: src/auth.ts\"");
 
 const CREATE_DESCRIPTION =
-  "Creates a new live task checklist message in Telegram. Call this once at " +
-  "the start of a multi-step agent task to send the checklist and get its " +
-  "message_id. Use the returned message_id with update_checklist to edit it " +
-  "in-place as steps progress.";
+  "Creates a new live task checklist message in Telegram. Use for discrete " +
+  "named steps with status (pending/running/done/failed). " +
+  "For percentage-based progress tracking, use send_new_progress instead. " +
+  "Call this once at the start of a multi-step agent task to send the " +
+  "checklist and get its message_id. Use the returned message_id with " +
+  "update_checklist to edit it in-place as steps progress.";
 
 const UPDATE_DESCRIPTION =
   "Updates an existing live task checklist message in Telegram. Pass the " +

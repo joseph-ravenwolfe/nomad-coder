@@ -14,8 +14,9 @@ const SEVERITY_PREFIX: Record<string, string> = {
 const DESCRIPTION =
   "Sends a formatted notification message to a chat. Handles severity " +
   "styling (info/success/warning/error) automatically with emoji prefixes " +
-  "and bold titles. The most common agent tool — use for build results, " +
-  "progress updates, and status changes. Default parse_mode is Markdown " +
+  "and bold titles. Use for structured status messages (build results, " +
+  "process events, errors). For conversational replies or long explanations, " +
+  "use send_text instead. Default parse_mode is Markdown " +
   "— write standard Markdown in the body and it is auto-converted, no " +
   "escaping needed.";
 

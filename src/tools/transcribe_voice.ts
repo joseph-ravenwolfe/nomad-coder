@@ -4,10 +4,10 @@ import { toResult, toError } from "../telegram.js";
 import { transcribeWithIndicator } from "../transcribe.js";
 
 const DESCRIPTION =
-  "Transcribes a Telegram voice message by its file_id. Use this when you " +
-  "have a voice message's file_id (from a voice event in the message store) " +
-  "but need to (re-)transcribe it — for example if transcription failed " +
-  "previously, or you want to re-process with updated settings.";
+  "Transcribes a Telegram voice message by its file_id. " +
+  "Voice messages returned by dequeue_update are already pre-transcribed — " +
+  "only call this to re-process (e.g. transcription failed previously or " +
+  "you want to re-run with updated settings).";
 
 export function register(server: McpServer) {
   server.registerTool(

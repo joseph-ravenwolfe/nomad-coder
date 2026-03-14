@@ -9,7 +9,8 @@ const DESCRIPTION =
   "Idempotent — safe to call multiple times; only one interval runs at a " +
   "time. Cancelled automatically when any message is sent. Default timeout " +
   "is 20 s. Pass cancel: true to immediately stop typing (replaces the old " +
-  "cancel_typing tool).";
+  "cancel_typing tool). For a persistent in-chat visual placeholder that " +
+  "survives message sends, use show_animation instead.";
 
 export function register(server: McpServer) {
   server.registerTool(

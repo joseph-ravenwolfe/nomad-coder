@@ -4,6 +4,8 @@ import { getApi, toResult, toError } from "../telegram.js";
 
 const DESCRIPTION =
   "Acknowledges a callback query from an inline button press. " +
+  "Only needed when handling button presses manually via send_message with a keyboard — " +
+  "choose, confirm, and send_choice auto-ack button presses automatically. " +
   "Must be called within 30 s of receiving the update. " +
   "Optionally shows a toast or alert to the user.";
 

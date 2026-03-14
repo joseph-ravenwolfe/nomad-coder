@@ -8,7 +8,8 @@ const DESCRIPTION =
   "Sends a text message to the Telegram chat. Default parse_mode is Markdown — " +
   "write standard Markdown (*bold*, _italic_, `code`, [links](url)) and it is " +
   "auto-converted. Messages longer than 4096 characters are automatically split. " +
-  "For voice/TTS, use `send_text_as_voice` instead.";
+  "For structured status with severity styling, use notify instead. " +
+  "For voice/TTS, use send_text_as_voice instead.";
 
 export function register(server: McpServer) {
   server.registerTool(

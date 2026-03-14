@@ -23,7 +23,8 @@ const DESCRIPTION =
   "message, checks for pending messages from a previous " +
   "session, and — if any exist — asks the operator whether " +
   "to resume or start fresh. Returns { action, pending } " +
-  "so the agent knows how to proceed.";
+  "so the agent knows how to proceed. " +
+  "Follow with get_agent_guide to load behavioral conventions.";
 
 export function register(server: McpServer) {
   server.registerTool(

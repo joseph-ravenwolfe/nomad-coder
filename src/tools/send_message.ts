@@ -10,11 +10,12 @@ import type { ButtonStyle } from "./button-helpers.js";
 const DESCRIPTION =
   "Core send primitive — sends a message to the Telegram chat and returns immediately " +
   "with a message_id. Optionally attach an inline keyboard (buttons). " +
-  "Default parse_mode is Markdown (auto-converted). " +
-  "When keyboard is provided, the agent can handle button presses via dequeue_update " +
-  "and answer_callback_query — there is no blocking wait. " +
+  "Default parse_mode is Markdown (auto-converted). Does not auto-split long text — " +
+  "use send_text for messages longer than 4096 chars or when no keyboard is needed. " +
+  "When keyboard is provided, handle button presses via dequeue_update and " +
+  "answer_callback_query — there is no blocking wait. " +
   "For blocking single-selection, use choose. For yes/no, use confirm. " +
-  "For voice/TTS, use send_text_as_voice.";
+  "For voice/TTS, use send_text_as_voice.";  
 
 const buttonSchema = z.object({
   label: z

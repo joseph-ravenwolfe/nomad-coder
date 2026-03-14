@@ -16,7 +16,8 @@ const DESCRIPTION =
   "Two modes: temporary (default) = one-shot, disappears on next bot message or show_typing. " +
   "Persistent = continuous, restarts after each bot message until explicitly cancelled. " +
   "By default all regular spaces in frames are replaced with non-breaking spaces to prevent layout shift; " +
-  "set allow_breaking_spaces: true to opt out.";
+  "set allow_breaking_spaces: true to opt out. " +
+  "For a brief native typing indicator in the chat header (seconds, pre-reply), use show_typing instead.";
 
 export function register(server: McpServer) {
   server.registerTool(

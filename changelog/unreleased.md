@@ -28,6 +28,22 @@
 
 - Fixed animation default timeout being only 2 minutes — changed to 10 minutes (600 s) in both `show_animation.ts` and `animation-state.ts`
 - Fixed `show_animation` not firing `fireTempReactionRestore` when a new animation message is created — temp reactions are now cleared as expected
+- Fixed `unpin_message` passing `undefined` as second arg to `unpinChatMessage` when no `message_id` given — now calls with no args to unpin most recent
+- Fixed `send_new_checklist` accepting both create and update in one tool — split into `send_new_checklist` (create-only) and `update_checklist` (edit-only)
+- Fixed `setSessionLogMode` accepting invalid numeric values — now validates, floors, and clamps to ≥ 1 before saving
+- Fixed `gen-build-info.mjs` writing to a directory that may not exist — added `mkdirSync({ recursive: true })` before write
+- Fixed `renderProgress` not clamping `width` — now enforces minimum of 1 character
+- Fixed `append_text` error code literal lacking `as const` narrowing
+
+## Docs
+
+- Audited all 37 tool descriptions for disambiguation and cross-references
+- Clarified `notify` vs `send_text` usage (severity styling vs conversational replies)
+- Clarified `edit_message` over `edit_message_text` (legacy) for all text edits
+- Clarified `answer_callback_query` is only needed for manual `send_message` keyboards — `choose`/`confirm`/`send_choice` auto-ack
+- Clarified `transcribe_voice` is only for re-processing — `dequeue_update` pre-transcribes voice
+- Added cross-references: `session_start` ↔ `get_agent_guide`, `send_new_checklist` ↔ `send_new_progress`, `show_animation` ↔ `show_typing`
+- Clarified `send_message` does not auto-split (use `send_text` for long messages without keyboard)
 - Fixed `ackVoiceMessage` unconditionally calling `trySetMessageReaction` — now a no-op when the message already has the `🫡` reaction recorded
 
 - Fixed orphaned `setTimeout` handles in `dequeue_update` and `ask` loop iterations — timer is now cancelled with `clearTimeout` after the `Promise.race` resolves

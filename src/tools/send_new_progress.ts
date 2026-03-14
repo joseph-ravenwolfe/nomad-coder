@@ -29,6 +29,8 @@ export function renderProgress(
 
 const DESCRIPTION =
   "Creates a new progress bar message and returns its message_id. " +
+  "Use for percentage-based continuous tracking (e.g. 47%). " +
+  "For discrete named steps with pass/fail status, use send_new_checklist instead. " +
   "Pass the returned message_id to update_progress to edit in-place. " +
   "Multiple concurrent progress bars are supported — each is tracked by its own message_id.";
 
