@@ -4,11 +4,14 @@
 
 - Added `mcp-config.example.json` as a reference config template
 - Added async wait etiquette section to `telegram-communication.instructions.md`
+- Added `update_checklist` tool for editing existing checklists in-place (split from `send_new_checklist`)
+- Added 👀 reaction rules table to `docs/behavior.md`
 
 ## Changed
 
 - Updated `LOOP-PROMPT.md` casing reference in `.github/copilot-instructions.md`
 - Changed `working`, `thinking`, and `loading` builtin animation presets to use `[···word···]` bracket delimiter style
+- Split `send_new_checklist` (create-or-update) into two focused tools: `send_new_checklist` (create-only) + `update_checklist` (edit-only, required `message_id`)
 
 ## Fixed
 
@@ -34,6 +37,12 @@
 - Fixed `edit_message` skipping `validateText` before calling Telegram API — now validates resolved text length/emptiness and returns a structured error
 - Fixed `append_text` returning a plain string to `toError` for `MESSAGE_NOT_TEXT` — now returns a structured `{ code, message }` object so callers get a stable error code
 - Fixed `confirm` callback hook in single-button CTA mode — now ignores callback data that is neither `yes_data` nor a valid `no_data` (prevents calling `ackAndEditSelection` with empty label)
+- Fixed `pin_message` passing `undefined` to `unpinChatMessage` when no `message_id` given — now calls `unpinChatMessage(chatId)` with no ID to unpin the most recent pin
+- Fixed `gen-build-info.mjs` failing when `dist/tools/` doesn't exist — now calls `mkdirSync` with `{ recursive: true }` before writing
+- Fixed `setSessionLogMode` accepting invalid numeric values (e.g. 0, -1, NaN) — now validates and clamps to integer >= 1, falls back to `null`
+- Fixed `renderProgress` crashing when `width <= 0` — now clamps `width` to at least 1
+- Fixed `append_text` `MESSAGE_NOT_TEXT` error code missing `as const` — literal type now preserved on the wire
+- Enabled Docker Scout critical/high vulnerability display in `.vscode/settings.json` (was incorrectly disabled)
 
 ## Removed
 

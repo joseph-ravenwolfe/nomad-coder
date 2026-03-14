@@ -3,7 +3,7 @@
 // Called as part of `pnpm build`. Falls back gracefully if git is unavailable.
 
 import { execSync } from "child_process";
-import { writeFileSync } from "fs";
+import { mkdirSync, writeFileSync } from "fs";
 
 let commit = "unknown";
 try {
@@ -13,6 +13,8 @@ try {
 }
 
 const buildTime = new Date().toISOString();
+
+mkdirSync("dist/tools", { recursive: true });
 
 writeFileSync(
   "dist/tools/build-info.json",

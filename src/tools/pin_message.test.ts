@@ -63,6 +63,6 @@ describe("pin_message tool", () => {
     mocks.unpinChatMessage.mockResolvedValue(true);
     const result = await call({ unpin: true });
     expect(isError(result)).toBe(false);
-    expect(mocks.unpinChatMessage).toHaveBeenCalledWith(1, undefined);
+    expect(mocks.unpinChatMessage).toHaveBeenCalledWith(1);
   });
 });

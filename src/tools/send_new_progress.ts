@@ -15,8 +15,9 @@ export function renderProgress(
   subtext?: string,
 ): string {
   const clamped = Math.max(0, Math.min(100, percent));
-  const filled = Math.round((clamped / 100) * width);
-  const empty = width - filled;
+  const safeWidth = Number.isFinite(width) ? Math.max(1, width) : DEFAULT_WIDTH;
+  const filled = Math.round((clamped / 100) * safeWidth);
+  const empty = Math.max(0, safeWidth - filled);
   const bar = FILLED.repeat(filled) + EMPTY.repeat(empty);
   const pct = `${Math.round(clamped)}%`;
   const lines: string[] = [];

@@ -34,7 +34,9 @@ export function register(server: McpServer) {
       if (typeof chatId !== "number") return toError(chatId);
       try {
         if (unpin) {
-          const ok = await getApi().unpinChatMessage(chatId, message_id);
+          const ok = message_id === undefined
+            ? await getApi().unpinChatMessage(chatId)
+            : await getApi().unpinChatMessage(chatId, message_id);
           return toResult({ ok, unpinned: true });
         }
         if (message_id === undefined) {

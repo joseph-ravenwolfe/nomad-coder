@@ -30,7 +30,7 @@ describe("send_new_checklist tool", () => {
     call = server.getHandler("send_new_checklist");
   });
 
-  it("creates a new message when no message_id is given", async () => {
+  it("creates a new message when called", async () => {
     mocks.sendMessage.mockResolvedValue({ message_id: 10, chat: { id: 1 }, date: 0 });
     const result = await call({ title: "CI Pipeline", steps: STEPS });
     expect(isError(result)).toBe(false);
@@ -39,15 +39,6 @@ describe("send_new_checklist tool", () => {
     expect(data.hint).toBeDefined();
     expect(mocks.sendMessage).toHaveBeenCalledOnce();
     expect(mocks.editMessageText).not.toHaveBeenCalled();
-  });
-
-  it("edits in-place when message_id is provided", async () => {
-    mocks.editMessageText.mockResolvedValue({ message_id: 10 });
-    const result = await call({ title: "CI Pipeline", steps: STEPS, message_id: 10 });
-    expect(isError(result)).toBe(false);
-    expect((parseResult(result)).updated).toBe(true);
-    expect(mocks.editMessageText).toHaveBeenCalledOnce();
-    expect(mocks.sendMessage).not.toHaveBeenCalled();
   });
 
   it("renders step statuses with appropriate icons", async () => {
@@ -75,5 +66,32 @@ describe("send_new_checklist tool", () => {
     });
     const [, text] = mocks.sendMessage.mock.calls[0];
     expect(text).toContain("<i>exit code 1</i>");
+  });
+});
+
+describe("update_checklist tool", () => {
+  let update: (args: Record<string, unknown>) => Promise<unknown>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    const server = createMockServer();
+    register(server);
+    update = server.getHandler("update_checklist");
+  });
+
+  it("edits in-place when message_id is provided", async () => {
+    mocks.editMessageText.mockResolvedValue({ message_id: 10 });
+    const result = await update({ title: "CI Pipeline", steps: STEPS, message_id: 10 });
+    expect(isError(result)).toBe(false);
+    expect((parseResult(result)).updated).toBe(true);
+    expect(mocks.editMessageText).toHaveBeenCalledOnce();
+    expect(mocks.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("handles boolean editMessageText response (channel case)", async () => {
+    mocks.editMessageText.mockResolvedValue(true);
+    const result = await update({ title: "T", steps: STEPS, message_id: 42 });
+    expect(isError(result)).toBe(false);
+    expect((parseResult(result)).message_id).toBe(42);
   });
 });

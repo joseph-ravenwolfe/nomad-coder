@@ -70,8 +70,15 @@ export function getSessionLogMode(): "manual" | number | null {
 export function setSessionLogMode(mode: "manual" | number | null): void {
   if (mode === null) {
     delete _config.sessionLog;
-  } else {
+  } else if (mode === "manual") {
     _config.sessionLog = mode;
+  } else {
+    const clamped = Math.floor(mode);
+    if (Number.isFinite(clamped) && clamped >= 1) {
+      _config.sessionLog = clamped;
+    } else {
+      delete _config.sessionLog;
+    }
   }
   save();
 }

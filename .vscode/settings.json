@@ -4,5 +4,5 @@
         "git push": false,
         "npx tsc": true
     },
-    "docker.lsp.experimental.scout.criticalHighVulnerabilities": false
+    "docker.lsp.experimental.scout.criticalHighVulnerabilities": true
 }
