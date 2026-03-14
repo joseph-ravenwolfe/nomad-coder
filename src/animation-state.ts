@@ -164,9 +164,6 @@ export async function startAnimation(
   persistent = false,
   allowBreakingSpaces = false,
 ): Promise<number> {
-  // Cancel any existing animation
-  await cancelAnimation();
-
   const chatId = resolveChat();
   if (typeof chatId !== "number") throw new Error("ALLOWED_USER_ID not configured");
 
@@ -196,16 +193,42 @@ export async function startAnimation(
   const parseMode = processed[0]?.parse_mode;
 
   const firstFrame = processedFrames[0] ?? "⏳";
-  const msg = await bypassProxy(() =>
-    getRawApi().sendMessage(chatId, firstFrame, { parse_mode: parseMode }),
-  );
 
-  // Track the placeholder's message_id so position detection is accurate
-  trackMessageId(msg.message_id);
+  // If an animation is already active, reuse its message (edit in place)
+  // instead of delete + recreate, avoiding visible flicker.
+  let messageId: number;
+  if (_state) {
+    clearTimers();
+    messageId = _state.messageId;
+    try {
+      await bypassProxy(() =>
+        getRawApi().editMessageText(_state!.chatId, messageId, firstFrame, { parse_mode: parseMode }),
+      );
+    } catch {
+      // Edit failed (message gone?) — fall back to creating a new one
+      _state = null;
+      const msg = await bypassProxy(() =>
+        getRawApi().sendMessage(chatId, firstFrame, { parse_mode: parseMode }),
+      );
+      messageId = msg.message_id;
+      trackMessageId(messageId);
+    }
+  } else {
+    // No existing animation — cancel any stale resume state and create fresh
+    if (_savedForResume) {
+      _savedForResume = null;
+      clearSendInterceptor();
+    }
+    const msg = await bypassProxy(() =>
+      getRawApi().sendMessage(chatId, firstFrame, { parse_mode: parseMode }),
+    );
+    messageId = msg.message_id;
+    trackMessageId(messageId);
+  }
 
   _state = {
     chatId,
-    messageId: msg.message_id,
+    messageId,
     persistent,
     rawFrames: paddedFrames,
     frames: processedFrames,
@@ -372,7 +395,7 @@ export async function startAnimation(
     },
   });
 
-  return msg.message_id;
+  return messageId;
 }
 
 /**

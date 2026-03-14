@@ -98,18 +98,18 @@ describe("animation-state", () => {
       expect(mocks.sendMessage).toHaveBeenCalledWith(123, "`...`", { parse_mode: "MarkdownV2" });
     });
 
-    it("cancels previous animation before starting new one", async () => {
+    it("reuses existing message when starting new animation", async () => {
       mocks.sendMessage
-        .mockResolvedValueOnce({ message_id: 42 })
-        .mockResolvedValueOnce({ message_id: 99 });
+        .mockResolvedValueOnce({ message_id: 42 });
 
       await startAnimation(["A"]);
       expect(getAnimationMessageId()).toBe(42);
 
       await startAnimation(["B"]);
-      // Old message should have been deleted
-      expect(mocks.deleteMessage).toHaveBeenCalledWith(123, 42);
-      expect(getAnimationMessageId()).toBe(99);
+      // Old message should have been edited in place, not deleted
+      expect(mocks.deleteMessage).not.toHaveBeenCalled();
+      expect(mocks.editMessageText).toHaveBeenCalledWith(123, 42, "B", { parse_mode: "MarkdownV2" });
+      expect(getAnimationMessageId()).toBe(42);
     });
 
     it("throws if resolveChat returns non-number", async () => {
