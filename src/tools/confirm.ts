@@ -91,6 +91,8 @@ export function register(server: McpServer) {
         // One-shot: acks, shows selection, removes buttons. Event still queues for dequeue_update.
         registerCallbackHook(sent.message_id, (evt) => {
           const confirmed = evt.content.data === yes_data;
+          // In single-button CTA mode (no_text is ""), ignore anything that isn't yes_data.
+          if (!confirmed && !no_text) return;
           const chosenLabel = confirmed ? yes_text : no_text;
           void ackAndEditSelection(chatId, sent.message_id, text, chosenLabel, evt.content.qid)
             .catch((e: unknown) => process.stderr.write(`[warn] confirm hook failed: ${String(e)}\n`));

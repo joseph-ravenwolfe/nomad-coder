@@ -138,5 +138,6 @@ describe("append_text tool", () => {
     mocks.getMessage.mockReturnValue({ content: { type: "voice" } });
     const result = await call({ message_id: 10, text: "oops" });
     expect(isError(result)).toBe(true);
+    expect(result.content[0].text).toContain("MESSAGE_NOT_TEXT");
   });
 });

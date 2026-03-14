@@ -2,7 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { InlineKeyboardMarkup } from "grammy/types";
 import { z } from "zod";
 import {
-  getApi, toResult, toError, resolveChat, validateCallbackData, LIMITS,
+  getApi, toResult, toError, resolveChat, validateText, validateCallbackData, LIMITS,
 } from "../telegram.js";
 import { resolveParseMode } from "../markdown.js";
 import { recordOutgoingEdit } from "../message-store.js";
@@ -65,7 +65,7 @@ export function register(server: McpServer) {
             if (dataErr) return toError(dataErr);
             if (btn.label.length > LIMITS.BUTTON_TEXT) {
               return toError({
-                code: "BUTTON_DATA_INVALID" as const,
+                code: "BUTTON_LABEL_EXCEEDS_LIMIT" as const,
                 message: `Button label "${btn.label}" is ${btn.label.length} chars; Telegram hard limit is ${LIMITS.BUTTON_TEXT}.`,
               });
             }
@@ -93,6 +93,8 @@ export function register(server: McpServer) {
         if (text !== undefined) {
           // Update text (and optionally keyboard)
           const { text: finalText, parse_mode: finalMode } = resolveParseMode(text, parse_mode);
+          const textErr = validateText(finalText);
+          if (textErr) return toError(textErr);
           const result = await getApi().editMessageText(chatId, message_id, finalText, {
             parse_mode: finalMode,
             reply_markup,

@@ -30,6 +30,11 @@
 - Fixed orphaned `setTimeout` handles in `dequeue_update` and `ask` loop iterations — timer is now cancelled with `clearTimeout` after the `Promise.race` resolves
 - Fixed `snake_case` local variable names in `get_me.ts` — renamed `mcp_commit`/`mcp_build_time` to `mcpCommit`/`mcpBuildTime`; wire-format output field names are unchanged
 
+- Fixed `BUTTON_DATA_INVALID` error code in `edit_message` button label validation — renamed to `BUTTON_LABEL_EXCEEDS_LIMIT` (consistent with `send_choice`)
+- Fixed `edit_message` skipping `validateText` before calling Telegram API — now validates resolved text length/emptiness and returns a structured error
+- Fixed `append_text` returning a plain string to `toError` for `MESSAGE_NOT_TEXT` — now returns a structured `{ code, message }` object so callers get a stable error code
+- Fixed `confirm` callback hook in single-button CTA mode — now ignores callback data that is neither `yes_data` nor a valid `no_data` (prevents calling `ackAndEditSelection` with empty label)
+
 ## Removed
 
 - Removed `mcp-config.json` from version control (now gitignored; copy from `mcp-config.example.json`)
