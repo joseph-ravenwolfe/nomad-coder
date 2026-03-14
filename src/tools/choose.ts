@@ -102,7 +102,7 @@ export function register(server: McpServer) {
           const chosen = options.find((o) => o.value === evt.content.data);
           const chosenLabel = chosen?.label ?? evt.content.data ?? "";
           void ackAndEditSelection(chatId, messageId, question, chosenLabel, evt.content.qid)
-            .catch((e: unknown) => process.stderr.write(`[warn] choose hook failed: ${e}\n`));
+            .catch((e: unknown) => process.stderr.write(`[warn] choose hook failed: ${String(e)}\n`));
         });
 
         // Fires immediately when a voice message is detected (before transcription).
@@ -137,6 +137,7 @@ export function register(server: McpServer) {
 
         if (match.kind === "voice") {
           clearCallbackHook(messageId);
+          // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- skippedEditDone may be true if onVoiceDetected fired before poll returned
           if (!skippedEditDone) await editWithSkipped(chatId, messageId, question);
           return toResult({
             skipped: true,

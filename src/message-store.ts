@@ -138,7 +138,7 @@ let _insertionOrder: number[] = [];
 let _highestMessageId = 0;
 
 /** Per-message bot reaction index — tracks the current bot reaction for restore. */
-let _botReactionIndex = new Map<number, string>();
+const _botReactionIndex = new Map<number, string>();
 
 /** Optional callback fired after every timeline push. Used by auto-dump. */
 let _onEventCallback: ((timelineSize: number) => void) | null = null;

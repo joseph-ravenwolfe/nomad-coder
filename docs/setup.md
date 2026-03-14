@@ -193,10 +193,10 @@ Add to `claude_desktop_config.json`:
 - Telegram silently ignores edits where the text is identical to the current content.
 - This is not an error — the message is already up to date.
 
-### Long-polling (`get_updates`, `wait_for_*`) returns empty immediately
+### `dequeue_update` returns `{ empty: true }` immediately
 
-- If `timeout` is 0 (short poll) and there are no pending updates, this is expected.
-- Increase `timeout_seconds` to up to 55 for true long-polling.
+- If `timeout` is 0 (instant poll) and there are no pending updates, this is expected.
+- Use `dequeue_update()` with no arguments to block up to 60 s for the next update.
 
 ### Bot receives its own messages
 

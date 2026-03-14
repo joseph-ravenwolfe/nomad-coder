@@ -50,7 +50,7 @@ Normal drain-then-block sequence:
 3. On update: handle it, then go to step 1
 ```
 
-`pending` (included in every non-empty response) tells you how many items are still queued. When `pending > 0`, skip straight to another `dequeue_update(timeout: 0)` call instead of blocking.
+`pending` (included when more updates are queued; omitted when 0) tells you how many items are still waiting. When `pending > 0`, skip straight to another `dequeue_update(timeout: 0)` call instead of blocking.
 
 ### Looking up prior messages
 

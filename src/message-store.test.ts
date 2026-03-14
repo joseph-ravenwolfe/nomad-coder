@@ -292,7 +292,7 @@ describe("patchVoiceText — two-phase voice recording", () => {
 
   it("is a no-op when message_id is unknown", () => {
     // Should not throw
-    expect(() => patchVoiceText(999, "text")).not.toThrow();
+    expect(() => { patchVoiceText(999, "text"); }).not.toThrow();
   });
 
   it("is a no-op when event is not a voice type", () => {

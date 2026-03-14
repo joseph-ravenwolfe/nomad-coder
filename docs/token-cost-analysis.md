@@ -22,7 +22,7 @@ Every registered MCP tool contributes its full name + description + parameter sc
 
 ### Measurement (v1.12.0, 35 tools)
 
-> **Note:** These measurements are from V2. V3 reduces tool count from 35 to 30 (consolidating polling, media, and typing tools). The structure of the cost analysis remains valid; absolute numbers are slightly lower.
+> **Note:** These measurements are from V2. V3 reduces tool count from 35 to 34 (consolidating polling and media tools while adding new message primitives and session tooling). The structure of the cost analysis remains valid; absolute numbers are slightly lower.
 
 A rough token count of all tool definitions in this MCP:
 

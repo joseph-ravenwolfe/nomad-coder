@@ -52,19 +52,22 @@ Tools are grouped by abstraction level.
 | `ask` | Sends a question and blocks until the user replies with free text or voice. |
 | `choose` | Sends a question with labeled inline keyboard buttons; blocks until a button is pressed or the user replies with text/voice. |
 | `confirm` | Sends a Yes/No inline keyboard and blocks until a button is pressed. Returns `{ confirmed: true \| false }`, or `{ timed_out: true }` if the timeout expires without input. |
+| `send_choice` | Sends buttons and returns immediately with a `message_id`. The first press auto-locks the keyboard; the callback event appears in `dequeue_update`. Non-blocking version of `choose`. |
 | `send_new_checklist` | Creates or edits a live task checklist message with per-step status indicators. |
 
 ### Polling & message retrieval
 
 | Tool | Description |
 | --- | --- |
-| `dequeue_update` | **Universal update consumption.** Blocks up to `timeout` seconds when the queue is empty. Returns the next update as `{ id, event, from, content, pending? }`. The response lane (reactions, callbacks) drains before the message lane. Voice messages arrive pre-transcribed. Returns `{ empty: true }` when no update is available within the timeout. |
+| `dequeue_update` | **Universal update consumption.** Blocks up to `timeout` seconds when the queue is empty. Returns `{ updates: [...] }` — a compact batch: response lane items (reactions, callbacks) first, then up to one message lane item. Voice messages arrive pre-transcribed. Returns `{ empty: true }` when no update is available within the timeout. `pending` is included when more updates are queued. |
 | `get_message` | Random-access lookup of a stored message by ID with optional version history. Returns text, caption, file metadata, and edit history. Only call for message IDs already known to this agent session. |
 
 ### Messaging
 
 | Tool | Description |
 | --- | --- |
+| `send_message` | Core send primitive — sends a message with an optional inline keyboard and returns immediately with a `message_id`. For persistent keyboards; button presses arrive via `dequeue_update`. |
+| `edit_message` | Core edit primitive — modifies an existing message by ID. Pass `text`, `keyboard`, or both. Pass `keyboard: null` to remove buttons. |
 | `send_text` | Sends a text message. Supports Markdown (default, auto-converted), MarkdownV2, HTML. Messages over 4096 chars are automatically split. |
 | `send_text_as_voice` | Synthesizes text to speech and sends it as a voice note. Requires `TTS_HOST` or `OPENAI_API_KEY`. All Markdown is stripped before synthesis. |
 | `send_file` | Sends a file (photo, document, video, audio, or voice) by local path, HTTPS URL, or Telegram `file_id`. Type is auto-detected by extension. |
@@ -83,6 +86,7 @@ Tools are grouped by abstraction level.
 | --- | --- |
 | `show_animation` | Starts a cycling placeholder message with configurable frames and interval. Single frame = static placeholder. Auto-cancels on timeout. |
 | `cancel_animation` | Stops the active animation. Without `text`: deletes the placeholder. With `text`: edits it into a permanent message. |
+| `set_default_animation` | Configures the session's default animation frames or registers named presets for `show_animation`. |
 
 ### Interaction primitives
 
@@ -108,7 +112,8 @@ Tools are grouped by abstraction level.
 
 | Tool | Description |
 | --- | --- |
-| `dump_session_record` | Sends the conversation timeline as a JSON file to the Telegram chat. Returns `{ message_id, event_count, file_id }`. Caption includes the file ID for crash recovery. Rolling 1000-event limit. Call only when the operator explicitly requests session history. |
+| `session_start` | Call once at session start. Sends an intro message, checks for pending messages from a previous session, and asks the operator whether to resume or start fresh. Returns `{ action, pending }`. |
+| `dump_session_record` | Sends the conversation timeline as a JSON file to the Telegram chat. Returns `{ message_id, event_count, file_id }`. Caption includes the file ID for crash recovery. Accepts optional `limit` (default 100, max 1000). Call only when the operator explicitly requests session history. |
 
 ### Server management
 
@@ -189,10 +194,13 @@ telegram-bridge-mcp/
 │       ├── ask.ts
 │       ├── choose.ts
 │       ├── confirm.ts
-        ├── send_new_checklist.ts
+│       ├── send_choice.ts
+│       ├── send_new_checklist.ts
 │       ├── dequeue_update.ts
 │       ├── get_message.ts
 │       ├── answer_callback_query.ts
+│       ├── send_message.ts
+│       ├── edit_message.ts
 │       ├── send_text.ts
 │       ├── send_text_as_voice.ts
 │       ├── send_file.ts
@@ -204,6 +212,7 @@ telegram-bridge-mcp/
 │       ├── show_typing.ts
 │       ├── show_animation.ts
 │       ├── cancel_animation.ts
+│       ├── set_default_animation.ts
 │       ├── download_file.ts
 │       ├── transcribe_voice.ts
 │       ├── set_topic.ts
@@ -211,6 +220,7 @@ telegram-bridge-mcp/
 │       ├── get_me.ts
 │       ├── get_chat.ts
 │       ├── set_reaction.ts
+│       ├── session_start.ts
 │       ├── dump_session_record.ts
 │       └── shutdown.ts
 ├── docs/
@@ -234,6 +244,6 @@ telegram-bridge-mcp/
 
 **Background poller with message store.** A single background `getUpdates` loop runs continuously (started in `index.ts`) and feeds all updates into an always-on message store (`message-store.ts`). Tools consume from the store via `dequeue_update` — no tool-level long-polling against the Telegram API. This separates update ingestion from update consumption and enables voice pre-transcription, random-access message lookup, and reliable queuing.
 
-**`dequeue_update` is the sole update-consumption tool.** It replaces the former `get_update`, `get_updates`, and `wait_for_message` tools. The response lane (reactions, callbacks) drains before the message lane on each call. `pending` tells the agent how many more items are queued.
+**`dequeue_update` is the sole update-consumption tool.** It replaces the former `get_update`, `get_updates`, `wait_for_message`, and `wait_for_callback_query` tools. The response lane (reactions, callbacks) drains before the message lane on each call. `pending` tells the agent how many more updates are queued (omitted when 0).
 
 **Structured errors over exceptions.** All Telegram API errors are classified into typed `TelegramErrorCode` values with actionable messages. The assistant can branch on `code` rather than parsing raw error strings.

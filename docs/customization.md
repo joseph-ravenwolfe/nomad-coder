@@ -191,7 +191,7 @@ This prevents cascading failures and keeps you in control.
 
 ## Voice-Driven Development
 
-All message-receiving tools (`wait_for_message`, `ask`, `choose`) support **automatic voice transcription** via local Whisper.
+All inbound voice messages are **automatically transcribed** via local Whisper before being delivered through `dequeue_update`. Voice arrives as `{ type: "voice", text: "..." }` — no special handling needed.
 
 **Workflow:**
 

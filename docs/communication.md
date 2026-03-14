@@ -2,7 +2,25 @@
 
 All agent communication goes through Telegram. The operator is on their phone — not watching the agent panel.
 
-MCP resources: `telegram-bridge-mcp://communication-guide` (full) · `telegram-bridge-mcp://quick-reference` (hard rules only)
+MCP resource: `telegram-bridge-mcp://communication-guide`
+
+---
+
+## Session Flow
+
+Every session follows this loop:
+
+1. **Announce** — send a brief `notify` that you're online and ready.
+2. **Call `dequeue_update`** — blocks up to 60 s waiting for the next update.
+3. **On receive** — work through the message handling pipeline:
+   a. **Voice message?** Set a *temporary* 👀 reaction immediately — signals to the human that you caught the message and are processing it.
+   b. **Show a thinking animation** — the human can see you're considering a plan.
+   c. **Once the action plan is clear**, switch to a working animation — signals you're now executing.
+   d. **When ready to reply**, call `show_typing` — signals your response is imminent.
+   e. **Send the reply.** Prefer `confirm` / `choose` for any decision; use `send_text_as_voice` if the operator prefers audio responses.
+4. **Loop** — go back to step 2.
+
+The thinking → working → `show_typing` pipeline gives the operator a live status signal at every stage. You don't have to use all three for short tasks — jumping straight to working or `show_typing` is fine. The key is to never go silent.
 
 ---
 
@@ -10,12 +28,11 @@ MCP resources: `telegram-bridge-mcp://communication-guide` (full) · `telegram-b
 
 1. **`confirm`** — all yes/no questions. Always buttons.
 2. **`choose`** — all multi-option questions. Always buttons.
-3. **`dequeue_update`** — all update waiting. Blocks up to timeout with `pending` count.
-4. **`reply_to_message_id`** — include on every reply to thread messages visually.
-5. **Commit/push** — get explicit operator approval first. Send a `notify` summary before committing.
-6. **`show_typing`** — call when you are actively composing a reply. This is the "I'm about to respond" signal — not a generic receipt acknowledgement. It tells the operator a response is imminent.
-7. **React 👀 immediately on voice messages.** Set 👀 the moment a voice message arrives (before transcription). For short text messages ("yes", "ok"), skip the reaction — `show_typing` is the acknowledgement. For longer text tasks, use a *temporary* 👀 (timeout ≤5s, restore_emoji: null) that auto-clears on your first outbound. Update 👀 to 🫡 or 👍 once work is complete; never leave it unresolved.
-8. **Drain before you speak** — before sending any message, drain pending updates with `dequeue_update(timeout=0)` until empty. Never talk over the operator; always hear them out first. Responding without draining makes it look like you dismissed what they said. When `pending > 0`, show a typing indicator while continuing to drain — the operator can see you're reading through their messages.
+3. **`dequeue_update`** — sole tool for receiving updates. Returns `{ updates: [...] }`: non-content events first, optionally ending with a content message.
+4. **Commit/push** — get explicit operator approval first. Send a `notify` summary before committing.
+5. **`show_typing`** — call when composing a reply. This is the "response is imminent" signal, not a generic receipt.
+6. **👀 on voice messages only — always temporary.** Set 👀 the moment a voice message arrives (before transcription). Pass `timeout_seconds ≤ 5` and omit `restore_emoji` so it auto-removes. Update to 🫡 or 👍 when done. For text messages, skip 👀 entirely — `show_typing` is the acknowledgement.
+7. **Watch `pending`.** A non-zero `pending` in the `dequeue_update` result means the operator has sent more messages while you were working. They may have changed their mind or added details. Consider calling `dequeue_update` once more before acting, to fold new context into your plan or queue it as the next task.
 
 ---
 
@@ -25,33 +42,81 @@ MCP resources: `telegram-bridge-mcp://communication-guide` (full) · `telegram-b
 | --- | --- |
 | Pure statement / preference | React (🫡 👍 👀 ❤) — no text reply |
 | Yes/No decision | `confirm` |
-| Fixed options | `choose` |
-| Open-ended input | `ask` |
+| Fixed options | `choose` (blocking, waits for tap) · `send_choice` (non-blocking) |
+| Open-ended input | `ask` (shortcut: send question + wait for reply) |
 | Short status (1–2 sentences) | `notify` |
-| Ephemeral placeholder ("Thinking…") | `show_animation` / `cancel_animation` |
+| Thinking / considering | `show_animation` (thinking preset) |
+| Executing / working | `show_animation` (working preset) |
+| Response is imminent | `show_typing` |
+| Cancel an animation | `cancel_animation` |
 | Structured result / explanation | `send_text` (Markdown) |
+| Simple plain-english reply (if preferred) | `send_text_as_voice` |
 | Build / deploy / error event | `notify` with severity |
-| Multi-step task (3+ steps) | `send_new_checklist` checklist |
+| Multi-step task (3+ steps) | `send_new_checklist` + `pin_message` |
+| Completed work / ready to proceed | `confirm` (single-button CTA, no `no_text`) |
 
 ---
 
 ## Reactions
 
 ```txt
-👀 = I'm processing this right now (set IMMEDIATELY on receive — the "eyes are on it" signal)
-🫡 = got it / acknowledged / understood (receipt of a simple statement or instruction)
+👀 = "I caught this message and am processing it" — set on voice messages only; always temporary
+🫡 = got it / acknowledged / understood
 👍 = task complete / confirmed done
 ❤  = great / love it
 ```
 
-**Lifecycle pattern:** React 👀 the moment you receive a message — this is the first thing you do, before any processing. Once you've responded or completed work, update the reaction to 🫡 (acknowledgement) or 👍 (task done). This gives the operator a live status indicator: 👀 = still in progress, resolved emoji = done.
+**What 👀 means to humans:** it signals that your eyes are on a specific message — you've caught up to it and are actively processing it. It's too static to mean "thinking"; it means "received and in progress." Because of this weight, use it sparingly:
 
-**👀 on text vs voice messages:**
-- **Voice messages** — set 👀 immediately; it stays while transcribing; update to 🫡 when done. The processing genuinely takes time so the 👀 is meaningful.
-- **Short text messages** ("yes", "proceed", "ok") — skip 👀 entirely. `show_typing` is the acknowledgement; you're already responding. A permanent 👀 on a "yes" looks like you're permanently staring at the message.
-- **Longer text tasks** — set 👀 as a *temporary* reaction (`restore_emoji: null`, `timeout_seconds ≤ 5`) so it auto-clears on your next outbound or within 5 seconds, whichever comes first.
+- **Voice messages** — set 👀 immediately as a *temporary* reaction (omit `restore_emoji`, set `timeout_seconds ≤ 5`). It auto-clears so it doesn't linger after you've responded.
+- **Text messages** — skip 👀 entirely. `show_typing` is the acknowledgement for text.
+- **You may use 👀 on other messages** if the situation genuinely warrants it (e.g., a long multi-part request). But always make it temporary and always resolve it to 🫡 or 👍.
 
-`show_typing` = I'm composing a reply right now — use this when a text response is imminent, not as a generic "received" signal. The order should be: receive → (👀 only if voice or long task) → do work → `show_typing` → send reply → update reaction to 🫡/👍.
+`show_typing` = response is imminent — not a generic "received" signal. Call it just before you send. The full pipeline: receive → (👀 if voice) → think → work → `show_typing` → send → update reaction to 🫡/👍.
+
+---
+
+## Button Design
+
+Humans strongly prefer tapping a button over typing a reply. When a decision is needed, always use buttons.
+
+**Color (`primary`, `success`, `danger`, no style)**
+
+- `primary` (blue) is the recommended emphasis color for the expected or positive action — use it to guide the operator's eye.
+- The default unstyled button is not always positive — you decide which action deserves `primary` based on context.
+- For a genuinely unbiased A/B choice where neither option is preferred, use no color on either button.
+- Avoid applying `primary` to both buttons — it defeats the purpose.
+
+**Symbols and icons**
+
+- Symbols/unicode icons in button labels are strongly encouraged — they add clarity at a glance.
+- **All-or-nothing rule:** if any button in a set has a symbol or emoji, all buttons in that set must have one.
+- Emojis (e.g. 🟢 🔴) only belong in *unstyled* buttons — they clash visually with colored buttons. Use plain text + icon characters (e.g. `✓ Yes`, `✗ No`) when a style is applied.
+
+**Single-button CTA**
+
+Pass an empty string to `no_text` on `confirm` to render a single centered button — ideal for "done / continue" moments.
+
+---
+
+## `dequeue_update` and the Pending Queue
+
+`dequeue_update` is the sole tool for receiving updates. Each call returns `{ updates: [...] }`: non-content events (reactions, callback queries) come first, optionally followed by a content message from the operator.
+
+```text
+Normal loop:
+  loop:
+    result = dequeue_update()          # blocks up to 60 s
+    handle result
+    goto loop
+
+On timeout ({ empty: true }):
+  call dequeue_update() again immediately — this is normal idle behavior.
+```
+
+**The `pending` field is a warning.** When `pending > 0`, the operator has sent more messages while you were working — they may have changed their mind, added details, or cancelled the task. Before acting on your current plan, consider calling `dequeue_update` once more to check. You can fold the new context into your current plan or treat it as the next task after you finish.
+
+Never assume silence means approval. If unsure whether to proceed, ask via `confirm` and wait.
 
 ---
 
@@ -73,7 +138,7 @@ Prefer the **quiet Unicode symbol** over the emoji version unless you need to si
 | Strong positive completion | ✅ (emoji) | — |
 | Strong negative / warning | ❌ (emoji) | — |
 
-The ✅/❌ emoji carry high visual weight — they're right for one-off confirmations and final results, but feel loud when used repeatedly.  
+The ✅/❌ emoji carry high visual weight — they're right for one-off confirmations and final results, but feel loud when used repeatedly.
 The ✓/✗ characters read as a natural part of text and work well inside button labels, checklist items, inline status notes, and anywhere the context already provides enough emphasis.
 
 ---
@@ -140,7 +205,7 @@ Call `dequeue_update` again after every task, timeout, or error — loop forever
 Only `exit` from the operator ends the loop.  
 When unsure whether to stop, ask via Telegram and wait for the operator's answer.
 
-On timeout (`{ timed_out: true }`): call `dequeue_update` again immediately. Normal idle behavior.
+On timeout (`{ empty: true }`): call `dequeue_update` again immediately. Normal idle behavior.
 
 ---
 

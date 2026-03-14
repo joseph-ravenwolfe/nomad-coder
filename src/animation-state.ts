@@ -199,10 +199,11 @@ export async function startAnimation(
   let messageId: number;
   if (_state) {
     clearTimers();
-    messageId = _state.messageId;
+    const state = _state; // capture before try — TS can't narrow through function calls
+    messageId = state.messageId;
     try {
       await bypassProxy(() =>
-        getRawApi().editMessageText(_state!.chatId, messageId, firstFrame, { parse_mode: parseMode }),
+        getRawApi().editMessageText(state.chatId, messageId, firstFrame, { parse_mode: parseMode }),
       );
     } catch {
       // Edit failed (message gone?) — fall back to creating a new one

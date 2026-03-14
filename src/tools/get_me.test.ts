@@ -10,15 +10,15 @@ vi.mock("../telegram.js", async (importActual) => {
 
 vi.mock("module", async (importActual) => {
   const actual = await importActual<typeof import("module")>();
-  return {
-    ...actual,
+  const mod = Object.assign(Object.create(null) as object, actual);
+  return Object.assign(mod, {
     createRequire: () => (path: string) => {
       if (path.endsWith("package.json")) return { version: "0.0.0-test" };
       if (path.endsWith("build-info.json"))
         return { BUILD_COMMIT: "t3stc0mm", BUILD_TIME: "2025-01-01T00:00:00.000Z" };
       throw new Error(`Unexpected require: ${path}`);
     },
-  };
+  });
 });
 
 import { register } from "./get_me.js";

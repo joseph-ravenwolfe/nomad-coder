@@ -21,7 +21,7 @@ export function register(server: McpServer) {
       setImmediate(() => {
         stopPoller();
         const notifyShutdown = Promise.race([
-          sendServiceMessage("⛔️ Shutting down…").catch((e) => { process.stderr.write(`[shutdown] sendServiceMessage error: ${e}\n`); }),
+          sendServiceMessage("⛔️ Shutting down…").catch((e: unknown) => { process.stderr.write(`[shutdown] sendServiceMessage error: ${String(e)}\n`); }),
           new Promise<void>((r) => setTimeout(r, 5000)),
         ]);
         void notifyShutdown.finally(() => clearCommandsOnShutdown().finally(() => process.exit(0)));

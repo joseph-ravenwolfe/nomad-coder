@@ -96,7 +96,7 @@ export function register(server: McpServer) {
           await Promise.race([
             waitForEnqueue(),
             new Promise<void>((r) => setTimeout(r, Math.min(remaining, 5000))),
-            new Promise<void>((r) => { if (signal.aborted) r(); else signal.addEventListener("abort", () => r(), { once: true }); }),
+            new Promise<void>((r) => { if (signal.aborted) r(); else signal.addEventListener("abort", () => { r(); }, { once: true }); }),
           ]);
         }
 

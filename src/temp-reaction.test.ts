@@ -55,12 +55,12 @@ describe("temp-reaction", () => {
     expect(hasTempReaction()).toBe(false);
   });
 
-  it("leaves reaction in place when no restore_emoji and no previous reaction recorded", async () => {
-    await setTempReaction(100, "👀");
+  it("clears reaction when no restore_emoji and no previous reaction recorded", async () => {
+    await setTempReaction(100, "\uD83D\uDC40");
     await fireTempReactionRestore();
-    // Only the initial set call; no restore/remove call
+    // Initial set + clear (empty array via setMessageReaction)
     expect(mocks.trySetMessageReaction).toHaveBeenCalledTimes(1);
-    expect(mocks.setMessageReaction).not.toHaveBeenCalled();
+    expect(mocks.setMessageReaction).toHaveBeenCalledWith(42, 100, []);
     expect(hasTempReaction()).toBe(false);
   });
 
@@ -95,11 +95,11 @@ describe("temp-reaction", () => {
     expect(mocks.setMessageReaction).not.toHaveBeenCalled();
   });
 
-  it("leaves reaction in place if no previous reaction recorded and no restore_emoji", async () => {
+  it("clears reaction if no previous reaction recorded and no restore_emoji", async () => {
     mocks.getBotReaction.mockReturnValue(null);
-    await setTempReaction(100, "👀");
+    await setTempReaction(100, "\uD83D\uDC40");
     await fireTempReactionRestore();
-    expect(mocks.setMessageReaction).not.toHaveBeenCalled();
+    expect(mocks.setMessageReaction).toHaveBeenCalledWith(42, 100, []);
     expect(hasTempReaction()).toBe(false);
   });
 });

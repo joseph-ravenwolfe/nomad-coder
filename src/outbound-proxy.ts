@@ -11,7 +11,7 @@
  */
 
 import type { Api } from "grammy";
-import { cancelTyping, typingGeneration, cancelTypingIfSameGeneration } from "./typing-state.js";
+import { typingGeneration, cancelTypingIfSameGeneration } from "./typing-state.js";
 import { clearPendingTemp } from "./temp-message.js";
 import { recordOutgoing } from "./message-store.js";
 import { fireTempReactionRestore } from "./temp-reaction.js";
