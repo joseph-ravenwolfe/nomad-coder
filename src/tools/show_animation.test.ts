@@ -49,7 +49,7 @@ describe("show_animation tool", () => {
     expect(mocks.startAnimation).toHaveBeenCalledWith(
       undefined,
       1000,
-      120,
+      600,
       false,
       false,
     );
@@ -79,7 +79,7 @@ describe("show_animation tool", () => {
     expect(mocks.startAnimation).toHaveBeenCalledWith(
       ["thinking.", "thinking..", "thinking..."],
       1000,
-      120,
+      600,
       false,
       false,
     );
@@ -92,7 +92,7 @@ describe("show_animation tool", () => {
     expect(mocks.startAnimation).toHaveBeenCalledWith(
       ["preset."],
       1000,
-      120,
+      600,
       false,
       false,
     );
@@ -123,7 +123,7 @@ describe("show_animation tool", () => {
     expect(mocks.startAnimation).toHaveBeenCalledWith(
       undefined,
       1000,
-      120,
+      600,
       true,
       false,
     );

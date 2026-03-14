@@ -160,7 +160,7 @@ async function cycleFrame(): Promise<void> {
 export async function startAnimation(
   frames: string[] = [...getDefaultFrames()],
   intervalMs = 1000,
-  timeoutSeconds = 120,
+  timeoutSeconds = 600,
   persistent = false,
   allowBreakingSpaces = false,
 ): Promise<number> {

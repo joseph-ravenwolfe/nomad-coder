@@ -44,8 +44,8 @@ export function register(server: McpServer) {
           .int()
           .min(5)
           .max(600)
-          .default(120)
-          .describe("Seconds of inactivity before auto-cleanup (default 120, max 600)"),
+          .default(600)
+          .describe("Seconds of inactivity before auto-cleanup (default 600, max 600)"),
         persistent: z
           .boolean()
           .default(false)
