@@ -111,6 +111,20 @@ const FILE_METHODS: Record<string, string> = {
   sendDocument: "document",
 };
 
+/** Extract file_id from a Grammy send response based on content type. */
+function extractFileId(msg: Record<string, unknown>, contentType: string): string | undefined {
+  try {
+    if (contentType === "photo") {
+      const photos = msg.photo as Array<{ file_id?: string }> | undefined;
+      return photos?.[photos.length - 1]?.file_id;
+    }
+    const media = msg[contentType] as { file_id?: string } | undefined;
+    return media?.file_id;
+  } catch {
+    return undefined;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Proxy factory
 // ---------------------------------------------------------------------------
@@ -191,7 +205,10 @@ export function createOutboundProxy(realApi: Api): Api {
             // Extract caption for recording
             const optsArg = args[2] as Record<string, unknown> | undefined;
             const caption = optsArg?.caption as string | undefined;
-            recordOutgoing(msg.message_id, fileContentType, undefined, caption);
+
+            // Extract file_id from the response (Grammy returns the full Message)
+            const fileId = extractFileId(msg, fileContentType);
+            recordOutgoing(msg.message_id, fileContentType, undefined, caption, fileId);
 
             return msg;
           } finally {

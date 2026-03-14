@@ -189,7 +189,7 @@ describe("outbound-proxy", () => {
       expect(mocks.cancelTypingIfSameGeneration).toHaveBeenCalledOnce();
       expect(mocks.clearPendingTemp).toHaveBeenCalledOnce();
       expect(mocks.recordOutgoing).toHaveBeenCalledWith(
-        msgId, contentType, undefined, undefined,
+        msgId, contentType, undefined, undefined, undefined,
       );
     });
 
@@ -201,7 +201,7 @@ describe("outbound-proxy", () => {
       );
 
       expect(mocks.recordOutgoing).toHaveBeenCalledWith(
-        2, "photo", undefined, "My caption",
+        2, "photo", undefined, "My caption", undefined,
       );
     });
 

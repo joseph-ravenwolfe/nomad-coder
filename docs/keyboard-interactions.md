@@ -12,7 +12,7 @@ Understanding the hierarchy prevents choosing the wrong tool and guides future A
 | `send_message(keyboard?)` | No | No | Fire & stream — buttons persist until explicitly removed |
 | `send_choice(options)` | No | Yes | Fire & one-shot — auto-locks on first press |
 | `choose(options)` | Yes | Yes | Send + wait + return value |
-| `send_confirmation(...)` | Yes | Yes | `choose` specialised for yes/no |
+| `confirm(...)` | Yes | Yes | `choose` specialised for yes/no |
 
 ### Key insight: `send` vs `choose`
 
@@ -30,7 +30,7 @@ spinner. Subsequent presses are ignored.
 send_message(keyboard?)         ← Level 1 — raw send, no wait, no lock
   └── send_choice(options)      ← Level 2 — raw send + auto-lock on first press
         └── choose(options)     ← Level 3 — send_choice + internal wait + return value
-              └── send_confirmation  ← Level 4 — choose specialised for yes/no
+              └── confirm            ← Level 4 — choose specialised for yes/no
 ```
 
 `choose` is essentially `send_choice` + a blocking `dequeue_update` loop that waits for
@@ -79,7 +79,7 @@ Examples:
 - Multi-step questionnaires where each answer determines the next question
 - Any point where branching logic depends on user input
 
-### `send_confirmation`
+### `confirm`
 
 A specialised `choose` for exactly two options (yes/no, proceed/cancel). Use it instead of
 `choose` when the choice is binary — the description is clearer and the layout is consistent.

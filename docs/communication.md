@@ -8,7 +8,7 @@ MCP resources: `telegram-bridge-mcp://communication-guide` (full) · `telegram-b
 
 ## Hard Rules
 
-1. **`send_confirmation`** — all yes/no questions. Always buttons.
+1. **`confirm`** — all yes/no questions. Always buttons.
 2. **`choose`** — all multi-option questions. Always buttons.
 3. **`dequeue_update`** — all update waiting. Blocks up to timeout with `pending` count.
 4. **`reply_to_message_id`** — include on every reply to thread messages visually.
@@ -24,7 +24,7 @@ MCP resources: `telegram-bridge-mcp://communication-guide` (full) · `telegram-b
 | Situation | Tool |
 | --- | --- |
 | Pure statement / preference | React (🫡 👍 👀 ❤) — no text reply |
-| Yes/No decision | `send_confirmation` |
+| Yes/No decision | `confirm` |
 | Fixed options | `choose` |
 | Open-ended input | `ask` |
 | Short status (1–2 sentences) | `notify` |
@@ -104,7 +104,7 @@ Before any significant state-changing operation, briefly state what you're about
 | Build / compile | `send_text` "Building now — ~10s…" |
 | Restart server | `send_text` "Restarting server…" |
 | Delete files | `send_text` "Deleting X…" |
-| Destructive / irreversible | `send_confirmation` — require explicit approval first |
+| Destructive / irreversible | `confirm` — require explicit approval first |
 
 This keeps the operator's eyes on what's happening. A brief heads-up before a restart or push means they won't be surprised when the bot goes quiet for a few seconds. It's not a formal gate — just transparency.
 

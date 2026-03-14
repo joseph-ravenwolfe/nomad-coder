@@ -153,7 +153,7 @@ The MCP overhead is real but modest for sessions longer than a few turns. The br
 
 1. **One outbound tool call per agent turn.** Don’t chain `show_typing` → `send_text` → `set_reaction` unless each is genuinely needed. Each call adds ~100–200 tokens to the permanent context.
 
-2. **Use `send_confirmation` / `choose` instead of `ask`** when the answer space is known. Button responses are shorter than typed text, reducing the result payload.
+2. **Use `confirm` / `choose` instead of `ask`** when the answer space is known. Button responses are shorter than typed text, reducing the result payload.
 
 3. **Use `dequeue_update` instead of deprecated polling tools.** V3 consolidates all polling into one tool with compact output format. The `pending` count lets the agent decide whether to dequeue again without wasting tokens.
 

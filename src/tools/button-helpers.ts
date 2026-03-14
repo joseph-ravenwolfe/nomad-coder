@@ -1,5 +1,5 @@
 /**
- * Shared helpers for button-based interaction tools (choose, send_choice, send_confirmation).
+ * Shared helpers for button-based interaction tools (choose, send_choice, confirm).
  */
 
 import { getApi, ackVoiceMessage } from "../telegram.js";
@@ -56,7 +56,7 @@ export type ButtonStyle = "success" | "primary" | "danger";
 
 /**
  * Wait for a callback_query on a specific message from the store queue.
- * Used by send_confirmation (button-only response expected).
+ * Used by confirm (button-only response expected).
  */
 export async function pollButtonPress(
   _chatId: number,
@@ -85,7 +85,7 @@ export async function pollButtonPress(
     await Promise.race([
       waitForEnqueue(),
       new Promise<void>((r) => setTimeout(r, Math.min(remaining, 5000))),
-      ...(signal ? [new Promise<void>((r) => { if (signal.aborted) r(); else signal.addEventListener("abort", () => r(), { once: true }); })] : []),
+      ...(signal ? [new Promise<void>((r) => { if (signal.aborted) { r(); } else { signal.addEventListener("abort", () => { r(); }, { once: true }); } })] : []),
     ]);
   }
   return null;
@@ -111,7 +111,7 @@ export async function pollButtonOrTextOrVoice(
 
   while (Date.now() < deadline) {
     if (signal?.aborted) return null;
-    let hasPendingVoice = false;
+    const state = { hasPendingVoice: false };
 
     const result = dequeueMatch((event: TimelineEvent) => {
       // Check for callback on the specific message
@@ -132,7 +132,7 @@ export async function pollButtonOrTextOrVoice(
           // Don't consume until transcription is complete (two-phase recording)
           if (!event.content.text) {
             // Voice arrived but transcription not yet done — flag for immediate edit
-            hasPendingVoice = true;
+            state.hasPendingVoice = true;
             return undefined;
           }
           ackVoiceMessage(event.id);
@@ -155,7 +155,7 @@ export async function pollButtonOrTextOrVoice(
     });
 
     // Fire onVoiceDetected once as soon as a voice message is seen (pre-transcription)
-    if (hasPendingVoice && !voiceDetectedFired) {
+    if (state.hasPendingVoice && !voiceDetectedFired) {
       voiceDetectedFired = true;
       onVoiceDetected?.();
     }
@@ -168,7 +168,7 @@ export async function pollButtonOrTextOrVoice(
     await Promise.race([
       waitForEnqueue(),
       new Promise<void>((r) => setTimeout(r, Math.min(remaining, 5000))),
-      ...(signal ? [new Promise<void>((r) => { if (signal.aborted) r(); else signal.addEventListener("abort", () => r(), { once: true }); })] : []),
+      ...(signal ? [new Promise<void>((r) => { if (signal.aborted) { r(); } else { signal.addEventListener("abort", () => { r(); }, { once: true }); } })] : []),
     ]);
   }
   return null;
@@ -213,7 +213,7 @@ export async function ackAndEditSelection(
 
 /**
  * Edits the host message to show ⏱ Timed out with all buttons removed.
- * Used by send_confirmation when no button was pressed within the timeout.
+ * Used by confirm when no button was pressed within the timeout.
  */
 export async function editWithTimedOut(
   chatId: number,

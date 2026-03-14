@@ -17,7 +17,7 @@ const DESCRIPTION =
 
 export function register(server: McpServer) {
   server.registerTool(
-    "send_confirmation",
+    "confirm",
     {
       description: DESCRIPTION,
       inputSchema: {
@@ -93,14 +93,14 @@ export function register(server: McpServer) {
           const confirmed = evt.content.data === yes_data;
           const chosenLabel = confirmed ? yes_text : no_text;
           void ackAndEditSelection(chatId, sent.message_id, text, chosenLabel, evt.content.qid)
-            .catch((e: unknown) => process.stderr.write(`[warn] send_confirmation hook failed: ${e}\n`));
+            .catch((e: unknown) => process.stderr.write(`[warn] confirm hook failed: ${String(e)}\n`));
         });
 
         // Fires immediately when a voice message is detected (before transcription).
         // This removes the keyboard right away so the user doesn't see a delayed edit.
-        let skippedEditDone = false;
+        const editState = { done: false };
         const onVoiceDetected = () => {
-          skippedEditDone = true;
+          editState.done = true;
           clearCallbackHook(sent.message_id);
           editWithSkipped(chatId, sent.message_id, text).catch(() => {/* non-fatal */});
         };
@@ -115,7 +115,7 @@ export function register(server: McpServer) {
         // User typed or spoke instead of pressing a button — mark as skipped
         if (result.kind === "text" || result.kind === "voice") {
           clearCallbackHook(sent.message_id);
-          if (!skippedEditDone) await editWithSkipped(chatId, sent.message_id, text);
+          if (!editState.done) await editWithSkipped(chatId, sent.message_id, text);
           return toResult({
             skipped: true,
             text_response: result.text,

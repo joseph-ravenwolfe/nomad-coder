@@ -1,16 +1,16 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { toError } from "../telegram.js";
+import { getApi, resolveChat, toError } from "../telegram.js";
 import { dumpTimeline, timelineSize, storeSize } from "../message-store.js";
+import { getSessionLogMode } from "../config.js";
 
 const DESCRIPTION =
-  "Returns the full conversation timeline as compact JSON — all inbound and outbound " +
-  "events since server start (rolling limit of 1000 events), including user messages, " +
-  "voice transcriptions, file metadata, locations, and contacts. " +
+  "Snapshots the conversation timeline as a JSON file and sends it to the Telegram chat " +
+  "as a downloadable document. The file will appear as a bot message that both the user " +
+  "and agent can download later via download_file. " +
+  "Covers all inbound and outbound events since server start (rolling limit of 1000 events). " +
   "This is a broad history dump containing sensitive user content. " +
-  "Only call when the user explicitly requests session history, context recovery, or an audit. " +
-  "Do not call speculatively or to discover prior context without user consent. " +
-  "Use limit to control output size.";
+  "Only call when the user explicitly requests session history, context recovery, or an audit.";
 
 export function register(server: McpServer) {
   server.registerTool(
@@ -27,18 +27,71 @@ export function register(server: McpServer) {
           .describe("Max events to return (most recent). Default 100."),
       },
     },
-    ({ limit }) => {
+    async ({ limit }) => {
       try {
+        if (getSessionLogMode() === null) {
+          return {
+            content: [{
+              type: "text" as const,
+              text: "Session log is disabled. Use /session in Telegram to enable it.",
+            }],
+          };
+        }
+
+        const chatId = resolveChat();
+        if (typeof chatId !== "number") {
+          return { content: [{ type: "text" as const, text: "No chat configured." }] };
+        }
+
         const full = dumpTimeline();
         const timeline = full.length > limit ? full.slice(-limit) : full;
-        const summary = {
+
+        if (timeline.length === 0) {
+          return { content: [{ type: "text" as const, text: "No events captured yet." }] };
+        }
+
+        const now = new Date().toISOString();
+        const payload = {
+          generated: now,
           timeline_events: timelineSize(),
           unique_messages: storeSize(),
           returned: timeline.length,
           truncated: full.length > limit,
+          timeline,
         };
+
+        const { InputFile } = await import("grammy");
+        const buf = Buffer.from(JSON.stringify(payload, null, 2), "utf-8");
+        const file = new InputFile(buf, `session-log-${now.replace(/[:.]/g, "-")}.json`);
+        const label = `📼 Session log · ${timeline.length} events`;
+        const api = getApi();
+        const msg = await api.sendDocument(chatId, file, {
+          caption: label,
+        }) as { message_id: number; document?: { file_id?: string } };
+
+        const fileId = msg.document?.file_id;
+
+        // Amend caption with file_id so it's recoverable after a crash
+        if (fileId) {
+          try {
+            await api.editMessageCaption(chatId, msg.message_id, {
+              caption: `${label}\nFile ID: \`${fileId}\``,
+              parse_mode: "Markdown",
+            });
+          } catch { /* best effort */ }
+        }
+
+        const result: Record<string, unknown> = {
+          message_id: msg.message_id,
+          event_count: timeline.length,
+        };
+        if (fileId) result.file_id = fileId;
+
         return {
-          content: [{ type: "text" as const, text: JSON.stringify({ summary, timeline }) }],
+          content: [{
+            type: "text" as const,
+            text: JSON.stringify(result),
+          }],
         };
       } catch (err) {
         return toError(err);

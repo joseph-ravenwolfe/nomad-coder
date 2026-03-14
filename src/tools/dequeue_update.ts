@@ -2,7 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { toResult, ackVoiceMessage } from "../telegram.js";
 import {
-  dequeue, pendingCount, waitForEnqueue,
+  dequeueBatch, pendingCount, waitForEnqueue,
   type TimelineEvent,
 } from "../message-store.js";
 
@@ -18,12 +18,18 @@ function compactEvent(event: TimelineEvent): Record<string, unknown> {
   return rest;
 }
 
+/** Compact a batch of events for the response. */
+function compactBatch(events: TimelineEvent[]): Record<string, unknown>[] {
+  return events.map(compactEvent);
+}
+
 const DESCRIPTION =
-  "Consume the next update from the queue. Response lane (reactions, callbacks) " +
-  "drains before message lane (new messages, commands, media). " +
+  "Consume queued updates in a single batch. Non-content events (reactions, " +
+  "callbacks) are drained first, then up to one content event (user message " +
+  "with text, media, or voice) is appended. Returns an array of compact " +
+  "events: [{ id, event, from, content }, ...]. " +
   "Voice messages arrive pre-transcribed as { type: \"voice\", text: \"...\" }. " +
-  "pending > 0 means more updates are queued — call again before blocking. " +
-  "Returns compact format: { id, event, from, content }. " +
+  "pending > 0 means more updates are queued — call again. " +
   "Two modes: omit timeout (default 60 s) to block until an update arrives; " +
   "pass timeout: 0 for an instant non-blocking poll (use only for startup drain loops).";
 
@@ -43,12 +49,12 @@ export function register(server: McpServer) {
       },
     },
     async ({ timeout }, { signal }) => {
-      // Try immediate dequeue
-      let event = dequeue();
-      if (event) {
-        ackVoice(event);
+      // Try immediate batch dequeue
+      let batch = dequeueBatch();
+      if (batch.length > 0) {
+        for (const evt of batch) ackVoice(evt);
         const pending = pendingCount();
-        const result = compactEvent(event);
+        const result: Record<string, unknown> = { updates: compactBatch(batch) };
         if (pending > 0) result.pending = pending;
         return toResult(result);
       }
@@ -67,14 +73,14 @@ export function register(server: McpServer) {
         await Promise.race([
           waitForEnqueue(),
           new Promise<void>((r) => setTimeout(r, remaining)),
-          new Promise<void>((r) => { if (signal.aborted) r(); else signal.addEventListener("abort", () => r(), { once: true }); }),
+          new Promise<void>((r) => { if (signal.aborted) { r(); } else { signal.addEventListener("abort", () => { r(); }, { once: true }); } }),
         ]);
 
-        event = dequeue();
-        if (event) {
-          ackVoice(event);
+        batch = dequeueBatch();
+        if (batch.length > 0) {
+          for (const evt of batch) ackVoice(evt);
           const pending = pendingCount();
-          const result = compactEvent(event);
+          const result: Record<string, unknown> = { updates: compactBatch(batch) };
           if (pending > 0) result.pending = pending;
           return toResult(result);
         }

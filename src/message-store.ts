@@ -140,6 +140,14 @@ let _highestMessageId = 0;
 /** Per-message bot reaction index — tracks the current bot reaction for restore. */
 let _botReactionIndex = new Map<number, string>();
 
+/** Optional callback fired after every timeline push. Used by auto-dump. */
+let _onEventCallback: ((timelineSize: number) => void) | null = null;
+
+/** Register a callback that fires after every timeline event push. */
+export function setOnEvent(callback: ((timelineSize: number) => void) | null): void {
+  _onEventCallback = callback;
+}
+
 /** Two-lane queue — response lane items drain before message lane. */
 const _responseLane = new SimpleQueue<QueueItem>();
 const _messageLane = new SimpleQueue<QueueItem>();
@@ -217,6 +225,7 @@ function pushEvent(event: TimelineEvent): void {
   const versions = getOrCreateVersions(event.id);
   versions.set(CURRENT, event);
   if (event.id > _highestMessageId) _highestMessageId = event.id;
+  if (_onEventCallback) _onEventCallback(_timeline.length);
 }
 
 // ---------------------------------------------------------------------------
@@ -430,6 +439,7 @@ export function recordOutgoing(
   contentType: string,
   text?: string,
   caption?: string,
+  fileId?: string,
 ): void {
   recordBotMessage({
     message_id: messageId,
@@ -437,12 +447,16 @@ export function recordOutgoing(
     text,
     caption,
   });
+  const content: EventContent = { type: contentType };
+  if (text !== undefined) content.text = text;
+  if (caption !== undefined) content.caption = caption;
+  if (fileId !== undefined) content.file_id = fileId;
   const evt: TimelineEvent = {
     id: messageId,
     timestamp: now(),
     event: "sent",
     from: "bot",
-    content: { type: contentType, text, caption },
+    content,
   };
   pushEvent(evt);
 }
@@ -541,6 +555,31 @@ export function dequeue(): TimelineEvent | undefined {
   return item?.event;
 }
 
+/**
+ * Batch dequeue: drain all ready response-lane items (reactions, callbacks)
+ * then include up to one ready message-lane item (user message with content).
+ * Returns an empty array when nothing is available.
+ */
+export function dequeueBatch(): TimelineEvent[] {
+  const batch: TimelineEvent[] = [];
+
+  // Drain response lane (non-content events)
+  let resp: QueueItem | undefined;
+  while ((resp = _dequeueReady(_responseLane)) !== undefined) {
+    _consumedMessageIds.add(resp.event.id);
+    batch.push(resp.event);
+  }
+
+  // Include up to one content event from the message lane
+  const msg = _dequeueReady(_messageLane);
+  if (msg) {
+    _consumedMessageIds.add(msg.event.id);
+    batch.push(msg.event);
+  }
+
+  return batch;
+}
+
 /** Dequeue the first item that is NOT a voice-pending-transcription. */
 function _dequeueReady(lane: SimpleQueue<QueueItem>): QueueItem | undefined {
   const items = lane.dump();
@@ -564,7 +603,7 @@ function _isReady(item: QueueItem): boolean {
 /**
  * Finds and removes the first queued item matching the predicate.
  * Checks response lane first, then message lane.
- * Used by compound tools (ask, choose, send_confirmation) to consume
+ * Used by compound tools (ask, choose, confirm) to consume
  * a specific callback/message from the queue.
  */
 export function dequeueMatch<T>(
@@ -666,6 +705,21 @@ export function dumpTimeline(): Array<Omit<TimelineEvent, "_update">> {
   return _timeline.map(({ _update: _, ...rest }) => rest);
 }
 
+/**
+ * Returns timeline events from `cursor` onward (0-based index into
+ * the internal array) plus the new cursor for the next call.
+ * Used by auto-dump to capture only events since the last dump.
+ * If the timeline was evicted past the cursor, returns all current events.
+ */
+export function dumpTimelineSince(cursor: number): {
+  events: Array<Omit<TimelineEvent, "_update">>;
+  nextCursor: number;
+} {
+  const start = Math.max(0, Math.min(cursor, _timeline.length));
+  const events = _timeline.slice(start).map(({ _update: _, ...rest }) => rest);
+  return { events, nextCursor: _timeline.length };
+}
+
 /** Number of events currently in the timeline. */
 export function timelineSize(): number {
   return _timeline.length;
@@ -714,6 +768,7 @@ export function resetStoreForTest(): void {
   _callbackHooks.clear();
   _botReactionIndex.clear();
   _consumedMessageIds.clear();
+  _onEventCallback = null;
 }
 
 /** Register a one-shot auto-lock hook for a send_choice message. */

@@ -42,7 +42,7 @@ vi.mock("./button-helpers.js", async (importActual) => {
   };
 });
 
-import { register } from "./send_confirmation.js";
+import { register } from "./confirm.js";
 
 const SENT_MSG = { message_id: 5, chat: { id: 42 }, date: 0 };
 
@@ -50,7 +50,7 @@ function makeButtonResult(data: string): ButtonResult {
   return { kind: "button", callback_query_id: "cq1", data, message_id: 5 };
 }
 
-describe("send_confirmation tool", () => {
+describe("confirm tool", () => {
   let call: (args: Record<string, unknown>) => Promise<unknown>;
 
   beforeEach(() => {
@@ -59,7 +59,7 @@ describe("send_confirmation tool", () => {
     mocks.editWithSkipped.mockResolvedValue(undefined);
     const server = createMockServer();
     register(server);
-    call = server.getHandler("send_confirmation");
+    call = server.getHandler("confirm");
   });
 
   it("returns confirmed:true when Yes is pressed", async () => {

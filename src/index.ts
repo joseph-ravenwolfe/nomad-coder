@@ -6,9 +6,11 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { createServer } from "./server.js";
 import { getSecurityConfig, getApi, resolveChat, installOutboundProxy, sendServiceMessage } from "./telegram.js";
 import { clearCommandsOnShutdown } from "./shutdown.js";
-import { BUILT_IN_COMMANDS } from "./built-in-commands.js";
-import { startPoller, stopPoller } from "./poller.js";
+import { BUILT_IN_COMMANDS, applySessionLogConfig, doTimelineDump } from "./built-in-commands.js";
+import { startPoller, stopPoller, drainPendingUpdates, waitForPollerExit } from "./poller.js";
 import { createOutboundProxy } from "./outbound-proxy.js";
+import { loadConfig, getSessionLogMode, sessionLogLabel } from "./config.js";
+import { timelineSize } from "./message-store.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(join(__dirname, "..", "package.json"), "utf-8")) as { name: string; version: string };
@@ -16,6 +18,9 @@ process.stderr.write(`[info] [${pkg.name}] v${pkg.version} starting...\n`);
 
 // Initialize security config early so warnings surface at startup
 getSecurityConfig();
+
+// Load persistent MCP config
+loadConfig();
 
 // Warn if TTS/STT remote hosts are using plain HTTP (credentials and audio exposed in transit)
 if (process.env.TTS_HOST && !process.env.TTS_HOST.startsWith("https://")) {
@@ -32,11 +37,23 @@ for (const sig of ["SIGTERM", "SIGINT"] as const) {
     if (_shuttingDown) return;
     _shuttingDown = true;
     stopPoller();
-    const notifyOffline = Promise.race([
-      sendServiceMessage("🔴 Offline").catch((e) => { process.stderr.write(`[shutdown] sendServiceMessage error: ${e}\n`); }),
-      new Promise<void>((r) => setTimeout(r, 5000)),
-    ]);
-    void notifyOffline.finally(() => clearCommandsOnShutdown().finally(() => process.exit(0)));
+    const shutdownSequence = (async () => {
+      // Wait for the poll loop to finish (completes in-flight transcriptions)
+      await waitForPollerExit();
+      // Drain any updates received since the last poll iteration
+      const drained = await drainPendingUpdates();
+      if (drained > 0) process.stderr.write(`[shutdown] drained ${drained} pending update(s)\n`);
+      // Dump session log before exit (if not disabled)
+      if (getSessionLogMode() !== null && timelineSize() > 0) {
+        try { await doTimelineDump(); } catch { /* best effort */ }
+      }
+      await sendServiceMessage("🔴 Offline").catch((e: unknown) => {
+        process.stderr.write(`[shutdown] sendServiceMessage error: ${String(e)}\n`);
+      });
+    })();
+    const timeout = new Promise<void>((r) => setTimeout(r, 10000));
+    void Promise.race([shutdownSequence, timeout])
+      .finally(() => clearCommandsOnShutdown().finally(() => process.exit(0)));
   });
 }
 
@@ -44,6 +61,9 @@ const server = createServer();
 
 // Install the outbound proxy before any API calls
 installOutboundProxy(createOutboundProxy);
+
+// Apply session log config (wires up auto-dump if configured)
+applySessionLogConfig();
 
 const transport = new StdioServerTransport();
 
@@ -65,4 +85,5 @@ startPoller();
 process.stderr.write("[info] background poller started\n");
 
 // Best-effort startup notification — bypasses proxy (operational, not agent content)
-void sendServiceMessage("🟢 Online").catch(() => {});
+const logStatus = sessionLogLabel();
+void sendServiceMessage(`🟢 Online\nSession log: ${logStatus}\n/session to change settings`).catch(() => {});

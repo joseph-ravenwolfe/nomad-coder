@@ -17,16 +17,14 @@ const mocks = vi.hoisted(() => ({
   resolveChat: vi.fn((): number | string => 123),
   clearCommandsOnShutdown: vi.fn((): Promise<void> => Promise.resolve()),
   stopPoller: vi.fn(),
-  isRecording: vi.fn((): boolean => false),
-  startRecording: vi.fn(),
-  stopRecording: vi.fn(),
-  recordedCount: vi.fn((): number => 0),
-  getMaxUpdates: vi.fn((): number => 50),
-  getSessionEntries: vi.fn((): unknown[] => []),
-  clearRecording: vi.fn(),
-  setAutoDump: vi.fn(),
-  getAutoDumpThreshold: vi.fn((): number | null => null),
-  sanitizeSessionEntries: vi.fn((): Promise<Record<string, unknown>[]> => Promise.resolve([])),
+  getSessionLogMode: vi.fn((): "manual" | number | null => "manual"),
+  setSessionLogMode: vi.fn(),
+  sessionLogLabel: vi.fn((): string => "manual"),
+  dumpTimeline: vi.fn((): unknown[] => []),
+  dumpTimelineSince: vi.fn((): { events: unknown[]; nextCursor: number } => ({ events: [], nextCursor: 0 })),
+  timelineSize: vi.fn((): number => 0),
+  storeSize: vi.fn((): number => 0),
+  setOnEvent: vi.fn(),
 }));
 
 vi.mock("./telegram.js", () => ({
@@ -53,20 +51,18 @@ vi.mock("./poller.js", () => ({
   stopPoller: mocks.stopPoller,
 }));
 
-vi.mock("./session-recording.js", () => ({
-  isRecording: mocks.isRecording,
-  startRecording: mocks.startRecording,
-  stopRecording: mocks.stopRecording,
-  recordedCount: mocks.recordedCount,
-  getMaxUpdates: mocks.getMaxUpdates,
-  getSessionEntries: mocks.getSessionEntries,
-  clearRecording: mocks.clearRecording,
-  setAutoDump: mocks.setAutoDump,
-  getAutoDumpThreshold: mocks.getAutoDumpThreshold,
+vi.mock("./config.js", () => ({
+  getSessionLogMode: mocks.getSessionLogMode,
+  setSessionLogMode: mocks.setSessionLogMode,
+  sessionLogLabel: mocks.sessionLogLabel,
 }));
 
-vi.mock("./update-sanitizer.js", () => ({
-  sanitizeSessionEntries: mocks.sanitizeSessionEntries,
+vi.mock("./message-store.js", () => ({
+  dumpTimeline: mocks.dumpTimeline,
+  dumpTimelineSince: mocks.dumpTimelineSince,
+  timelineSize: mocks.timelineSize,
+  storeSize: mocks.storeSize,
+  setOnEvent: mocks.setOnEvent,
 }));
 
 import {
@@ -125,8 +121,8 @@ describe("built-in-commands", () => {
     mocks.editMessageText.mockResolvedValue(true);
     mocks.deleteMessage.mockResolvedValue(true);
     mocks.answerCallbackQuery.mockResolvedValue(true);
-    mocks.isRecording.mockReturnValue(false);
-    mocks.recordedCount.mockReturnValue(0);
+    mocks.getSessionLogMode.mockReturnValue("manual");
+    mocks.sessionLogLabel.mockReturnValue("manual");
   });
 
   // -- BUILT_IN_COMMANDS constant ------------------------------------------
@@ -188,7 +184,7 @@ describe("built-in-commands", () => {
     expect(result).toBe(true);
     expect(mocks.sendMessage).toHaveBeenCalledWith(
       123,
-      expect.stringContaining("Session Recording"),
+      expect.stringContaining("Session Log"),
       expect.objectContaining({
         parse_mode: "Markdown",
         reply_markup: expect.objectContaining({
@@ -198,28 +194,18 @@ describe("built-in-commands", () => {
     );
   });
 
-  it("shows Start button when not recording", async () => {
-    mocks.isRecording.mockReturnValue(false);
+  it("shows mode and action buttons", async () => {
+    mocks.timelineSize.mockReturnValue(5);
     await handleIfBuiltIn(cmdUpdate("/session"));
     const call = mocks.sendMessage.mock.calls[0];
     const keyboard = call[2].reply_markup.inline_keyboard;
     const buttons = keyboard.flat().map(
       (b: { callback_data: string }) => b.callback_data,
     );
-    expect(buttons).toContain("session:start");
-  });
-
-  it("shows Dump/Stop buttons when recording", async () => {
-    mocks.isRecording.mockReturnValue(true);
-    mocks.recordedCount.mockReturnValue(5);
-    await handleIfBuiltIn(cmdUpdate("/session"));
-    const call = mocks.sendMessage.mock.calls[0];
-    const keyboard = call[2].reply_markup.inline_keyboard;
-    const buttons = keyboard.flat().map(
-      (b: { callback_data: string }) => b.callback_data,
-    );
+    expect(buttons).toContain("session:disable");
+    expect(buttons).toContain("session:autodump");
     expect(buttons).toContain("session:dump");
-    expect(buttons).toContain("session:stop");
+    expect(buttons).toContain("session:dismiss");
   });
 
   it("handles /session when resolveChat returns non-number", async () => {
@@ -254,94 +240,71 @@ describe("built-in-commands", () => {
       expect(mocks.deleteMessage).toHaveBeenCalledWith(123, panelId);
     });
 
-    it("session:start starts recording and refreshes panel", async () => {
+    it("session:disable sets mode to null", async () => {
       const panelId = await createPanel();
-      await handleIfBuiltIn(callbackUpdate(panelId, "session:start"));
-      expect(mocks.startRecording).toHaveBeenCalledWith(100);
-      // Panel should be edited to refresh
+      await handleIfBuiltIn(callbackUpdate(panelId, "session:disable"));
+      expect(mocks.setSessionLogMode).toHaveBeenCalledWith(null);
       expect(mocks.editMessageText).toHaveBeenCalled();
     });
 
-    it("session:stop stops and clears recording", async () => {
+    it("session:manual sets mode to manual", async () => {
+      mocks.getSessionLogMode.mockReturnValue(null);
       const panelId = await createPanel();
-      await handleIfBuiltIn(callbackUpdate(panelId, "session:stop"));
-      expect(mocks.stopRecording).toHaveBeenCalled();
-      expect(mocks.clearRecording).toHaveBeenCalled();
+      await handleIfBuiltIn(callbackUpdate(panelId, "session:manual"));
+      expect(mocks.setSessionLogMode).toHaveBeenCalledWith("manual");
+      expect(mocks.editMessageText).toHaveBeenCalled();
     });
 
     it("session:dump dumps and deletes panel", async () => {
       const panelId = await createPanel();
-      mocks.getSessionEntries.mockReturnValue([]);
-      mocks.sanitizeSessionEntries.mockResolvedValue([]);
+      mocks.dumpTimeline.mockReturnValue([]);
       await handleIfBuiltIn(callbackUpdate(panelId, "session:dump"));
       // Panel deleted
       expect(mocks.deleteMessage).toHaveBeenCalledWith(123, panelId);
       // Empty dump sends a message
       expect(mocks.sendMessage).toHaveBeenCalledWith(
         123,
-        expect.stringContaining("no updates captured"),
+        expect.stringContaining("no events captured"),
         expect.any(Object),
       );
     });
   });
 
-  // -- sendSessionPrefsPrompt ----------------------------------------------
+  // -- sendSessionPrefsPrompt (deprecated — now a no-op) --------------------
 
   describe("sendSessionPrefsPrompt", () => {
-    it("sends prefs prompt once", async () => {
-      await sendSessionPrefsPrompt();
-      expect(mocks.sendMessage).toHaveBeenCalledWith(
-        123,
-        expect.stringContaining("Session Start"),
-        expect.objectContaining({ parse_mode: "Markdown" }),
-      );
-    });
-
-    it("skips when resolveChat returns non-number", async () => {
-      mocks.resolveChat.mockReturnValue("not set");
-      await sendSessionPrefsPrompt();
+    it("is a no-op (deprecated)", () => {
+      // eslint-disable-next-line @typescript-eslint/no-deprecated -- testing the deprecated function still works
+      sendSessionPrefsPrompt();
       expect(mocks.sendMessage).not.toHaveBeenCalled();
     });
   });
 
-  // -- Prefs flow callbacks ------------------------------------------------
+  // -- Mode switch via /session panel --------------------------------------
 
-  describe("prefs flow", () => {
-    async function createPrefsPanel(): Promise<number> {
+  describe("mode switches", () => {
+    async function createPanel(): Promise<number> {
       mocks.sendMessage.mockResolvedValueOnce({ message_id: 300 });
-      await sendSessionPrefsPrompt();
+      await handleIfBuiltIn(cmdUpdate("/session"));
       return 300;
     }
 
-    it("session:prefs:record advances to step 2", async () => {
-      const panelId = await createPrefsPanel();
-      await handleIfBuiltIn(callbackUpdate(panelId, "session:prefs:record"));
+    it("session:setauto:50 persists auto mode", async () => {
+      const panelId = await createPanel();
+      await handleIfBuiltIn(callbackUpdate(panelId, "session:setauto:50"));
+      expect(mocks.setSessionLogMode).toHaveBeenCalledWith(50);
+      expect(mocks.editMessageText).toHaveBeenCalled();
+    });
+
+    it("session:autodump shows threshold picker", async () => {
+      const panelId = await createPanel();
+      await handleIfBuiltIn(callbackUpdate(panelId, "session:autodump"));
       expect(mocks.editMessageText).toHaveBeenCalledWith(
         123,
         panelId,
-        expect.stringContaining("auto-dump"),
+        expect.stringContaining("Auto-dump"),
         expect.any(Object),
       );
-    });
-
-    it("session:prefs:skip dismisses the panel", async () => {
-      const panelId = await createPrefsPanel();
-      await handleIfBuiltIn(callbackUpdate(panelId, "session:prefs:skip"));
-      expect(mocks.deleteMessage).toHaveBeenCalledWith(123, panelId);
-    });
-
-    it("session:auto:50 starts recording with auto-dump", async () => {
-      const panelId = await createPrefsPanel();
-      await handleIfBuiltIn(callbackUpdate(panelId, "session:auto:50"));
-      expect(mocks.startRecording).toHaveBeenCalledWith(100); // max(50*2, 100)
-      expect(mocks.setAutoDump).toHaveBeenCalledWith(50, expect.any(Function));
-    });
-
-    it("session:auto:never starts recording without auto-dump", async () => {
-      const panelId = await createPrefsPanel();
-      await handleIfBuiltIn(callbackUpdate(panelId, "session:auto:never"));
-      expect(mocks.startRecording).toHaveBeenCalledWith(500);
-      expect(mocks.setAutoDump).not.toHaveBeenCalled();
     });
   });
 });

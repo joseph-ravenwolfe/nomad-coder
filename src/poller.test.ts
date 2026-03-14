@@ -44,7 +44,7 @@ vi.mock("./transcribe.js", () => ({
   transcribeVoice: mocks.transcribeVoice,
 }));
 
-import { startPoller, stopPoller, isPollerRunning } from "./poller.js";
+import { startPoller, stopPoller, isPollerRunning, drainPendingUpdates } from "./poller.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -504,6 +504,52 @@ describe("poller", () => {
       expect(mocks.getUpdates).toHaveBeenCalledTimes(2);
 
       stopPoller();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // drainPendingUpdates
+  // -------------------------------------------------------------------------
+
+  describe("drainPendingUpdates", () => {
+    it("records pending updates on shutdown drain", async () => {
+      const u1 = textUpdate(50, "last msg");
+      const u2 = textUpdate(51, "very last");
+      mocks.getUpdates.mockResolvedValueOnce([u1, u2]);
+
+      const count = await drainPendingUpdates();
+
+      expect(count).toBe(2);
+      expect(mocks.recordInbound).toHaveBeenCalledWith(u1);
+      expect(mocks.recordInbound).toHaveBeenCalledWith(u2);
+      expect(mocks.advanceOffset).toHaveBeenCalledWith([u1, u2]);
+    });
+
+    it("uses timeout=0 for non-blocking fetch", async () => {
+      mocks.getUpdates.mockResolvedValueOnce([]);
+
+      await drainPendingUpdates();
+
+      expect(mocks.getUpdates).toHaveBeenCalledWith(
+        expect.objectContaining({ timeout: 0 }),
+      );
+    });
+
+    it("returns 0 on error without crashing", async () => {
+      mocks.getUpdates.mockRejectedValueOnce(new Error("network down"));
+
+      const count = await drainPendingUpdates();
+
+      expect(count).toBe(0);
+    });
+
+    it("returns 0 when no updates pending", async () => {
+      mocks.getUpdates.mockResolvedValueOnce([]);
+
+      const count = await drainPendingUpdates();
+
+      expect(count).toBe(0);
+      expect(mocks.advanceOffset).toHaveBeenCalledWith([]);
     });
   });
 });

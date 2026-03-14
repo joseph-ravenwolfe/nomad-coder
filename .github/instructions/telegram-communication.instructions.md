@@ -1,39 +1,38 @@
 ---
 applyTo: "**"
 ---
-# Telegram Communication — Hard Rules
+# Telegram Communication
 
-Full guide: `communication.md` · MCP resource: `telegram-bridge-mcp://communication-guide`
+> **Authoritative guide:** `docs/communication.md` · **MCP resource:** `telegram-bridge-mcp://communication-guide`
+>
+> At session start, load the MCP resource for full patterns (formatting, commit/push flow, pinning, loop, session end).
 
----
+When Telegram MCP tools are available, **all communication goes through Telegram**.
 
-## Always
+## Non-Negotiable Rules
 
-1. **Reply via Telegram** for every substantive action or decision.
-2. **`send_confirmation`** for all yes/no questions — always buttons.
-3. **`choose`** for all multi-option questions — always buttons.
-4. **`dequeue_update`** for all update waiting — long-polls correctly with configurable timeout.
-5. **`reply_to_message_id`** on every reply — threads messages visually.
-6. **`show_typing`** when a text reply is imminent — this is the "I'm about to respond" signal, not a generic receipt acknowledgement. Points the operator's eyes at the chat.
-7. **Reactions have specific meanings.** 👀 = "I'm processing this" — set immediately on **voice messages**, before any other action. For **short text messages** ("yes", "ok", "proceed"), skip 👀 entirely — `show_typing` is the acknowledgement. For **longer text tasks**, use a *temporary* 👀 (≤5s timeout, `restore_emoji: null`) that auto-clears on your first outbound. 🫡 = "got it / acknowledged". 👍 / ❤ = done / great. Never leave 👀 unresolved; always update to 🫡 or 👍 when work is complete.
-8. **`notify` (silent) before committing.** Get explicit approval before pushing.
-9. **`dequeue_update` again** after every task, timeout, or error — loop forever.
-10. **Ask via Telegram** when unsure whether to stop. Wait for the answer.
-11. **Never assume silence means approval.** Always wait for explicit confirmation before proceeding with implementation.
-12. **Drain before you speak.** Before sending any message, drain pending updates with `dequeue_update(timeout=0)` until empty. Never talk over the operator — always hear them out first.
-13. **Announce before major actions.** Before any significant operation — build, restart, commit, push, delete files — briefly state what you're about to do (`send_text` or `notify`). For destructive/irreversible actions, always require explicit confirmation first (`send_confirmation`).
+1. **Drain before you speak.** `dequeue_update(timeout=0)` until empty before every outbound message. Never talk over the operator.
+2. **Reply via Telegram** for every substantive response — not the agent panel.
+3. **`reply_to_message_id`** on every reply — threads messages visually.
+4. **`confirm`** for yes/no · **`choose`** for multi-option — always buttons.
+5. **React 👀 immediately on voice messages.** Skip on short texts ("yes", "ok"). Never leave 👀 unresolved — always update to 🫡 or 👍 when work is complete.
+6. **`show_typing`** when a text reply is imminent — not a generic receipt.
+7. **Announce before major actions** (`send_text` or `notify`). Require `confirm` for destructive/irreversible ones.
+8. **`dequeue_update` again** after every task, timeout, or error — loop forever.
+9. **Never assume silence means approval.**
 
 ## Tool Selection
 
 | Situation | Tool |
 | --- | --- |
-| Statement / preference | React (🫡 👍 👀 ❤) **+ follow-up text with intent** |
-| Yes/No decision | `send_confirmation` |
+| Pure statement / preference | React (🫡 👍 👀 ❤) — no text reply |
+| Yes/No decision | `confirm` |
 | Fixed options | `choose` |
 | Open-ended input | `ask` |
-| Status / result | `notify` or `send_message` |
+| Short status (1–2 sentences) | `notify` |
+| Ephemeral placeholder ("Thinking…") | `show_animation` / `cancel_animation` |
+| Structured result / explanation | `send_text` (Markdown) |
+| Build / deploy / error event | `notify` with severity |
 | Multi-step task (3+) | `send_new_checklist` + `pin_message` |
-| Completed work / ready to proceed | `send_confirmation` (single-button CTA) |
-
-See `communication.md` for formatting, commit/push flow, pinning, and session end patterns.
+| Completed work / ready to proceed | `confirm` (single-button CTA) |
 

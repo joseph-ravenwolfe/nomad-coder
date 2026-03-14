@@ -348,7 +348,7 @@ V2 has **40 tools**. V3 targets **29** — a 28% reduction.
 1. **One tool per concept.** Five media tools → one `send_file`. Four polling tools → one `dequeue_update`.
 2. **Parameters over tools.** `cancel_typing` → `show_typing` with `cancel: true`. `unpin_message` → `pin_message` with `unpin: true`.
 3. **Keep semantic tools that save tokens.** `notify` formats a severity-prefixed notification in one call. Without it, the agent would build `"ℹ️ **Title**\n\nbody"` every time — wasted tokens and formatting bugs. Keep it.
-4. **Compound tools stay.** `ask`, `choose`, `send_confirmation` handle the full send→wait→cleanup cycle internally. The alternative is 3–5 tool calls. Keep them.
+4. **Compound tools stay.** `ask`, `choose`, `confirm` handle the full send→wait→cleanup cycle internally. The alternative is 3–5 tool calls. Keep them.
 
 ### Removed (12 tools)
 
@@ -432,7 +432,7 @@ send_file({
 | --- | --- |
 | `ask` | Sends question → blocks for reply → returns text/voice response |
 | `choose` | Sends inline buttons → blocks for press → returns selection |
-| `send_confirmation` | Sends Yes/No → blocks → returns `{ confirmed }` |
+| `confirm` | Sends Yes/No → blocks → returns `{ confirmed }` |
 
 These consume from the queue internally — the agent never sees the raw callback.
 
@@ -454,7 +454,7 @@ These consume from the queue internally — the agent never sees the raw callbac
 | 12 | `cancel_animation` | **Visual** | Stop animation; optionally replace with real message |
 | 13 | `ask` | **Interact** | Question → text reply |
 | 14 | `choose` | **Interact** | Options → button press |
-| 15 | `send_confirmation` | **Interact** | Yes/No → boolean |
+| 15 | `confirm` | **Interact** | Yes/No → boolean |
 | 16 | `answer_callback_query` | **Interact** | Acknowledge button press |
 | 17 | `show_typing` | **Status** | Sustained typing indicator. `cancel: true` to stop. |
 | 18 | `send_chat_action` | **Status** | One-shot action (upload_photo, record_video, etc.) |
@@ -477,7 +477,7 @@ These consume from the queue internally — the agent never sees the raw callbac
 | --- | --- |
 | `notify` | Semantic formatting (emoji + severity + bold title) saves tokens. Without it, agent manually formats every notification — error-prone and verbose. |
 | `send_chat_action` | Different from `show_typing`. Supports 11 action types (upload_photo, record_video, etc.) as one-shot signals. `show_typing` is sustained-repeat for "typing..." only. |
-| `answer_callback_query` | Low-level primitive needed for custom inline keyboards outside `choose`/`send_confirmation`. |
+| `answer_callback_query` | Low-level primitive needed for custom inline keyboards outside `choose`/`confirm`. |
 | `transcribe_voice` | Pre-transcription handles the common case, but agents may need to transcribe audio files or re-attempt failed transcriptions on demand. |
 | `show_animation` / `cancel_animation` | Replaces `send_draft` with a server-managed system. The server handles the animation lifecycle transparently — the agent just says "I'm working" and "I'm done." `cancel_animation({ text })` lets the placeholder become the final answer. |
 | `append_text` | Server-side delta concat eliminates the O(N²) token cost of full-text re-sends. Essential for streaming-style message building. |
@@ -545,7 +545,7 @@ show_animation({
 | `edit_message_text`, `append_text` | `set_commands`, `set_topic` |
 | `delete_message`, `forward_message` | `download_file`, `transcribe_voice` |
 | `set_reaction`, `pin_message` | `dequeue_update`, `get_message` |
-| `ask`, `choose`, `send_confirmation` (send internally) | `dump_session_record`, `shutdown` |
+| `ask`, `choose`, `confirm` (send internally) | `dump_session_record`, `shutdown` |
 | `send_new_checklist`, `show_typing`, `send_chat_action` | |
 
 **Rule:** If it calls a Telegram Bot API method that modifies the chat, it resets the timer. Read-only and config tools do not.
@@ -860,7 +860,7 @@ export function dumpTimeline(): Array<Omit<TimelineEvent, "_update">> {
 
 ### `dequeueMatch()` — Drain & Requeue
 
-Queue doesn't support middle-removal. For compound tools (`ask`, `choose`, `send_confirmation`) that need to pluck a specific callback from the queue:
+Queue doesn't support middle-removal. For compound tools (`ask`, `choose`, `confirm`) that need to pluck a specific callback from the queue:
 
 ```ts
 function _scanAndRemove<T>(

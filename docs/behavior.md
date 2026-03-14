@@ -124,7 +124,7 @@ Whenever the user's response can be one of a predictable set of options — yes/
 
 Only use `ask` or `dequeue_update` for truly open-ended free-text input where choices cannot be enumerated.
 
-For the full keyboard interaction taxonomy — when to use `send_message` vs `send_choice` vs `choose` vs `send_confirmation`, button types, and implementation notes — see [`docs/keyboard-interactions.md`](keyboard-interactions.md).
+For the full keyboard interaction taxonomy — when to use `send_message` vs `send_choice` vs `choose` vs `confirm`, button types, and implementation notes — see [`docs/keyboard-interactions.md`](keyboard-interactions.md).
 
 ---
 
@@ -174,7 +174,7 @@ set_topic("Refactor Agent")
 
 **Behavior:**
 
-- Applies to: `send_text`, `notify`, `ask`, `choose`, `send_confirmation`, `send_new_checklist`
+- Applies to: `send_text`, `notify`, `ask`, `choose`, `confirm`, `send_new_checklist`
 - Does **not** apply to: `send_file` (file captions stay clean)
 - The tag always appears — there is no per-message override
 - Pass an empty string to clear: `set_topic("")`
@@ -229,7 +229,7 @@ await cancel_animation()
 **Default timeouts are optimized for minimal token usage during idle polling:**
 
 - `dequeue_update`: 60 s (default) — blocks until a message arrives or timeout occurs; up to 300 s for long idle periods
-- `ask`, `choose`, `send_confirmation`: 60 s — reasonable wait when expecting a response
+- `ask`, `choose`, `confirm`: 60 s — reasonable wait when expecting a response
 
 All tools support up to 300 s max. Use shorter timeouts (e.g., 30–60 s) when you want more responsive feedback loops, or longer timeouts when idle to minimize repeated polling overhead.
 
@@ -434,7 +434,7 @@ The message store records all inbound and outbound events automatically — no o
 
 | Tool | Purpose |
 | --- | --- |
-| `dump_session_record(limit?)` | Returns the most recent timeline events as JSON. Default 100, max 1000. |
+| `dump_session_record(limit?)` | Sends the most recent timeline events as a JSON file to the Telegram chat. Returns `{ message_id, event_count, file_id }`. Default 100, max 1000. |
 
 **Key rules:**
 
@@ -442,8 +442,10 @@ The message store records all inbound and outbound events automatically — no o
 - The timeline is in-memory only. It does not persist across server restarts.
 - The timeline is a rolling window — oldest events are evicted when the 1000-event limit is reached.
 - `dump_session_record` contains sensitive user content. Only call when the user explicitly requests session history, context recovery, or an audit.
+- The document caption includes the `file_id` in monospace for crash recovery — users can copy it and provide it to a new agent instance.
+- Use `download_file` with the returned `file_id` to retrieve the JSON content.
 
-The `/session` built-in command provides a Telegram-side panel for start/stop recording with auto-dump support.
+The `/session` built-in command provides a Telegram-side panel for manual dumps and auto-dump configuration. See [session-recording.md](session-recording.md) for full details.
 
 ---
 

@@ -10,7 +10,7 @@
 ## Problem
 
 Every outbound tool (`send_text`, `notify`, `send_new_checklist`, `send_file`,
-`send_text_as_voice`, `ask`, `choose`, `send_confirmation`) manually calls
+`send_text_as_voice`, `ask`, `choose`, `confirm`) manually calls
 the same boilerplate before and after each send:
 
 ```typescript
@@ -317,5 +317,5 @@ Tool → proxy.sendMessage()
 | `src/tools/edit_message_text.ts` | Remove `resetAnimationTimeout`, `cancelTyping`, `recordOutgoingEdit` |
 | `src/tools/ask.ts` | Remove `cancelTyping`, `clearPendingTemp`, `recordOutgoing` |
 | `src/tools/choose.ts` | Remove `cancelTyping`, `clearPendingTemp`, `recordOutgoing` |
-| `src/tools/send_confirmation.ts` | Remove `cancelTyping`, `clearPendingTemp`, `recordOutgoing` |
+| `src/tools/confirm.ts` | Remove `cancelTyping`, `clearPendingTemp`, `recordOutgoing` |
 | `src/tools/get_chat.ts` | Remove `recordOutgoing` |

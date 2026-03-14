@@ -13,7 +13,7 @@ const DESCRIPTION =
   "Default parse_mode is Markdown (auto-converted). " +
   "When keyboard is provided, the agent can handle button presses via dequeue_update " +
   "and answer_callback_query — there is no blocking wait. " +
-  "For blocking single-selection, use choose. For yes/no, use send_confirmation. " +
+  "For blocking single-selection, use choose. For yes/no, use confirm. " +
   "For voice/TTS, use send_text_as_voice.";
 
 const buttonSchema = z.object({

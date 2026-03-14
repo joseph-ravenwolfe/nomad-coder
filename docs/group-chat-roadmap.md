@@ -131,7 +131,7 @@ In a group with multiple bots, one bot's reply can trigger another. Must filter 
 
 - [ ] All send tools accept `SessionContext` (or explicit `reply_to_message_id` + `chat_id`)
 - [ ] `show_typing` (with `cancel: true` to stop) scoped per session
-- [ ] `send_confirmation` / `choose` / `ask` work within reply thread
+- [ ] `confirm` / `choose` / `ask` work within reply thread
 
 ### Phase 4 — Multi-Session Concurrency (deferred)
 

@@ -1,89 +1,119 @@
 import { vi, describe, it, expect, beforeEach } from "vitest";
 import { createMockServer, isError } from "./test-utils.js";
 
-// ── dump_session_record (V3 — uses message-store) ───────────────────────
+// ── dump_session_record (V3 — sends JSON file to Telegram) ──────────────
 
-const storeMocks = vi.hoisted(() => ({
-  dumpTimeline: vi.fn(() => []),
+const mocks = vi.hoisted(() => ({
+  dumpTimeline: vi.fn(() => [] as Array<Record<string, unknown>>),
   timelineSize: vi.fn(() => 0),
   storeSize: vi.fn(() => 0),
+  sendDocument: vi.fn(),
+  editMessageCaption: vi.fn(),
+  getSessionLogMode: vi.fn((): "manual" | number | null => "manual"),
 }));
 
-vi.mock("../message-store.js", () => storeMocks);
+vi.mock("../message-store.js", () => ({
+  dumpTimeline: mocks.dumpTimeline,
+  timelineSize: mocks.timelineSize,
+  storeSize: mocks.storeSize,
+}));
+
+vi.mock("../telegram.js", async (importActual) => {
+  const actual = await importActual<typeof import("../telegram.js")>();
+  return {
+    ...actual,
+    getApi: () => ({ sendDocument: mocks.sendDocument, editMessageCaption: mocks.editMessageCaption }),
+    resolveChat: () => 42,
+  };
+});
+
+vi.mock("../config.js", () => ({
+  getSessionLogMode: mocks.getSessionLogMode,
+}));
 
 import { register as registerDump } from "./dump_session_record.js";
 
 describe("dump_session_record tool (V3)", () => {
   let call: (args: Record<string, unknown>) => Promise<unknown>;
 
-  const parseJson = (result: unknown) => {
-    const text = (result as { content: { text: string }[] }).content[0].text;
-    return JSON.parse(text);
-  };
+  const getText = (result: unknown) =>
+    (result as { content: { text: string }[] }).content[0].text;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    storeMocks.dumpTimeline.mockReturnValue([]);
-    storeMocks.timelineSize.mockReturnValue(0);
-    storeMocks.storeSize.mockReturnValue(0);
+    mocks.dumpTimeline.mockReturnValue([]);
+    mocks.timelineSize.mockReturnValue(0);
+    mocks.storeSize.mockReturnValue(0);
+    mocks.sendDocument.mockResolvedValue({ message_id: 1 });
+    mocks.editMessageCaption.mockResolvedValue({});
+    mocks.getSessionLogMode.mockReturnValue("manual");
     const server = createMockServer();
     registerDump(server);
     call = server.getHandler("dump_session_record");
   });
 
-  it("returns JSON with summary and timeline", async () => {
-    const result = await call({});
-    expect(isError(result)).toBe(false);
-    const data = parseJson(result);
-    expect(data).toHaveProperty("summary");
-    expect(data).toHaveProperty("timeline");
+  it("returns disabled message when session log is off", async () => {
+    mocks.getSessionLogMode.mockReturnValue(null);
+    const text = getText(await call({}));
+    expect(text).toContain("disabled");
   });
 
-  it("includes timeline_events, unique_messages, returned, truncated in summary", async () => {
-    storeMocks.timelineSize.mockReturnValue(5);
-    storeMocks.storeSize.mockReturnValue(3);
-    const data = parseJson(await call({}));
-    expect(data.summary.timeline_events).toBe(5);
-    expect(data.summary.unique_messages).toBe(3);
-    expect(data.summary.returned).toBe(0);
-    expect(data.summary.truncated).toBe(false);
+  it("returns 'no events' when timeline is empty", async () => {
+    const text = getText(await call({}));
+    expect(text).toContain("No events captured");
   });
 
-  it("returns empty timeline when store is empty", async () => {
-    const data = parseJson(await call({}));
-    expect(data.timeline).toEqual([]);
-  });
-
-  it("returns timeline events from dumpTimeline", async () => {
+  it("sends JSON document to Telegram on non-empty timeline", async () => {
     const events = [
-      { ts: 1000, event: "message", direction: "inbound", id: 1, content: { type: "text", text: "hi" } },
-      { ts: 1001, event: "message", direction: "outbound", id: 2, content: { type: "text", text: "hello" } },
+      { id: 1, event: "message", content: { type: "text", text: "hi" } },
+      { id: 2, event: "message", content: { type: "text", text: "hello" } },
     ];
-    storeMocks.dumpTimeline.mockReturnValue(events);
-    storeMocks.timelineSize.mockReturnValue(2);
-    const data = parseJson(await call({}));
-    expect(data.timeline).toHaveLength(2);
-    expect(data.timeline[0].content.text).toBe("hi");
-    expect(data.timeline[1].content.text).toBe("hello");
+    mocks.dumpTimeline.mockReturnValue(events);
+    mocks.timelineSize.mockReturnValue(2);
+    mocks.storeSize.mockReturnValue(2);
+    mocks.sendDocument.mockResolvedValue({
+      message_id: 99,
+      document: { file_id: "abc123" },
+    });
+
+    const data = JSON.parse(getText(await call({})));
+    expect(data.message_id).toBe(99);
+    expect(data.event_count).toBe(2);
+    expect(data.file_id).toBe("abc123");
+    expect(mocks.sendDocument).toHaveBeenCalledOnce();
+    expect(mocks.sendDocument).toHaveBeenCalledWith(
+      42,
+      expect.anything(),
+      expect.objectContaining({ caption: expect.stringContaining("2 events") }),
+    );
+    expect(mocks.editMessageCaption).toHaveBeenCalledWith(
+      42,
+      99,
+      expect.objectContaining({
+        caption: expect.stringContaining("File ID: `abc123`"),
+        parse_mode: "Markdown",
+      }),
+    );
   });
 
-  it("respects limit parameter and truncates", async () => {
+  it("respects limit parameter", async () => {
     const events = Array.from({ length: 5 }, (_, i) => ({
-      id: i + 1, event: "message", from: "user",
-      content: { type: "text", text: `msg${i}` },
+      id: i + 1, event: "message", content: { type: "text", text: `msg${i}` },
     }));
-    storeMocks.dumpTimeline.mockReturnValue(events);
-    storeMocks.timelineSize.mockReturnValue(5);
-    const data = parseJson(await call({ limit: 2 }));
-    expect(data.timeline).toHaveLength(2);
-    expect(data.summary.truncated).toBe(true);
-    expect(data.summary.returned).toBe(2);
-    // Returns the LAST 2 (most recent)
-    expect(data.timeline[0].id).toBe(4);
-    expect(data.timeline[1].id).toBe(5);
+    mocks.dumpTimeline.mockReturnValue(events);
+    mocks.timelineSize.mockReturnValue(5);
+
+    const data = JSON.parse(getText(await call({ limit: 2 })));
+    expect(data.event_count).toBe(2);
+    expect(mocks.sendDocument).toHaveBeenCalledOnce();
   });
 
-  it("default limit still works with no params", async () => {
+  it("does not call sendDocument when timeline is empty", async () => {
+    await call({});
+    expect(mocks.sendDocument).not.toHaveBeenCalled();
+  });
+
+  it("does not error with default params", async () => {
     const result = await call({});
     expect(isError(result)).toBe(false);
   });

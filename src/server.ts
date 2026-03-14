@@ -20,7 +20,7 @@ import { register as registerEditMessage } from "./tools/edit_message.js";
 import { register as registerDeleteMessage } from "./tools/delete_message.js";
 import { register as registerAsk } from "./tools/ask.js";
 import { register as registerChoose } from "./tools/choose.js";
-import { register as registerSendConfirmation } from "./tools/send_confirmation.js";
+import { register as registerConfirm } from "./tools/confirm.js";
 import { register as registerAnswerCallbackQuery } from "./tools/answer_callback_query.js";
 import { register as registerShowTyping } from "./tools/show_typing.js";
 import { register as registerSendChatAction } from "./tools/send_chat_action.js";
@@ -52,7 +52,7 @@ export function createServer(): McpServer {
   registerNotify(server);
   registerAsk(server);
   registerChoose(server);  registerSendChoice(server);  registerSendNewChecklist(server);
-  registerSendConfirmation(server);
+  registerConfirm(server);
 
   // ── Polling ─────────────────────────────────────────────────────────────
   registerDequeueUpdate(server);

@@ -51,7 +51,7 @@ Tools are grouped by abstraction level.
 | `notify` | Sends a titled, severity-coded notification with optional body. Supports silent delivery. |
 | `ask` | Sends a question and blocks until the user replies with free text or voice. |
 | `choose` | Sends a question with labeled inline keyboard buttons; blocks until a button is pressed or the user replies with text/voice. |
-| `send_confirmation` | Sends a Yes/No inline keyboard and blocks until a button is pressed. Returns `{ confirmed: true \| false }`, or `{ timed_out: true }` if the timeout expires without input. |
+| `confirm` | Sends a Yes/No inline keyboard and blocks until a button is pressed. Returns `{ confirmed: true \| false }`, or `{ timed_out: true }` if the timeout expires without input. |
 | `send_new_checklist` | Creates or edits a live task checklist message with per-step status indicators. |
 
 ### Polling & message retrieval
@@ -108,7 +108,7 @@ Tools are grouped by abstraction level.
 
 | Tool | Description |
 | --- | --- |
-| `dump_session_record` | Returns the full conversation timeline as compact JSON — all inbound and outbound events since server start (rolling 1000-event limit). Call only when the operator explicitly requests session history. |
+| `dump_session_record` | Sends the conversation timeline as a JSON file to the Telegram chat. Returns `{ message_id, event_count, file_id }`. Caption includes the file ID for crash recovery. Rolling 1000-event limit. Call only when the operator explicitly requests session history. |
 
 ### Server management
 
@@ -188,7 +188,7 @@ telegram-bridge-mcp/
 │       ├── notify.ts
 │       ├── ask.ts
 │       ├── choose.ts
-│       ├── send_confirmation.ts
+│       ├── confirm.ts
         ├── send_new_checklist.ts
 │       ├── dequeue_update.ts
 │       ├── get_message.ts

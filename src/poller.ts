@@ -35,15 +35,27 @@ const ALLOWED_UPDATES = DEFAULT_ALLOWED_UPDATES as ReadonlyArray<
 >;
 
 let _running = false;
+let _loopPromise: Promise<void> | null = null;
 
 export function startPoller(): void {
   if (_running) return;
   _running = true;
-  void _pollLoop();
+  _loopPromise = _pollLoop();
 }
 
 export function stopPoller(): void {
   _running = false;
+}
+
+/**
+ * Wait for the poll loop to finish its current iteration and exit.
+ * Call after `stopPoller()` to ensure in-flight transcriptions complete.
+ */
+export async function waitForPollerExit(): Promise<void> {
+  if (_loopPromise) {
+    await _loopPromise;
+    _loopPromise = null;
+  }
 }
 
 export function isPollerRunning(): boolean {
@@ -153,6 +165,54 @@ async function _pollLoop(): Promise<void> {
       process.stderr.write(`[poller] error: ${msg}\n`);
       await new Promise<void>((r) => setTimeout(r, DEFAULT_BACKOFF_MS));
     }
+  }
+}
+
+/**
+ * Final non-blocking poll that captures any updates received between the last
+ * poll iteration and shutdown.  Voice messages are transcribed before the
+ * function returns so no event is lost.  The offset is advanced so Telegram
+ * won't re-deliver these updates.
+ */
+export async function drainPendingUpdates(): Promise<number> {
+  try {
+    const updates = await getApi().getUpdates({
+      offset: getOffset(),
+      limit: 100,
+      timeout: 0,                              // non-blocking
+      allowed_updates: ALLOWED_UPDATES,
+    });
+    const allowed = filterAllowedUpdates(updates);
+    const voiceUpdates: Update[] = [];
+    for (const u of allowed) {
+      try {
+        // Skip built-in commands during shutdown — just record everything
+        if (u.message?.voice) {
+          if (recordInbound(u)) voiceUpdates.push(u);
+        } else {
+          recordInbound(u);                    // dedup is built in
+        }
+      } catch (perUpdateErr) {
+        const msg = perUpdateErr instanceof Error
+          ? perUpdateErr.message
+          : String(perUpdateErr);
+        process.stderr.write(
+          `[poller] drain: error processing update ${u.update_id}: ${msg}\n`,
+        );
+      }
+    }
+    // Transcribe any voice messages before we exit
+    if (voiceUpdates.length > 0) {
+      await Promise.all(
+        voiceUpdates.map((u) => _transcribeAndRecord(u)),
+      );
+    }
+    advanceOffset(updates);
+    return allowed.length;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    process.stderr.write(`[poller] drain error: ${msg}\n`);
+    return 0;
   }
 }
 

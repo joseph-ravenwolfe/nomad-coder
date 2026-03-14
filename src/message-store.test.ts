@@ -6,12 +6,14 @@ import {
   recordOutgoingEdit,
   recordBotReaction,
   dequeue,
+  dequeueBatch,
   dequeueMatch,
   pendingCount,
   waitForEnqueue,
   getMessage,
   getVersions,
   dumpTimeline,
+  dumpTimelineSince,
   timelineSize,
   storeSize,
   resetStoreForTest,
@@ -757,5 +759,173 @@ describe("recordOutgoingEdit fallback (#6)", () => {
     expect(evt).toBeDefined();
     // Should be "edit", not "sent" — the edit event type must be preserved
     expect(evt!.event).toBe("edit");
+  });
+});
+
+// ===========================================================================
+// Incremental dumps — dumpTimelineSince cursor tracking
+// ===========================================================================
+
+describe("dumpTimelineSince", () => {
+  it("returns all events when cursor is 0", () => {
+    recordInbound(textUpdate(1, "a"));
+    recordInbound(textUpdate(2, "b"));
+    recordOutgoing(100, "text", "c");
+
+    const { events, nextCursor } = dumpTimelineSince(0);
+    expect(events).toHaveLength(3);
+    expect(nextCursor).toBe(3);
+    expect(events[0].content.text).toBe("a");
+    expect(events[2].content.text).toBe("c");
+  });
+
+  it("returns only new events on repeat dumps", () => {
+    recordInbound(textUpdate(1, "first"));
+    recordInbound(textUpdate(2, "second"));
+
+    // First dump — gets everything
+    const dump1 = dumpTimelineSince(0);
+    expect(dump1.events).toHaveLength(2);
+
+    // Add more events
+    recordInbound(textUpdate(3, "third"));
+    recordOutgoing(200, "text", "fourth");
+
+    // Second dump — only new events since cursor
+    const dump2 = dumpTimelineSince(dump1.nextCursor);
+    expect(dump2.events).toHaveLength(2);
+    expect(dump2.events[0].content.text).toBe("third");
+    expect(dump2.events[1].content.text).toBe("fourth");
+    expect(dump2.nextCursor).toBe(4);
+  });
+
+  it("returns empty when no new events since last cursor", () => {
+    recordInbound(textUpdate(1, "only"));
+    const { nextCursor } = dumpTimelineSince(0);
+
+    const dump2 = dumpTimelineSince(nextCursor);
+    expect(dump2.events).toHaveLength(0);
+    expect(dump2.nextCursor).toBe(nextCursor);
+  });
+
+  it("handles cursor beyond timeline length gracefully", () => {
+    recordInbound(textUpdate(1, "a"));
+    // Cursor past end of timeline (e.g. after eviction)
+    const { events, nextCursor } = dumpTimelineSince(9999);
+    expect(events).toHaveLength(0);
+    expect(nextCursor).toBe(1);
+  });
+
+  it("strips _update from output", () => {
+    recordInbound(textUpdate(1, "hello"));
+    const { events } = dumpTimelineSince(0);
+    expect("_update" in events[0]).toBe(false);
+  });
+
+  it("three consecutive incremental dumps capture all events exactly once", () => {
+    recordInbound(textUpdate(1, "batch1"));
+    const d1 = dumpTimelineSince(0);
+    expect(d1.events).toHaveLength(1);
+
+    recordInbound(textUpdate(2, "batch2a"));
+    recordInbound(textUpdate(3, "batch2b"));
+    const d2 = dumpTimelineSince(d1.nextCursor);
+    expect(d2.events).toHaveLength(2);
+
+    recordOutgoing(300, "text", "batch3");
+    const d3 = dumpTimelineSince(d2.nextCursor);
+    expect(d3.events).toHaveLength(1);
+    expect(d3.events[0].content.text).toBe("batch3");
+
+    // Collect all — should equal full dump
+    const all = [...d1.events, ...d2.events, ...d3.events];
+    const full = dumpTimeline();
+    expect(all.length).toBe(full.length);
+    for (let i = 0; i < all.length; i++) {
+      expect(all[i].content.text).toBe(full[i].content.text);
+    }
+  });
+});
+
+// ===========================================================================
+// dequeueBatch — batch dequeue (response lane + 1 content event)
+// ===========================================================================
+
+describe("dequeueBatch", () => {
+  it("drains response lane and includes one message lane item", () => {
+    // Reaction goes to response lane, message goes to message lane
+    recordInbound(reactionUpdate(100, ["\uD83D\uDC4D"]));
+    recordInbound(textUpdate(1, "Hello"));
+    expect(pendingCount()).toBe(2);
+
+    const batch = dequeueBatch();
+    expect(batch).toHaveLength(2);
+    expect(batch[0].event).toBe("reaction");
+    expect(batch[1].event).toBe("message");
+    expect(batch[1].content.text).toBe("Hello");
+    expect(pendingCount()).toBe(0);
+  });
+
+  it("returns only response lane events when no messages queued", () => {
+    recordInbound(reactionUpdate(100, ["\uD83D\uDC4D"]));
+    recordInbound(reactionUpdate(101, ["\u2764\uFE0F"]));
+
+    const batch = dequeueBatch();
+    expect(batch).toHaveLength(2);
+    expect(batch[0].event).toBe("reaction");
+    expect(batch[1].event).toBe("reaction");
+    expect(pendingCount()).toBe(0);
+  });
+
+  it("returns single content event when no response events queued", () => {
+    recordInbound(textUpdate(1, "Only message"));
+
+    const batch = dequeueBatch();
+    expect(batch).toHaveLength(1);
+    expect(batch[0].event).toBe("message");
+    expect(batch[0].content.text).toBe("Only message");
+  });
+
+  it("returns empty array when nothing is queued", () => {
+    const batch = dequeueBatch();
+    expect(batch).toHaveLength(0);
+  });
+
+  it("stops at one message even if more are queued", () => {
+    recordInbound(textUpdate(1, "First"));
+    recordInbound(textUpdate(2, "Second"));
+    expect(pendingCount()).toBe(2);
+
+    const batch = dequeueBatch();
+    expect(batch).toHaveLength(1);
+    expect(batch[0].content.text).toBe("First");
+    // Second message still pending
+    expect(pendingCount()).toBe(1);
+  });
+
+  it("includes callbacks from response lane", () => {
+    recordInbound(callbackUpdate(100, "btn:click"));
+    recordInbound(textUpdate(1, "After button"));
+
+    const batch = dequeueBatch();
+    expect(batch).toHaveLength(2);
+    expect(batch[0].event).toBe("callback");
+    expect(batch[1].event).toBe("message");
+  });
+
+  it("consecutive batches drain completely", () => {
+    recordInbound(reactionUpdate(100, ["\uD83D\uDC4D"]));
+    recordInbound(textUpdate(1, "First"));
+    recordInbound(textUpdate(2, "Second"));
+
+    const b1 = dequeueBatch();
+    expect(b1).toHaveLength(2); // reaction + first message
+
+    const b2 = dequeueBatch();
+    expect(b2).toHaveLength(1); // second message
+
+    const b3 = dequeueBatch();
+    expect(b3).toHaveLength(0); // empty
+    expect(pendingCount()).toBe(0);
   });
 });
