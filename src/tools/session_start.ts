@@ -24,7 +24,7 @@ const DESCRIPTION =
   "session, and — if any exist — asks the operator whether " +
   "to resume or start fresh. Returns { action, pending } " +
   "so the agent knows how to proceed. " +
-  "Follow with get_agent_guide to load behavioral conventions.";
+  "Call after get_agent_guide and get_me during session setup.";
 
 export function register(server: McpServer) {
   server.registerTool(

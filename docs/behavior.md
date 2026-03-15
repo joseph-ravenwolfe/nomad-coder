@@ -26,8 +26,8 @@ When starting a new session with this MCP:
 
 1. Call `get_agent_guide` (this tool) to load behavioral rules.
 2. Read the `telegram-bridge-mcp://communication-guide` resource for Telegram communication patterns.
-3. Drain stale messages: call `dequeue_update(timeout: 0)` in a loop, discarding results, until `pending == 0`.
-4. Send a brief **silent** `notify` that you're online and ready.
+3. Call `get_me` — verifies the Telegram connection. If it fails, stop and notify the user.
+4. Call `session_start` — sends an intro message and handles pending messages from a previous session (offers Resume / Start Fresh if any exist).
 5. Enter the `dequeue_update` loop — call with no arguments to block up to 60 s (the default).
 
 **`dequeue_update` is the sole tool for receiving updates.** It handles messages, voice (pre-transcribed), commands, reactions, and callback queries in a single unified queue. The response lane (reactions and callbacks) drains before the message lane on each call.

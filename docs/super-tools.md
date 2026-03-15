@@ -38,14 +38,14 @@ Implemented as of v3 (renamed from `update_status`).
 
 **Status values:** `pending` · `running` · `done` · `failed` · `skipped`
 
-**API (current — single-tool pattern):**
+**API (two-tool pattern):**
 
 ```text
 # Create
 { message_id } = send_new_checklist(title, steps)
 
-# Update (in-place edit)
-send_new_checklist(title, steps, message_id)
+# Update (in-place edit — requires message_id from send_new_checklist)
+update_checklist(message_id, title, steps)
 
 # Complete (agent-managed — not yet automatic)
 pin_message(message_id, unpin: true)
@@ -114,6 +114,7 @@ and it snaps back to whatever was there before (or a specified `restore_emoji`) 
 anything outbound happens (typing, send message, etc.).
 
 **Trigger for auto-removal:**
+
 - Any outbound event fires the cleanup: `show_typing`, `send_text`, `send_message`, `notify`, `send_file`, etc.
 - Optionally: a `timeout_seconds` deadline (e.g. `300` = 5 min) — reaction reverts on whichever comes first.
 
@@ -147,6 +148,7 @@ set_temporary_reaction(message_id, "👀", timeout_seconds: 300)
 ```
 
 **Implementation sketch:**
+
 - Store `{ message_id, restore_emoji }` in session state (single active slot — only one temporary at a time)
 - Outbound proxy intercepts every outbound API call → fires restore + clears slot
 - Timeout handled by a `setTimeout` that fires the same restore logic
@@ -162,4 +164,4 @@ never forgets the restore.
 
 - [`docs/keyboard-interactions.md`](keyboard-interactions.md) — keyboard primitive taxonomy
 - [`docs/communication.md`](communication.md) — when to use `send_new_checklist`
-- [`src/tools/send_new_checklist.ts`](../src/tools/send_new_checklist.ts) — implementation
+- [`src/tools/send_new_checklist.ts`](../src/tools/send_new_checklist.ts) — implementation (`send_new_checklist` + `update_checklist`)

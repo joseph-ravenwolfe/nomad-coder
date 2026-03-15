@@ -12,6 +12,9 @@
 - Updated `LOOP-PROMPT.md` casing reference in `.github/copilot-instructions.md`
 - Changed `working`, `thinking`, and `loading` builtin animation presets to use `[···word···]` bracket delimiter style
 - Split `send_new_checklist` (create-or-update) into two focused tools: `send_new_checklist` (create-only) + `update_checklist` (edit-only, required `message_id`)
+- Updated `docs/behavior.md` session startup section to reference `get_me` + `session_start` instead of the old manual drain-then-notify flow
+- Fixed `session_start.ts` tool description ordering — now says "Call after get_agent_guide and get_me" instead of the incorrect "Follow with get_agent_guide"
+- Updated `docs/super-tools.md` `send_new_checklist` API section to reflect the split into `send_new_checklist` (create) + `update_checklist` (edit)
 
 ## Fixed
 
@@ -19,7 +22,7 @@
 - Fixed session panel event count and "Dump record" button visibility reflecting raw timeline size instead of filtered record size
 - Fixed `/version` bot reply not marked as internal — now excluded from session record
 - Added `isInternalTimelineEvent()` predicate and `markInternalMessage()` export from `built-in-commands.ts` for consistent filtering across `doTimelineDump` and `dump_session_record` MCP tool
-
+- Fixed `config.ts` `save()` function not wrapping `writeFileSync` in try/catch — now silently ignores disk errors in read-only or permission-denied environments
 - Fixed potential crash in `setup.ts` when channel post has no `from` field (added optional chaining `u.message.from?.id`)
 - Fixed per-iteration `AbortSignal` listener accumulation in `dequeue_update.ts` and `ask.ts` (hoisted `abortPromise` outside loop)
 - Fixed misleading JSDoc in `temp-reaction.ts`: omitting `restoreEmoji` restores the previous recorded reaction, not removes it

@@ -41,7 +41,11 @@ function load(): McpConfig {
 }
 
 function save(): void {
-  writeFileSync(CONFIG_PATH, JSON.stringify(_config, null, 2) + "\n", "utf-8");
+  try {
+    writeFileSync(CONFIG_PATH, JSON.stringify(_config, null, 2) + "\n", "utf-8");
+  } catch {
+    // Best-effort — ignore disk errors (read-only containers, permission denied, etc.)
+  }
 }
 
 // ---------------------------------------------------------------------------
