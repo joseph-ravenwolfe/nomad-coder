@@ -6,8 +6,12 @@ import { applyTopicToText } from "../topic-state.js";
 import { dequeueMatch, waitForEnqueue, type TimelineEvent } from "../message-store.js";
 
 const DESCRIPTION =
-  "Sends a question to a chat and waits until the user replies " +
-  "with a text message. Returns the reply text directly. " +
+  "Sends a question to a chat and waits until the user replies. " +
+  "Returns one of three shapes: { timed_out: true } on deadline expiry; " +
+  "{ timed_out: false, aborted: true } on MCP cancellation; " +
+  "or { timed_out: false, text, message_id } for a text reply, " +
+  "{ timed_out: false, text, message_id, voice: true } for a transcribed voice reply, " +
+  "or { timed_out: false, command, args, message_id } for a bot-command reply. " +
   "Use for open-ended prompts where a button isn't appropriate.";
 
 export function register(server: McpServer) {

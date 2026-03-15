@@ -60,6 +60,10 @@
 - Fixed `message_id` schema in `pin_message` missing `.min(1)` — invalid IDs now rejected at schema level
 - Fixed `ask` returning `{ timed_out: true }` when aborted — now returns `{ timed_out: false, aborted: true }` to distinguish MCP cancellation from deadline expiry
 - Fixed `_clearSlot(fireRestore=true)` with null `restoreEmoji` not clearing the reaction — now correctly calls `setMessageReaction([], [])`
+- Fixed `message_id` schema in `edit_message` missing `.min(1)` — invalid IDs now rejected at schema level
+- Fixed `get_me.ts` throwing at import time when `package.json` is absent — now wraps `require` in try/catch and defaults `mcp_version` to `"unknown"`
+- Fixed trailing whitespace on blank line 69 in `send_new_progress.test.ts`
+- Updated `ask` tool `DESCRIPTION` to document all possible return shapes (text, voice, command, timed\_out, aborted)
 
 ## Docs
 

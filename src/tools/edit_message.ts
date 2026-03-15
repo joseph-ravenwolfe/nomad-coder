@@ -36,7 +36,7 @@ export function register(server: McpServer) {
     {
       description: DESCRIPTION,
       inputSchema: {
-        message_id: z.number().int().describe("ID of the message to edit"),
+        message_id: z.number().int().min(1).describe("ID of the message to edit"),
         text: z
           .string()
           .optional()

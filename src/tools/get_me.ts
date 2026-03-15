@@ -3,7 +3,13 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getApi, toResult, toError } from "../telegram.js";
 
 const require = createRequire(import.meta.url);
-const { version: MCP_VERSION } = require("../../package.json") as { version: string };
+let MCP_VERSION = "unknown";
+try {
+  const pkg = require("../../package.json") as { version: string };
+  MCP_VERSION = pkg.version;
+} catch {
+  // package.json not found (deployment artifact without it)
+}
 
 let mcpCommit = "dev";
 let mcpBuildTime = "unknown";
