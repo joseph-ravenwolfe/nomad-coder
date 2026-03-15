@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getApi, resolveChat, toError } from "../telegram.js";
 import { dumpTimeline, timelineSize, storeSize } from "../message-store.js";
 import { getSessionLogMode } from "../config.js";
-import { advanceDumpCursor } from "../built-in-commands.js";
+import { advanceDumpCursor, isInternalTimelineEvent, markInternalMessage } from "../built-in-commands.js";
 
 const DESCRIPTION =
   "Snapshots the conversation timeline as a JSON file and sends it to the Telegram chat " +
@@ -44,7 +44,7 @@ export function register(server: McpServer) {
           return { content: [{ type: "text" as const, text: "No chat configured." }] };
         }
 
-        const full = dumpTimeline();
+        const full = dumpTimeline().filter(evt => !isInternalTimelineEvent(evt));
         const timeline = full.length > limit ? full.slice(-limit) : full;
 
         if (timeline.length === 0) {
@@ -70,6 +70,7 @@ export function register(server: McpServer) {
           caption: label,
         }) as { message_id: number; document?: { file_id?: string } };
 
+        markInternalMessage(msg.message_id);
         advanceDumpCursor();
 
         const fileId = msg.document?.file_id;

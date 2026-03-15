@@ -32,6 +32,7 @@ try {
 export function getVersionString(): string {
   return `v${MCP_VERSION} (${_mcpCommit} ${_mcpBuildTime})`;
 }
+import type { TimelineEvent } from "./message-store.js";
 import { dumpTimeline, dumpTimelineSince, timelineSize, storeSize, setOnEvent } from "./message-store.js";
 
 // ---------------------------------------------------------------------------
@@ -131,6 +132,39 @@ export const BUILT_IN_COMMANDS = [
   { command: "version", description: "Show server version and build info" },
   { command: "shutdown", description: "Shut down the MCP server" },
 ] as const;
+
+const _builtInCommandNames = new Set<string>(BUILT_IN_COMMANDS.map(c => c.command));
+
+/**
+ * Message IDs for bot-sent session infrastructure messages (panel, dump docs,
+ * notices) that should be excluded from the session record dump.
+ * The events still appear in the timeline and flow through dequeue_update —
+ * they just shouldn't show up when recording the session.
+ */
+const _internalMessageIds = new Set<number>();
+
+/** Register a bot-sent message as internal so it is skipped in record dumps. */
+export function markInternalMessage(messageId: number): void {
+  _internalMessageIds.add(messageId);
+}
+
+/**
+ * Returns true if a timeline event is an internal server event (built-in
+ * slash command, session-panel callback, or bot-sent session infrastructure
+ * message) that should be excluded from the session record dump. The event
+ * is still stored in the timeline and visible to dequeue_update — it just
+ * shouldn't pollute the record.
+ */
+export function isInternalTimelineEvent(evt: Omit<TimelineEvent, "_update">): boolean {
+  if (_internalMessageIds.has(evt.id)) return true;
+  if (evt.event === "message" && evt.content.type === "command") {
+    return _builtInCommandNames.has(evt.content.text ?? "");
+  }
+  if (evt.event === "callback" && typeof evt.content.data === "string") {
+    return evt.content.data.startsWith("session:");
+  }
+  return false;
+}
 
 /**
  * Returns true if this update is a built-in command or a callback_query for
@@ -239,6 +273,7 @@ async function handleSessionCommand(): Promise<void> {
       reply_markup: { inline_keyboard: keyboard },
     });
     _activePanels.set(msg.message_id, "session");
+    markInternalMessage(msg.message_id);
   } catch { /* ignore */ }
 }
 
@@ -327,19 +362,20 @@ export async function doTimelineDump(incremental = false): Promise<void> {
   let timeline: Array<Record<string, unknown>>;
   if (incremental) {
     const result = dumpTimelineSince(_dumpCursor);
-    timeline = result.events;
+    timeline = result.events.filter(evt => !isInternalTimelineEvent(evt));
     _dumpCursor = result.nextCursor;
   } else {
-    timeline = dumpTimeline();
+    timeline = dumpTimeline().filter(evt => !isInternalTimelineEvent(evt));
     _dumpCursor = timelineSize();
   }
 
   if (timeline.length === 0) {
     if (!incremental) {
       try {
-        await api.sendMessage(chatId, "� *Session Record*\n_(no events captured)_", {
+        const noEvtMsg = await api.sendMessage(chatId, "🗒 *Session Record*\n_(no events captured)_", {
           parse_mode: "Markdown",
         });
+        markInternalMessage(noEvtMsg.message_id);
       } catch { /* ignore */ }
     }
     return;
@@ -364,6 +400,7 @@ export async function doTimelineDump(incremental = false): Promise<void> {
       message_id: number;
       document?: { file_id?: string };
     };
+    markInternalMessage(msg.message_id);
 
     // Amend caption with file_id so it's recoverable after a crash
     const fileId = msg.document?.file_id;
@@ -379,9 +416,10 @@ export async function doTimelineDump(incremental = false): Promise<void> {
     // Fallback: truncated message
     try {
       const json = JSON.stringify(payload);
-      await api.sendMessage(chatId, `\`\`\`json\n${json.slice(0, 3900)}\n\`\`\``, {
+      const fallbackMsg = await api.sendMessage(chatId, `\`\`\`json\n${json.slice(0, 3900)}\n\`\`\``, {
         parse_mode: "Markdown",
       });
+      markInternalMessage(fallbackMsg.message_id);
     } catch { /* ignore */ }
   }
 }
