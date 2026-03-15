@@ -21,7 +21,7 @@ export function register(server: McpServer) {
       inputSchema: {
         text: z.string().describe("Text to synthesize and send as a voice note."),
         disable_notification: z.boolean().optional().describe("Send silently"),
-        reply_to_message_id: z.number().int().optional().describe("Reply to this message ID"),
+        reply_to_message_id: z.number().int().min(1).optional().describe("Reply to this message ID"),
       },
     },
     async ({ text, disable_notification, reply_to_message_id }) => {

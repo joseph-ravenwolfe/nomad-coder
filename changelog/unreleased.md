@@ -9,6 +9,13 @@
 
 ## Changed
 
+- Corrected `get_agent_guide` tool description: now says "Call this first — before session_start" (was "after session_start")
+- Updated session flow step 1 in `docs/communication.md`: now references `session_start` instead of a manual `notify`
+- Corrected voice reaction pipeline docs across `docs/communication.md`, `docs/behavior.md`, and `.github/instructions/telegram-communication.instructions.md`: server manages ✍ → 😴/🫡 automatically; 👀 is optional and never required for voice messages
+- Rewrote 👀 rules table in `docs/behavior.md`: removed "Voice messages only" / "One shot" contradiction; replaced with "Optional, never required" and "Avoid on text" rows
+- Fixed `show_typing` description in `docs/behavior.md`: "right before doing actual work" → "right before sending a reply"
+- Fixed `dequeue_update` description: "Returns an array of compact events" → "Returns `{ updates: [...] }` with optional `pending`, or `{ empty: true }` on timeout"
+- Added `update_checklist` call to multi-step task pattern in `docs/communication.md` (replaced placeholder comment)
 - Updated `LOOP-PROMPT.md` casing reference in `.github/copilot-instructions.md`
 - Changed `working`, `thinking`, and `loading` builtin animation presets to use `[···word···]` bracket delimiter style
 - Split `send_new_checklist` (create-or-update) into two focused tools: `send_new_checklist` (create-only) + `update_checklist` (edit-only, required `message_id`)
@@ -17,6 +24,12 @@
 - Updated `docs/super-tools.md` `send_new_checklist` API section to reflect the split into `send_new_checklist` (create) + `update_checklist` (edit)
 
 ## Fixed
+
+- Added `.min(1)` to `message_id` schema in `append_text`, `delete_message`, `edit_message_text`, `set_reaction`, `update_progress` — rejects `0` at schema level instead of silently failing
+- Added `.min(1)` to `reply_to_message_id` schema in `ask`, `choose`, `confirm`, `notify`, `send_text_as_voice` — consistent with `send_choice` which already had it
+- Fixed per-iteration `AbortSignal` listener accumulation in `pollButtonPress` and `pollButtonOrTextOrVoice` — hoisted `abortPromise` outside loop (mirrors fix already applied to `dequeue_update.ts` and `ask.ts`)
+- Fixed `session_start` not propagating MCP `signal` to `pollButtonPress` — prevents 10-minute orphan wait when the client disconnects mid-confirmation
+- Fixed animation R4 failure path leaving orphaned placeholder message — now attempts best-effort `deleteMessage` before returning `{ intercepted: false }` (mirrors R5 cleanup path)
 
 - Fixed session record dump including internal server events (`/session`, `/version`, `session:*` callbacks, session panel messages, dump documents) — these are still stored in the timeline and visible to `dequeue_update` but filtered from the record JSON
 - Fixed session panel event count and "Dump record" button visibility reflecting raw timeline size instead of filtered record size

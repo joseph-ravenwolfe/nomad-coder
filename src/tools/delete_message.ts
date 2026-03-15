@@ -12,7 +12,7 @@ export function register(server: McpServer) {
     {
       description: DESCRIPTION,
       inputSchema: {
-        message_id: z.number().int().describe("ID of the message to delete"),
+        message_id: z.number().int().min(1).describe("ID of the message to delete"),
       },
     },
     async ({ message_id }) => {

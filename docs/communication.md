@@ -10,10 +10,10 @@ MCP resource: `telegram-bridge-mcp://communication-guide`
 
 Every session follows this loop:
 
-1. **Announce** — send a brief `notify` that you're online and ready.
+1. **Announce** — call `session_start` to announce your presence and handle any pending messages from the previous session.
 2. **Call `dequeue_update`** — blocks up to 60 s waiting for the next update.
 3. **On receive** — work through the message handling pipeline:
-   a. **Voice message?** Set a *temporary* 👀 reaction immediately — signals to the human that you caught the message and are processing it.
+   a. **Voice message?** The server already manages reactions: ✍ while transcribing, then 🫡 once your `dequeue_update` call returns it to you. No reaction action needed from you.
    b. **Show a thinking animation** — the human can see you're considering a plan.
    c. **Once the action plan is clear**, switch to a working animation — signals you're now executing.
    d. **When ready to reply**, call `show_typing` — signals your response is imminent.
@@ -31,7 +31,7 @@ The thinking → working → `show_typing` pipeline gives the operator a live st
 3. **`dequeue_update`** — sole tool for receiving updates. Returns `{ updates: [...] }`: non-content events first, optionally ending with a content message.
 4. **Commit/push** — get explicit operator approval first. Send a `notify` summary before committing.
 5. **`show_typing`** — call when composing a reply. This is the "response is imminent" signal, not a generic receipt.
-6. **👀 on voice messages only — always temporary.** Set 👀 the moment a voice message arrives (before transcription). Pass `timeout_seconds ≤ 5` and omit `restore_emoji` so it auto-removes. Update to 🫡 or 👍 when done. For text messages, skip 👀 entirely — `show_typing` is the acknowledgement.
+6. **👀 is optional — always temporary.** The server automatically manages voice reactions: ✍ while transcribing, 😴 if queued with no active waiter, and 🫡 when your `dequeue_update` returns it to you — no agent action needed. If you choose to set 👀 (to signal active attention on any message), it must always be `temporary: true`. Skip 👀 on text messages — `show_typing` is the acknowledgement.
 7. **Watch `pending`.** A non-zero `pending` in the `dequeue_update` result means the operator has sent more messages while you were working. They may have changed their mind or added details. Consider calling `dequeue_update` once more before acting, to fold new context into your plan or queue it as the next task.
 
 ---
@@ -60,7 +60,7 @@ The thinking → working → `show_typing` pipeline gives the operator a live st
 ## Reactions
 
 ```txt
-👀 = "I caught this message and am processing it" — set on voice messages only; always temporary
+👀 = "I'm actively considering this" — optional agent signal; always temporary
 🫡 = got it / acknowledged / understood
 👍 = task complete / confirmed done
 ❤  = great / love it
@@ -68,11 +68,11 @@ The thinking → working → `show_typing` pipeline gives the operator a live st
 
 **What 👀 means to humans:** it signals that your eyes are on a specific message — you've caught up to it and are actively processing it. It's too static to mean "thinking"; it means "received and in progress." Because of this weight, use it sparingly:
 
-- **Voice messages** — set 👀 immediately as a *temporary* reaction (omit `restore_emoji`, set `timeout_seconds ≤ 5`). It auto-clears so it doesn't linger after you've responded.
+- **Voice messages** — the server manages reactions automatically (✍ → 😴/🫡). No agent action required.
 - **Text messages** — skip 👀 entirely. `show_typing` is the acknowledgement for text.
-- **You may use 👀 on other messages** if the situation genuinely warrants it (e.g., a long multi-part request). But always make it temporary and always resolve it to 🫡 or 👍.
+- **You may use 👀 on any message** if the situation genuinely warrants it (e.g., a long multi-part request). Always make it temporary (`timeout_seconds ≤ 5`, omit `restore_emoji`) so it auto-clears.
 
-`show_typing` = response is imminent — not a generic "received" signal. Call it just before you send. The full pipeline: receive → (👀 if voice) → think → work → `show_typing` → send → update reaction to 🫡/👍.
+`show_typing` = response is imminent — not a generic "received" signal. Call it just before you send. The full pipeline: receive → think → work → `show_typing` → send → optionally update reaction to 🫡/👍.
 
 ---
 
@@ -184,7 +184,7 @@ Use `send_new_checklist` for any task with 3+ steps.
 ```txt
 msg = send_new_checklist(title, steps: [{label, status: "running"}, ...])
 pin_message(msg.message_id, disable_notification: true)
-# ... update after each step ...
+update_checklist(msg.message_id, steps: [{label, status: "done"}, {label, status: "running"}, ...])
 unpin_message(msg.message_id)
 ```
 
