@@ -16,7 +16,7 @@ export function register(server: McpServer) {
     {
       description: DESCRIPTION,
       inputSchema: {
-        message_id: z.number().int().describe("Message ID to append to"),
+        message_id: z.number().int().min(1).describe("Message ID to append to"),
         text: z.string().describe("New chunk to append"),
         separator: z
           .string()

@@ -184,7 +184,7 @@ set_topic("Refactor Agent")
 
 ## Tool usage: `show_typing`
 
-Call `show_typing` **after receiving a message**, right before doing actual work. It is idempotent — you can call it multiple times and only one interval runs; repeated calls just extend the deadline without spamming Telegram.
+Call `show_typing` **after receiving a message**, right before sending a reply. It is idempotent — you can call it multiple times and only one interval runs; repeated calls just extend the deadline without spamming Telegram.
 
 - **Default timeout:** 20 s — enough for most tasks. Pass a longer value for slow operations.
 - **Auto-cancelled** when any message-sending tool (`send_text`, `notify`, `send_file`, etc.) is called. You don't need to manually cancel on normal send paths.
@@ -260,13 +260,13 @@ React to user messages instead of sending a separate acknowledgement text. Commo
 | Rule | Detail |
 | --- | --- |
 | **Temporary only** | Always call `set_reaction(emoji: "👀", temporary: true)` — never a permanent `👀`. It auto-clears the moment the bot sends any outbound message. |
-| **Voice messages only** | Use `👀` exclusively on voice messages, as an immediate "I saw it" ack while transcription runs. Do **not** react to text messages with 👀 — it adds noise without value. |
-| **One shot** | Set `👀` once per voice message, before transcription. The server calls `ack_voice_message` automatically on `dequeue_update`; you do not need to call `set_reaction` yourself for voice. |
+| **Optional, never required** | The server automatically manages voice message reactions (✍ while transcribing, 😴 if queued, 🫡 when dequeued to you). You do not need to call `set_reaction` for voice messages. `👀` is a purely voluntary agent signal. |
+| **Avoid on text** | Do **not** react to text messages with 👀 — it adds noise without value. `show_typing` is the right acknowledgement for text. |
 | **Auto-restores on outbound** | When any outbound message or animation fires, `fireTempReactionRestore` runs automatically — the `👀` is replaced with the bot's previous reaction (or cleared if none). No manual cleanup needed. |
 | **No-op if already set** | The server silently skips `trySetMessageReaction` when the message already carries the same emoji. No redundant API calls. |
 | **Never leave 👀 stuck** | If you somehow set `👀` manually, it **must** be cleared by your next outbound action. If you set it and then decide not to respond, call `set_reaction(emoji: "")` to clear it explicitly. |
 
-**TL;DR:** `👀` on voice = fine. `👀` on text = don't. Temporary always. Let the auto-restore do its job.
+**TL;DR:** `👀` is optional — the server handles voice reactions automatically. Skip `👀` on text. Temporary always.
 
 ---
 
@@ -300,7 +300,7 @@ Do not use `\\n` (double backslash) — that would produce a visible backslash i
 
 ## Voice message handling
 
-Voice messages are automatically transcribed by the background poller before they arrive in `dequeue_update`. `ask` and `choose` also handle voice replies inline. While transcribing, a `✍` reaction is applied to the voice message; when done, it swaps to `🫡`.
+Voice messages are automatically transcribed by the background poller before they arrive in `dequeue_update`. `ask` and `choose` also handle voice replies inline. While transcribing, a `✍` reaction is applied to the voice message. When transcription completes, it swaps to `😴` if queued with no active waiter; once your `dequeue_update` returns it to you, the reaction updates to `🫡` automatically.
 
 Transcription is transparent — results arrive as `text` with `voice: true`.
 
@@ -359,7 +359,7 @@ Use this to acknowledge what the user reacted to and adapt behavior accordingly.
 
 When `dequeue_update` returns an event with a non-text `content.type`, **always ask the user what to do — never read or process the file automatically.**
 
-React with 👀 immediately on receipt, then use `choose` with inferred action buttons based on file type.
+Optionally react with 👀 to signal receipt, then use `choose` with inferred action buttons based on file type.
 
 ### Core rule: always ask first, download only when needed
 

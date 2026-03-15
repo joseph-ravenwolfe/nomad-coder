@@ -26,8 +26,8 @@ function compactBatch(events: TimelineEvent[]): Record<string, unknown>[] {
 const DESCRIPTION =
   "Consume queued updates in a single batch. Non-content events (reactions, " +
   "callbacks) are drained first, then up to one content event (user message " +
-  "with text, media, or voice) is appended. Returns an array of compact " +
-  "events: [{ id, event, from, content }, ...]. " +
+  "with text, media, or voice) is appended. Returns `{ updates: [{ id, event, from, content }, ...] }` " +
+  "with optional `pending` (count of remaining queued updates, when > 0), or `{ empty: true }` on timeout. " +
   "Voice messages arrive pre-transcribed as { type: \"voice\", text: \"...\" }. " +
   "pending > 0 means more updates are queued — call again. " +
   "Two modes: omit timeout (default 60 s) to block until an update arrives; " +

@@ -24,7 +24,7 @@ announce ready → dequeue_update (loop) → on message:
 
 1. **Reply via Telegram** for every substantive response — not the agent panel.
 2. **`confirm`** for yes/no · **`choose`** for multi-option — always buttons.
-3. **👀 is temporary and voice-only — read the rules.** The server auto-sets 🫡 on voice via `ackVoiceMessage`; you rarely need to set 👀 manually. If you do, it **must** be `temporary: true`, omit `restore_emoji` to auto-remove. Skip 👀 on text messages entirely. See `docs/behavior.md` § *👀 rules* for the full table.
+3. **👀 is optional and always temporary.** The server automatically manages voice reactions (✍ while transcribing, 😴 if queued, 🫡 when dequeued) — no agent action needed for voice. You may set 👀 voluntarily on any message (`temporary: true`, omit `restore_emoji`). Skip 👀 on text messages entirely. See `docs/behavior.md` § *👀 rules* for the full table.
 4. **`show_typing`** just before sending a reply — signals response is imminent, not a generic receipt.
 5. **Watch `pending`.** Non-zero means the operator sent more while you were working — check before acting.
 6. **Announce before major actions** (`send_text` or `notify`). Require `confirm` for destructive/irreversible ones.
