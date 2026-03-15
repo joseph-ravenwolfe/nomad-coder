@@ -392,7 +392,7 @@ function buildSessionPanel(): { text: string; keyboard: { text: string; callback
   const mode = getSessionLogMode();
 
   const lines = [
-    `� *Session Record*`,
+    `🗒 *Session Record*`,
     `Mode: ${sessionLogLabel()}`,
     `Timeline: ${tSize} events · ${mSize} messages`,
   ];
