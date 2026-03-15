@@ -17,6 +17,8 @@
 
 - Fixed session record dump including internal server events (`/session`, `/version`, `session:*` callbacks, session panel messages, dump documents) — these are still stored in the timeline and visible to `dequeue_update` but filtered from the record JSON
 - Fixed session panel event count and "Dump record" button visibility reflecting raw timeline size instead of filtered record size
+- Fixed `/version` bot reply not marked as internal — now excluded from session record
+- Added `isInternalTimelineEvent()` predicate and `markInternalMessage()` export from `built-in-commands.ts` for consistent filtering across `doTimelineDump` and `dump_session_record` MCP tool
 
 - Fixed potential crash in `setup.ts` when channel post has no `from` field (added optional chaining `u.message.from?.id`)
 - Fixed per-iteration `AbortSignal` listener accumulation in `dequeue_update.ts` and `ask.ts` (hoisted `abortPromise` outside loop)
