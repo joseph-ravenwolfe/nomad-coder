@@ -92,11 +92,15 @@ interface AnimationState {
   intervalMs: number;
   timeoutMs: number;
   frameIndex: number;
+  dispatchCount: number;     // counts actual API dispatches; interval doubles every 20
   cycleTimer: ReturnType<typeof setInterval> | null;
   timeoutTimer: ReturnType<typeof setTimeout> | null;
 }
 
 let _state: AnimationState | null = null;
+
+/** Number of dispatched frames per backoff step — interval doubles at each multiple. */
+const DISPATCHES_PER_BACKOFF_STEP = 20;
 
 /** Saved config for resuming animation after a file send. */
 let _savedForResume: { rawFrames: string[]; intervalMs: number; timeoutSeconds: number } | null = null;
@@ -128,11 +132,14 @@ function startTimeoutTimer(): void {
 }
 
 async function cycleFrame(): Promise<void> {
-  if (!_state) return;
-  const { chatId, messageId, frames, parseMode } = _state;
-  const prevText = frames[_state.frameIndex];
-  _state.frameIndex = (_state.frameIndex + 1) % frames.length;
-  const text = frames[_state.frameIndex];
+  // Capture state synchronously before any await — _state may be nulled/replaced
+  // by cancelAnimation() or the send interceptor while the API call is in-flight.
+  const captured = _state;
+  if (!captured) return;
+  const { chatId, messageId, frames, parseMode } = captured;
+  const prevText = frames[captured.frameIndex];
+  captured.frameIndex = (captured.frameIndex + 1) % frames.length;
+  const text = frames[captured.frameIndex];
   // Identical consecutive frames act as a timing delay — skip the API call
   if (text === prevText) return;
   try {
@@ -143,10 +150,26 @@ async function cycleFrame(): Promise<void> {
     // Animation placeholder is gone (deleted, expired) — stop cycling
     const msg = err instanceof Error ? err.message : String(err);
     process.stderr.write(`[animation] cycleFrame failed for msg ${messageId}, stopping: ${msg}\n`);
-    clearTimers();
-    _state = null;
-    _savedForResume = null;
-    clearSendInterceptor();
+    // Only clear global state if it still refers to this animation
+    if (_state === captured) {
+      clearTimers();
+      _state = null;
+      _savedForResume = null;
+      clearSendInterceptor();
+    }
+    return;
+  }
+  // Verify _state still refers to this animation before mutating
+  if (_state !== captured) return;
+  // Backoff: every DISPATCHES_PER_BACKOFF_STEP dispatches, double the interval
+  captured.dispatchCount++;
+  if (captured.dispatchCount % DISPATCHES_PER_BACKOFF_STEP === 0) {
+    captured.intervalMs = captured.intervalMs * 2;
+    if (captured.cycleTimer) {
+      clearInterval(captured.cycleTimer);
+      captured.cycleTimer = setInterval(() => void cycleFrame(), captured.intervalMs);
+      unrefTimer(captured.cycleTimer);
+    }
   }
 }
 
@@ -241,6 +264,7 @@ export async function startAnimation(
     intervalMs: Math.max(intervalMs, 1000), // Telegram rate limit floor
     timeoutMs: Math.min(timeoutSeconds, 600) * 1000,
     frameIndex: 0,
+    dispatchCount: 0,
     cycleTimer: null,
     timeoutTimer: null,
   };
