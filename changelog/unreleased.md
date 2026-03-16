@@ -8,11 +8,15 @@
 - `close_session` now removes the per-session queue on closure
 - `dequeue_update` is now session-aware — reads from session queue when a session is active, falls back to global queue
 - Added cross-session outbound forwarding — bot messages from one session appear in other sessions' queues
+- Added `routing-mode` module — configurable routing for ambiguous messages (load_balance default, cascade/governor stubs for Phase 4)
+- Added `.npmrc` with `node-linker=hoisted` — flattens `node_modules` for reliable type resolution across transitive deps
 
 ## Changed
 
 - Restored `@tsdotnet/queue` dependency — replaces hand-rolled `SimpleQueue<T>` inline class; pnpm type-resolution issue from v3.0.0 no longer reproduces
 - Refactored `message-store` to delegate queue operations to `TwoLaneQueue<T>` — inbound events are also routed to per-session queues via `routeToSession`
+- Ambiguous inbound messages now use load-balance routing (first idle session) instead of broadcast when multiple sessions are active
+- Fixed lint errors in `close_session` — removed unnecessary `async` and type assertions
 
 - Added session manager with incrementing SIDs and 6-digit PINs (crypto.randomInt)
 - Added `SESSION_AUTH_SCHEMA` and `checkAuth()` for tool-level session authentication

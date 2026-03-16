@@ -18,12 +18,12 @@ export function register(server: McpServer) {
         ...SESSION_AUTH_SCHEMA,
       },
     },
-    async ({ sid, pin }) => {
-      const authErr = checkAuth(sid as number, pin as number);
+    ({ sid, pin }) => {
+      const authErr = checkAuth(sid, pin);
       if (authErr) return authErr;
 
-      const closed = closeSession(sid as number);
-      if (closed) removeSessionQueue(sid as number);
+      const closed = closeSession(sid);
+      if (closed) removeSessionQueue(sid);
       return toResult({ closed, sid });
     },
   );

@@ -14,6 +14,7 @@
 
 import { TwoLaneQueue } from "./two-lane-queue.js";
 import type { TimelineEvent } from "./message-store.js";
+import { getRoutingMode } from "./routing-mode.js";
 
 // ---------------------------------------------------------------------------
 // Voice-ready predicate (shared with message-store's queue)
@@ -93,7 +94,9 @@ export function getMessageOwner(messageId: number): number {
  *
  * Routing rules:
  *   1. Targeted (reply-to, callback, reaction on owned message) → owner only
- *   2. Ambiguous (no reply context) → broadcast to all sessions
+ *   2. Ambiguous (no reply context) → depends on routing mode:
+ *      - load_balance: first idle session (hasPendingWaiters), lowest SID tie-break
+ *      - cascade / governor: broadcast for now (Phase 4 will refine)
  *
  * The global queue in message-store is NOT touched here — it's
  * populated by recordInbound as before. This is additive.
@@ -105,15 +108,21 @@ export function routeToSession(event: TimelineEvent, lane: "response" | "message
 
   if (targetSid > 0) {
     // Targeted: deliver only to the owning session
-    const q = _queues.get(targetSid);
-    if (q) {
-      if (lane === "response") q.enqueueResponse(event);
-      else q.enqueueMessage(event);
-    }
+    enqueueToSession(targetSid, event, lane);
     return;
   }
 
-  // Ambiguous: broadcast to all sessions
+  // Ambiguous routing
+  const mode = getRoutingMode();
+  if (mode === "load_balance") {
+    const sid = pickIdleSession();
+    if (sid > 0) {
+      enqueueToSession(sid, event, lane);
+      return;
+    }
+  }
+
+  // Fallback (cascade/governor or no idle session): broadcast to all
   for (const q of _queues.values()) {
     if (lane === "response") q.enqueueResponse(event);
     else q.enqueueMessage(event);
@@ -136,6 +145,35 @@ function resolveTargetSession(event: TimelineEvent): number {
   }
 
   return 0;
+}
+
+/** Enqueue to a single session by SID. No-op if queue is missing. */
+function enqueueToSession(
+  sid: number,
+  event: TimelineEvent,
+  lane: "response" | "message",
+): void {
+  const q = _queues.get(sid);
+  if (!q) return;
+  if (lane === "response") q.enqueueResponse(event);
+  else q.enqueueMessage(event);
+}
+
+/**
+ * Pick the idle session with the lowest SID (load-balance mode).
+ * A session is "idle" if it has a waiter (blocked on dequeue_update).
+ * Falls back to the lowest SID if none are idle.
+ */
+function pickIdleSession(): number {
+  let idleSid = 0;
+  let fallbackSid = 0;
+  for (const [sid, q] of _queues) {
+    if (fallbackSid === 0 || sid < fallbackSid) fallbackSid = sid;
+    if (q.hasPendingWaiters() && (idleSid === 0 || sid < idleSid)) {
+      idleSid = sid;
+    }
+  }
+  return idleSid > 0 ? idleSid : fallbackSid;
 }
 
 // ---------------------------------------------------------------------------

@@ -12,6 +12,10 @@ import {
   notifySessionWaiters,
   resetSessionQueuesForTest,
 } from "./session-queue.js";
+import {
+  setRoutingMode,
+  resetRoutingModeForTest,
+} from "./routing-mode.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -58,6 +62,7 @@ function reactionEvent(target: number, id = 400): TimelineEvent {
 describe("session-queue", () => {
   beforeEach(() => {
     resetSessionQueuesForTest();
+    resetRoutingModeForTest();
   });
 
   // -------------------------------------------------------------------------
@@ -153,32 +158,70 @@ describe("session-queue", () => {
   });
 
   // -------------------------------------------------------------------------
-  // Routing — ambiguous (broadcast)
+  // Routing — ambiguous (load balance, default mode)
   // -------------------------------------------------------------------------
 
-  describe("ambiguous routing (broadcast)", () => {
-    it("broadcasts message to all sessions", () => {
+  describe("ambiguous routing (load balance)", () => {
+    it("routes to lowest-SID idle session", () => {
       createSessionQueue(1);
       createSessionQueue(2);
-      createSessionQueue(3);
+      // Make session 2 idle (waiting on dequeue)
+      void getSessionQueue(2)?.waitForEnqueue();
       routeToSession(makeEvent(), "message");
-      expect(getSessionQueue(1)?.pendingCount()).toBe(1);
+      expect(getSessionQueue(1)?.pendingCount()).toBe(0);
       expect(getSessionQueue(2)?.pendingCount()).toBe(1);
-      expect(getSessionQueue(3)?.pendingCount()).toBe(1);
     });
 
-    it("broadcasts response event to all sessions", () => {
+    it("picks lowest SID when multiple sessions are idle", () => {
       createSessionQueue(1);
       createSessionQueue(2);
-      // Reaction on an unowned message → ambiguous
-      routeToSession(reactionEvent(999), "response");
+      void getSessionQueue(1)?.waitForEnqueue();
+      void getSessionQueue(2)?.waitForEnqueue();
+      routeToSession(makeEvent(), "message");
       expect(getSessionQueue(1)?.pendingCount()).toBe(1);
-      expect(getSessionQueue(2)?.pendingCount()).toBe(1);
+      expect(getSessionQueue(2)?.pendingCount()).toBe(0);
+    });
+
+    it("falls back to lowest SID when no session is idle", () => {
+      createSessionQueue(3);
+      createSessionQueue(5);
+      routeToSession(makeEvent(), "message");
+      expect(getSessionQueue(3)?.pendingCount()).toBe(1);
+      expect(getSessionQueue(5)?.pendingCount()).toBe(0);
+    });
+
+    it("routes to the only session regardless of idle state", () => {
+      createSessionQueue(1);
+      routeToSession(makeEvent({ id: 10 }), "message");
+      expect(getSessionQueue(1)?.pendingCount()).toBe(1);
     });
 
     it("no-ops when no session queues exist", () => {
-      // Should not throw
       routeToSession(makeEvent(), "message");
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Routing — ambiguous (broadcast fallback for cascade/governor)
+  // -------------------------------------------------------------------------
+
+  describe("ambiguous routing (broadcast fallback)", () => {
+    it("broadcasts in cascade mode", () => {
+      setRoutingMode("cascade");
+      createSessionQueue(1);
+      createSessionQueue(2);
+      routeToSession(makeEvent(), "message");
+      expect(getSessionQueue(1)?.pendingCount()).toBe(1);
+      expect(getSessionQueue(2)?.pendingCount()).toBe(1);
+    });
+
+    it("broadcasts in governor mode", () => {
+      setRoutingMode("governor", 1);
+      createSessionQueue(1);
+      createSessionQueue(2);
+      routeToSession(reactionEvent(999), "response");
+      expect(getSessionQueue(1)?.pendingCount()).toBe(1);
+      expect(getSessionQueue(2)?.pendingCount()).toBe(1);
     });
   });
 

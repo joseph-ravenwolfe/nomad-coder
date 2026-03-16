@@ -32,7 +32,7 @@ function voicePending(id: number): TestItem {
   return { id, type: "voice", ready: false };
 }
 
-function voiceReady(id: number, text: string): TestItem {
+function _voiceReady(id: number, text: string): TestItem {
   return { id, type: "voice", text, ready: true };
 }
 
@@ -174,7 +174,9 @@ describe("TwoLaneQueue", () => {
 
     it("returns undefined when nothing matches", () => {
       q.enqueueMessage(msg(1));
-      const result = q.dequeueMatch(() => undefined);
+      const result = q.dequeueMatch((item) =>
+        item.id === 999 ? true : undefined,
+      );
       expect(result).toBeUndefined();
       expect(q.pendingCount()).toBe(1);
     });
@@ -290,7 +292,7 @@ describe("TwoLaneQueue", () => {
 
     it("hasPendingWaiters reflects blocked callers", () => {
       expect(q.hasPendingWaiters()).toBe(false);
-      q.waitForEnqueue();
+      void q.waitForEnqueue();
       expect(q.hasPendingWaiters()).toBe(true);
     });
 
@@ -310,8 +312,8 @@ describe("TwoLaneQueue", () => {
 
     it("dequeueMatch does NOT wake waiters on miss", () => {
       q.enqueueMessage(msg(1));
-      q.waitForEnqueue();
-      q.dequeueMatch(() => undefined);
+      void q.waitForEnqueue();
+      q.dequeueMatch((): undefined => undefined);
       expect(q.hasPendingWaiters()).toBe(true);
     });
   });
@@ -355,7 +357,7 @@ describe("TwoLaneQueue", () => {
     it("empties both lanes and resets waiters", () => {
       q.enqueueResponse(response(1));
       q.enqueueMessage(msg(2));
-      q.waitForEnqueue();
+      void q.waitForEnqueue();
       q.clear();
       expect(q.pendingCount()).toBe(0);
       expect(q.hasPendingWaiters()).toBe(false);
