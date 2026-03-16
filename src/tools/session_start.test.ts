@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   pollButtonPress: vi.fn(),
   ackAndEditSelection: vi.fn(),
   createSession: vi.fn(),
+  setActiveSession: vi.fn(),
 }));
 
 vi.mock("../telegram.js", async (importActual) => {
@@ -34,6 +35,7 @@ vi.mock("../message-store.js", () => ({
 
 vi.mock("../session-manager.js", () => ({
   createSession: (...args: unknown[]) => mocks.createSession(...args),
+  setActiveSession: (...args: unknown[]) => mocks.setActiveSession(...args),
 }));
 
 vi.mock("./button-helpers.js", async (importActual) => {
@@ -255,5 +257,19 @@ describe("session_start tool", () => {
     expect(result.sid).toBe(3);
     expect(result.pin).toBe(719304);
     expect(result.sessions_active).toBe(3);
+  });
+
+  it("calls setActiveSession with the new session SID", async () => {
+    mocks.pendingCount.mockReturnValue(0);
+    mocks.createSession.mockReturnValue({
+      sid: 5,
+      pin: 999999,
+      name: "active-test",
+      sessionsActive: 2,
+    });
+
+    await call({ name: "active-test" });
+
+    expect(mocks.setActiveSession).toHaveBeenCalledWith(5);
   });
 });

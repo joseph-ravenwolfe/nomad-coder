@@ -320,6 +320,30 @@ describe("session-queue", () => {
   });
 
   // -------------------------------------------------------------------------
+  // Ownership cleanup on remove
+  // -------------------------------------------------------------------------
+
+  describe("ownership cleanup on removeSessionQueue", () => {
+    it("removes ownership entries for the closed session", () => {
+      createSessionQueue(1);
+      createSessionQueue(2);
+      trackMessageOwner(100, 1);
+      trackMessageOwner(200, 1);
+      trackMessageOwner(300, 2);
+      removeSessionQueue(1);
+      expect(getMessageOwner(100)).toBe(0);
+      expect(getMessageOwner(200)).toBe(0);
+      expect(getMessageOwner(300)).toBe(2); // other session untouched
+    });
+
+    it("no-ops cleanup when session not found", () => {
+      trackMessageOwner(100, 1);
+      removeSessionQueue(99); // doesn't exist
+      expect(getMessageOwner(100)).toBe(1); // untouched
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // Reset
   // -------------------------------------------------------------------------
 

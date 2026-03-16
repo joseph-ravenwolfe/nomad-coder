@@ -4,11 +4,15 @@ import { createMockServer, parseResult, isError, type ToolHandler } from "./test
 const mocks = vi.hoisted(() => ({
   closeSession: vi.fn(),
   validateSession: vi.fn(),
+  getActiveSession: vi.fn(),
+  setActiveSession: vi.fn(),
 }));
 
 vi.mock("../session-manager.js", () => ({
   closeSession: (...args: unknown[]) => mocks.closeSession(...args),
   validateSession: (...args: unknown[]) => mocks.validateSession(...args),
+  getActiveSession: (...args: unknown[]) => mocks.getActiveSession(...args),
+  setActiveSession: (...args: unknown[]) => mocks.setActiveSession(...args),
 }));
 
 import { register } from "./close_session.js";
@@ -68,5 +72,21 @@ describe("close_session tool", () => {
     await call({ sid: 1, pin: 999999 });
 
     expect(mocks.closeSession).not.toHaveBeenCalled();
+  });
+
+  it("resets active session to 0 when closing the active session", async () => {
+    mocks.getActiveSession.mockReturnValue(1);
+
+    await call({ sid: 1, pin: 123456 });
+
+    expect(mocks.setActiveSession).toHaveBeenCalledWith(0);
+  });
+
+  it("does not reset active session when closing a different session", async () => {
+    mocks.getActiveSession.mockReturnValue(2);
+
+    await call({ sid: 1, pin: 123456 });
+
+    expect(mocks.setActiveSession).not.toHaveBeenCalled();
   });
 });

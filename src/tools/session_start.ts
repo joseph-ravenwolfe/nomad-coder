@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getApi, toResult, toError, resolveChat } from "../telegram.js";
 import { markdownToV2 } from "../markdown.js";
 import { dequeue, pendingCount } from "../message-store.js";
-import { createSession } from "../session-manager.js";
+import { createSession, setActiveSession } from "../session-manager.js";
 import { createSessionQueue } from "../session-queue.js";
 import {
   pollButtonPress,
@@ -57,6 +57,7 @@ export function register(server: McpServer) {
 
       const session = createSession(name);
       createSessionQueue(session.sid);
+      setActiveSession(session.sid);
 
       try {
         // 1. Send the intro message

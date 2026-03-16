@@ -53,9 +53,15 @@ export function createSessionQueue(sid: number): boolean {
   return true;
 }
 
-/** Remove a session's queue. Returns false if not found. */
+/** Remove a session's queue and clean up ownership entries. */
 export function removeSessionQueue(sid: number): boolean {
-  return _queues.delete(sid);
+  const removed = _queues.delete(sid);
+  if (removed) {
+    for (const [msgId, owner] of _messageOwnership) {
+      if (owner === sid) _messageOwnership.delete(msgId);
+    }
+  }
+  return removed;
 }
 
 /** Get a session's queue (or undefined if no such session). */

@@ -29,6 +29,9 @@
 
 ## Fixed
 
+- Fixed `session_start` never calling `setActiveSession` — per-session queues were created but never activated in production
+- Fixed `close_session` not resetting active session when closing the currently active session
+- Fixed `removeSessionQueue` leaking `_messageOwnership` entries for closed sessions
 - Fixed `set_reaction` ignoring `temporary` flag — added explicit `temporary` boolean parameter so reactions auto-revert without requiring `restore_emoji` or `timeout_seconds`
 - Fixed confirm/choose buttons staying forever after timeout when user sends a text message (#27)
 
