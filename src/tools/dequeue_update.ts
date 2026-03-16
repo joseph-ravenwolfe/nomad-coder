@@ -40,6 +40,8 @@ const DESCRIPTION =
   "pending > 0 means more updates are queued — call again. " +
   "Two modes: omit timeout (default 60 s) to block until an update arrives; " +
   "pass timeout: 0 for an instant non-blocking poll (use only for startup drain loops). " +
+  "Pass sid (from session_start result) when multiple sessions share the same server process — " +
+  "this pins the queue to the correct session instead of relying on global active-session state. " +
   "Ensure session_start has been called.";
 
 export function register(server: McpServer) {
@@ -55,12 +57,19 @@ export function register(server: McpServer) {
           .max(300)
           .default(60)
           .describe("Seconds to block when queue is empty. Default 60 blocks until an update arrives (normal loop). Pass 0 for an instant non-blocking poll (drain loops only). Max 300 (5 min)."),
+        sid: z
+          .number()
+          .int()
+          .min(1)
+          .optional()
+          .describe("Session ID returned by session_start. Pass this when multiple sessions share the same server process to ensure this call reads from the correct session queue."),
       },
     },
-    async ({ timeout }, { signal }) => {
-      // Session-aware queue selection: use session queue when active,
-      // fall back to global queue for backward compat (sid 0).
-      const sid = getActiveSession();
+    async ({ timeout, sid: explicitSid }, { signal }) => {
+      // Session-aware queue selection: explicit sid takes priority over global
+      // active-session state (which is unreliable when multiple Copilot chat
+      // instances share the same server process).
+      const sid = explicitSid ?? getActiveSession();
       const sessionQueue = sid > 0 ? getSessionQueue(sid) : undefined;
 
       function dequeueBatchAny(): TimelineEvent[] {

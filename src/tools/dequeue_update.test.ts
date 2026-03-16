@@ -325,6 +325,45 @@ describe("dequeue_update tool", () => {
     expect(data.pending).toBe(3);
   });
 
+  it("uses explicit sid param over getActiveSession when provided", async () => {
+    const evt = makeEvent(70, "explicit sid");
+    const mockSessionQueue = {
+      dequeueBatch: vi.fn(() => [evt] as TimelineEvent[]),
+      pendingCount: vi.fn(() => 0),
+      waitForEnqueue: vi.fn().mockResolvedValue(undefined),
+    };
+    // getActiveSession returns a DIFFERENT session than the explicit sid
+    mocks.getActiveSession.mockReturnValue(1);
+    mocks.getSessionQueue.mockImplementation((sid: number) =>
+      sid === 3 ? mockSessionQueue : undefined,
+    );
+
+    const result = await call({ sid: 3, timeout: 0 });
+    const data = parseResult(result);
+    expect(data.updates[0].id).toBe(70);
+    // getSessionQueue was called with the explicit sid, not the active one
+    expect(mocks.getSessionQueue).toHaveBeenCalledWith(3);
+    expect(mockSessionQueue.dequeueBatch).toHaveBeenCalled();
+  });
+
+  it("falls back to getActiveSession when sid param is omitted", async () => {
+    const evt = makeEvent(71, "fallback to active");
+    const mockSessionQueue = {
+      dequeueBatch: vi.fn(() => [evt] as TimelineEvent[]),
+      pendingCount: vi.fn(() => 0),
+      waitForEnqueue: vi.fn().mockResolvedValue(undefined),
+    };
+    mocks.getActiveSession.mockReturnValueOnce(5);
+    mocks.getSessionQueue.mockImplementationOnce((sid: number) =>
+      sid === 5 ? mockSessionQueue : undefined,
+    );
+
+    const result = await call({ timeout: 0 });
+    const data = parseResult(result);
+    expect(data.updates[0].id).toBe(71);
+    expect(mocks.getSessionQueue).toHaveBeenCalledWith(5);
+  });
+
   // =========================================================================
   // Abort signal
   // =========================================================================
