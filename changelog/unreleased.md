@@ -35,6 +35,7 @@
 - Added troubleshooting entry for multiple instances competing for the same bot token
 - Added `debug-log` module — structured, bounded (2 000 entries) trace logger with categories (session, route, queue, cascade, dm, animation, tool); enable via `TELEGRAM_MCP_DEBUG=1` env var
 - Added debug instrumentation across `session-manager`, `session-queue`, `dm-permissions`, `animation-state`, and `session-auth` — all lifecycle events, routing decisions, and DM operations are now traced
+- Added `get_debug_log` tool — agent-readable access to the in-memory debug trace buffer with category filtering, count limits, and runtime toggle
 - Added `docs/multi-session-test-script.md` — detailed phase-by-phase manual test guide for multi-session features (6 phases, 20+ scenarios)
 
 ## Changed
