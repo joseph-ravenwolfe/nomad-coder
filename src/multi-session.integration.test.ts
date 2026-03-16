@@ -891,4 +891,208 @@ describe("multi-session integration", () => {
       expect(drain(s2.sid)).toEqual([event]);
     });
   });
+
+  // -------------------------------------------------------------------------
+  // Queue isolation & delivery exactness
+  // -------------------------------------------------------------------------
+  describe("queue isolation & delivery exactness", () => {
+    it("round-robin delivers exactly one copy per message across 3 sessions", () => {
+      const s1 = setupSession("A");
+      const s2 = setupSession("B");
+      const s3 = setupSession("C");
+      setRoutingMode("load_balance");
+
+      // Make all idle by calling waitForEnqueue
+      for (const sid of [s1.sid, s2.sid, s3.sid]) {
+        void getSessionQueue(sid)!.waitForEnqueue();
+      }
+
+      const count = 30;
+      const events: TimelineEvent[] = [];
+      for (let i = 0; i < count; i++) events.push(makeEvent());
+      for (const e of events) routeToSession(e, "message");
+
+      const got1 = drain(s1.sid);
+      const got2 = drain(s2.sid);
+      const got3 = drain(s3.sid);
+
+      // Total delivered equals total sent
+      const allIds = [...got1, ...got2, ...got3].map(e => e.id).sort((a, b) => a - b);
+      expect(allIds).toHaveLength(count);
+
+      // No duplicates
+      expect(new Set(allIds).size).toBe(count);
+
+      // All original IDs accounted for
+      expect(allIds).toEqual(events.map(e => e.id).sort((a, b) => a - b));
+
+      // Each session got roughly equal share (10 each for 30 messages)
+      expect(got1.length).toBe(10);
+      expect(got2.length).toBe(10);
+      expect(got3.length).toBe(10);
+    });
+
+    it("targeted routing delivers to exactly one session when multiple exist", () => {
+      const s1 = setupSession("A");
+      const s2 = setupSession("B");
+      const s3 = setupSession("C");
+
+      // S2 owns message 500
+      trackMessageOwner(500, s2.sid);
+
+      // Reply to message 500 — should go only to S2
+      const reply = replyEvent(500);
+      routeToSession(reply, "message");
+
+      expect(drain(s1.sid)).toHaveLength(0);
+      expect(drain(s2.sid)).toHaveLength(1);
+      expect(drain(s3.sid)).toHaveLength(0);
+
+      // Callback on message 500 — should go only to S2
+      const cb = callbackEvent(500);
+      routeToSession(cb, "response");
+
+      expect(drain(s1.sid)).toHaveLength(0);
+      expect(drain(s2.sid)).toHaveLength(1);
+      expect(drain(s3.sid)).toHaveLength(0);
+    });
+
+    it("session queues are fully isolated — draining one does not affect another", () => {
+      const s1 = setupSession("A");
+      const s2 = setupSession("B");
+      setRoutingMode("load_balance");
+
+      // Both idle
+      void getSessionQueue(s1.sid)!.waitForEnqueue();
+      void getSessionQueue(s2.sid)!.waitForEnqueue();
+
+      // 4 messages → 2 each (round-robin)
+      for (let i = 0; i < 4; i++) routeToSession(makeEvent(), "message");
+
+      // Drain only S1
+      const got1 = drain(s1.sid);
+      expect(got1).toHaveLength(2);
+
+      // S2 still has its 2 messages untouched
+      expect(getSessionQueue(s2.sid)!.pendingCount()).toBe(2);
+      const got2 = drain(s2.sid);
+      expect(got2).toHaveLength(2);
+
+      // No overlap
+      const ids1 = got1.map(e => e.id);
+      const ids2 = got2.map(e => e.id);
+      for (const id of ids1) expect(ids2).not.toContain(id);
+    });
+
+    it("cascade delivers to exactly one session at a time", () => {
+      const s1 = setupSession("A");
+      const s2 = setupSession("B");
+      const s3 = setupSession("C");
+      setRoutingMode("cascade");
+
+      // All idle
+      for (const sid of [s1.sid, s2.sid, s3.sid]) {
+        void getSessionQueue(sid)!.waitForEnqueue();
+      }
+
+      const event = makeEvent();
+      routeToSession(event, "message");
+
+      // Only S1 (lowest SID) should have it
+      expect(drain(s1.sid)).toHaveLength(1);
+      expect(drain(s2.sid)).toHaveLength(0);
+      expect(drain(s3.sid)).toHaveLength(0);
+    });
+
+    it("governor delivers to exactly one session — the governor", () => {
+      const s1 = setupSession("A");
+      const s2 = setupSession("B");
+      const s3 = setupSession("C");
+      setRoutingMode("governor", s2.sid);
+
+      const event = makeEvent();
+      routeToSession(event, "message");
+
+      expect(drain(s1.sid)).toHaveLength(0);
+      expect(drain(s2.sid)).toHaveLength(1);
+      expect(drain(s3.sid)).toHaveLength(0);
+    });
+
+    it("broadcast (fallback) delivers to all sessions", () => {
+      const s1 = setupSession("A");
+      const s2 = setupSession("B");
+      // Governor with missing SID triggers fallback broadcast
+      setRoutingMode("governor", 999);
+
+      const event = makeEvent();
+      routeToSession(event, "message");
+
+      expect(drain(s1.sid)).toHaveLength(1);
+      expect(drain(s2.sid)).toHaveLength(1);
+    });
+
+    it("response-lane events route without duplication in session queues", () => {
+      const s1 = setupSession("A");
+      const s2 = setupSession("B");
+
+      // S1 owns message 100
+      trackMessageOwner(100, s1.sid);
+
+      // Reaction targeting message 100 — response-lane targeted at S1
+      const reaction = makeEvent({
+        event: "reaction",
+        content: { type: "reaction", target: 100, added: ["👍"], removed: [] },
+      });
+      routeToSession(reaction, "response");
+
+      // Only S1 gets it, S2 does not
+      expect(drain(s1.sid)).toHaveLength(1);
+      expect(drain(s2.sid)).toHaveLength(0);
+    });
+
+    it("DM delivery does not leak to other sessions", () => {
+      const s1 = setupSession("A");
+      const s2 = setupSession("B");
+      const s3 = setupSession("C");
+
+      deliverDirectMessage(s1.sid, s2.sid, "secret message");
+
+      // Only S2 should have it
+      expect(drain(s1.sid)).toHaveLength(0);
+      expect(drain(s2.sid)).toHaveLength(1);
+      expect(drain(s3.sid)).toHaveLength(0);
+    });
+
+    it("mixed targeted + ambiguous messages all route correctly", () => {
+      const s1 = setupSession("A");
+      const s2 = setupSession("B");
+      setRoutingMode("load_balance");
+
+      // Both idle
+      void getSessionQueue(s1.sid)!.waitForEnqueue();
+      void getSessionQueue(s2.sid)!.waitForEnqueue();
+
+      // S1 owns message 200
+      trackMessageOwner(200, s1.sid);
+
+      // Send: targeted reply, ambiguous, targeted callback, ambiguous
+      routeToSession(replyEvent(200), "message");       // → S1 (targeted)
+      routeToSession(makeEvent(), "message");            // → S1 or S2 (round-robin)
+      routeToSession(callbackEvent(200), "response");    // → S1 (targeted)
+      routeToSession(makeEvent(), "message");            // → S1 or S2 (round-robin)
+
+      const got1 = drain(s1.sid);
+      const got2 = drain(s2.sid);
+
+      // S1 gets at least 2 targeted + some ambiguous
+      expect(got1.length).toBeGreaterThanOrEqual(2);
+
+      // Total is exactly 4
+      expect(got1.length + got2.length).toBe(4);
+
+      // No duplicates across sessions
+      const allIds = [...got1, ...got2].map(e => e.id);
+      expect(new Set(allIds).size).toBe(4);
+    });
+  });
 });

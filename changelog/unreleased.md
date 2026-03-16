@@ -38,6 +38,7 @@
 - Added `get_debug_log` tool — agent-readable access to the in-memory debug trace buffer with category filtering, count limits, and runtime toggle
 - Added cursor-based pagination to debug log — entries have auto-incrementing `id`; `get_debug_log` accepts `since` parameter to fetch only entries newer than a known id, reducing token cost for polling
 - Added `docs/multi-session-test-script.md` — detailed phase-by-phase manual test guide for multi-session features (6 phases, 20+ scenarios)
+- Added 9 integration tests for queue isolation and delivery exactness — round-robin uniqueness, targeted routing exclusivity, session queue independence, cascade/governor single-delivery, DM confinement, mixed routing scenarios
 
 ## Changed
 
