@@ -9,7 +9,8 @@
 - `list_sessions` tool — lists all active sessions (SID, name, creation time) and indicates the active session; no auth required
 - `dequeue_update` is now session-aware — reads from session queue when a session is active, falls back to global queue
 - Added cross-session outbound forwarding — bot messages from one session appear in other sessions' queues
-- Added `routing-mode` module — configurable routing for ambiguous messages (load_balance default, cascade/governor stubs for Phase 4)
+- Added `routing-mode` module — configurable routing for ambiguous messages (load_balance, cascade, governor)
+- Added `/routing` built-in command — inline panel to view and switch routing mode (load balance / cascade / governor)
 - Added `.npmrc` with `node-linker=hoisted` — flattens `node_modules` for reliable type resolution across transitive deps
 - Added `pnpm patch` files for `@tsdotnet/queue`, `collection-base`, `compare`, `exceptions` — adds `.js` extensions to relative `.d.ts` imports for `moduleResolution: "node16"` compatibility
 

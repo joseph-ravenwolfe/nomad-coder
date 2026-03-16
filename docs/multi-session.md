@@ -170,7 +170,7 @@ When a message arrives with no reply context (ambiguous), the server consults th
 
 #### 1. Load Balance
 
-The simplest mode. Ambiguous messages go to the **first idle session** (one currently blocked on `dequeue_update`). If multiple sessions are idle, the one with the lowest session ID wins.
+The simplest mode. Ambiguous messages are distributed via **round-robin** among idle sessions (those currently blocked on `dequeue_update`). If no sessions are idle, round-robin continues among all sessions.
 
 - No claim/pass ceremony — instant routing.
 - Good for: homogeneous workers doing the same type of task.
@@ -227,7 +227,7 @@ See [Governor Pattern](#governor-pattern) for scope and constraints.
 ### Routing Mode Selection
 
 - When the second session connects, the operator is prompted: "Multiple sessions active. How should ambiguous messages be routed?" with three button options.
-- The operator can change the routing mode at any time via a built-in command.
+- The operator can change the routing mode at any time via the `/routing` command, which opens an inline panel showing the current mode and buttons to switch.
 - If the operator doesn't respond, the default is **load balance** (simplest, safest).
 - Mode selection is stored in-memory and resets on MCP restart.
 

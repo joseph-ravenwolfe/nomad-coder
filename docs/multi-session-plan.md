@@ -53,40 +53,41 @@ Things to verify or set up before writing code.
 - [x] **Persistence** — Resolved: ephemeral (in-memory only). Restart invalidates all sessions.
 - [x] **Reply-to routing** — Resolved: replies are always targeted. Only the owning session gets them. Bidirectional.
 - [x] **Auth scope** — Resolved: bootstrap exceptions for `get_me`, `get_agent_guide`, `session_start`. Everything else requires `sid`/`pin`.
-- [ ] **Session store design** — define the in-memory data structure (Map of session objects with ID, PIN, name, state, queues, mute config, DM permissions)
-- [ ] **Session closure** — `close_session(sid)` removes from active tree, cascade adjusts, governor death triggers mode recovery
+- [x] **Session store design** — `Map<number, Session>` in session-manager.ts with SID, PIN, name, createdAt
+- [x] **Session closure** — `close_session(sid)` removes from active list, cleans up ownership, resets active session if closing the active one
+- [x] **Auth middleware pattern** — per-tool `checkAuth(sid, pin)` via SESSION_AUTH_SCHEMA; bootstrap tools exempt
+- [x] **Message store metadata** — `TimelineEvent.sid` tags outbound messages with session ID
 - [ ] **Tool parameter injection** — prototype adding `sid`/`pin` to all tool schemas
-- [ ] **Auth middleware pattern** — decide where authentication checks live (per-tool, middleware wrapper, or McpServer-level hook)
-- [ ] **Message store metadata** — confirm the store can tag messages with session IDs without breaking existing consumers
 - [ ] **DM queue design** — how silent DMs are stored and delivered alongside regular dequeue events
-- [ ] **Routing mode events** — define the event shape for cascade offers, claim/pass responses, and governor delegation
+- [x] **Routing mode events** — three modes implemented: load_balance (round-robin), cascade (priority), governor (designated)
 - [ ] **Test strategy** — multi-session tests need simulated concurrent tool calls; plan the test harness
 
 ## Implementation Order
 
 Based on the phased plan in [multi-session.md](multi-session.md), here's a more granular breakdown.
 
-### Phase 1: Session Manager & Auth (Foundation)
+### Phase 1: Session Manager & Auth (Foundation) ✅
 
-1. Add session counter and PIN generator to server state
-2. Modify `session_start` to return `{ sid, pin, sessions_active }`
-3. Add `sid`/`pin` parameters to all non-bootstrap tool schemas
-4. Add auth validation wrapper that checks `sid`/`pin` on every tool call
-5. Tag outbound messages in the store with the calling session's ID
-6. `close_session(sid)` — remove from active tree, adjust cascades
-7. Write tests for session creation, auth validation, PIN isolation, session closure
+1. ~~Add session counter and PIN generator to server state~~ ✅
+2. ~~Modify `session_start` to return `{ sid, pin, sessions_active }`~~ ✅
+3. ~~Add `sid`/`pin` parameters to all non-bootstrap tool schemas~~ ✅ (SESSION_AUTH_SCHEMA)
+4. ~~Add auth validation wrapper that checks `sid`/`pin` on every tool call~~ ✅ (checkAuth)
+5. ~~Tag outbound messages in the store with the calling session's ID~~ ✅ (TimelineEvent.sid)
+6. ~~`close_session(sid)` — remove from active tree, adjust cascades~~ ✅
+7. ~~Write tests for session creation, auth validation, PIN isolation, session closure~~ ✅
 
-### Phase 2: Per-Session Queues & Routing
+### Phase 2: Per-Session Queues & Routing ✅
 
-1. Split the current single dequeue queue into per-session queues
-2. Implement inbound routing: reply-based → owning session only
-3. Routing mode selection: prompt operator on 2nd session connect (load balance / cascade / governor)
-4. Load balance: route to first idle session (ascending ID order)
-5. Ordered cascade: offer to Session 1 first → claim/pass/timeout → cascade
-6. Governor: designate one session as router, auto-grant DM access
-7. Implement cross-session outbound forwarding (Session A's send → other sessions' queues, unless muted)
-8. Add `/switch` command parsing and active-session tracking
-9. Write tests for routing correctness (each mode, reply routing, switch)
+1. ~~Split the current single dequeue queue into per-session queues~~ ✅ (TwoLaneQueue per session)
+2. ~~Implement inbound routing: reply-based → owning session only~~ ✅
+3. ~~Routing mode selection: `/routing` command with inline panel~~ ✅
+4. ~~Load balance: round-robin among idle sessions~~ ✅
+5. ~~Cascade: lowest-SID idle session first (priority hierarchy)~~ ✅
+6. ~~Governor: route to designated governor session~~ ✅
+7. ~~Implement cross-session outbound forwarding~~ ✅ (broadcastOutbound)
+8. ~~Active-session tracking via setActiveSession/getActiveSession~~ ✅
+9. ~~Write tests for routing correctness (each mode, reply routing)~~ ✅
+10. ~~`list_sessions` tool — enumerate active sessions~~ ✅
 
 ### Phase 3: Direct Messages, Permissions & Muting
 
