@@ -6,6 +6,8 @@
  * Permissions are ephemeral (in-memory only, reset on restart).
  */
 
+import { dlog } from "./debug-log.js";
+
 // ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
@@ -28,6 +30,7 @@ function key(sender: number, target: number): string {
 /** Grant directional DM permission: sender → target. */
 export function grantDm(sender: number, target: number): void {
   _grants.add(key(sender, target));
+  dlog("dm", `granted DM sid=${sender} → sid=${target}`);
 }
 
 /** Revoke directional DM permission: sender → target. */
@@ -45,10 +48,12 @@ export function hasDmPermission(
 
 /** Remove all permissions involving a session (both directions). */
 export function revokeAllForSession(sid: number): void {
+  let count = 0;
   for (const k of _grants) {
     const [s, t] = k.split(":").map(Number);
-    if (s === sid || t === sid) _grants.delete(k);
+    if (s === sid || t === sid) { _grants.delete(k); count++; }
   }
+  if (count > 0) dlog("dm", `revoked ${count} DM permission(s) for sid=${sid}`);
 }
 
 /** List all sessions that `sender` can DM. */

@@ -23,6 +23,7 @@ import {
   fireTempReactionRestore,
 } from "./outbound-proxy.js";
 import { recordOutgoing, getHighestMessageId, trackMessageId } from "./message-store.js";
+import { dlog } from "./debug-log.js";
 
 // ---------------------------------------------------------------------------
 // State
@@ -156,7 +157,7 @@ async function cycleFrame(): Promise<void> {
     if (err instanceof GrammyError && err.error_code === 429) {
       // Rate-limited — pause the cycle timer and resume after retry_after
       const retryAfter = err.parameters.retry_after ?? 60;
-      process.stderr.write(`[animation] rate limited, pausing cycle for ${retryAfter}s\n`);
+      dlog("animation", `429 rate-limited, pausing ${retryAfter}s`, { messageId });
       if (_state?.cycleTimer) {
         clearInterval(_state.cycleTimer);
         _state.cycleTimer = null;
@@ -296,6 +297,8 @@ export async function startAnimation(
     timeoutTimer: null,
     resumeTimer: null,
   };
+
+  dlog("animation", `started msgId=${messageId} frames=${paddedFrames.length} persistent=${persistent}`);
 
   // Start cycling if multiple frames
   if (paddedFrames.length > 1) {
@@ -488,6 +491,8 @@ export async function cancelAnimation(
   clearTimers();
   _state = null;
   _savedForResume = null;
+
+  dlog("animation", `cancelled msgId=${messageId ?? "none"} replacement=${!!text}`);
 
   // Unregister the proxy interceptor
   clearSendInterceptor();

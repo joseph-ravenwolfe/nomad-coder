@@ -17,6 +17,7 @@ import { TwoLaneQueue } from "./two-lane-queue.js";
 import type { TimelineEvent } from "./message-store.js";
 import { getMessage, CURRENT } from "./message-store.js";
 import { getRoutingMode, getGovernorSid } from "./routing-mode.js";
+import { dlog } from "./debug-log.js";
 
 // ---------------------------------------------------------------------------
 // Voice-ready predicate (shared with message-store's queue)
@@ -61,6 +62,7 @@ export function createSessionQueue(sid: number): boolean {
     isReady: isEventReady,
     getId: getEventId,
   }));
+  dlog("queue", `created queue for sid=${sid} total=${_queues.size}`);
   return true;
 }
 
@@ -68,6 +70,7 @@ export function createSessionQueue(sid: number): boolean {
 export function removeSessionQueue(sid: number): boolean {
   const removed = _queues.delete(sid);
   if (removed) {
+    dlog("queue", `removed queue for sid=${sid} remaining=${_queues.size}`);
     for (const [msgId, owner] of _messageOwnership) {
       if (owner === sid) _messageOwnership.delete(msgId);
     }
@@ -126,6 +129,7 @@ export function routeToSession(event: TimelineEvent, lane: "response" | "message
 
   if (targetSid > 0) {
     // Targeted: deliver only to the owning session
+    dlog("route", `targeted event=${event.id} → sid=${targetSid}`, { lane, type: event.content.type });
     enqueueToSession(targetSid, event, lane);
     return;
   }
@@ -136,6 +140,7 @@ export function routeToSession(event: TimelineEvent, lane: "response" | "message
   if (mode === "load_balance") {
     const sid = pickRoundRobin();
     if (sid > 0) {
+      dlog("route", `load_balance event=${event.id} → sid=${sid}`, { lane, type: event.content.type });
       enqueueToSession(sid, event, lane);
       return;
     }
@@ -145,6 +150,7 @@ export function routeToSession(event: TimelineEvent, lane: "response" | "message
       const isIdle = _queues.get(sid)?.hasPendingWaiters() ?? false;
       const deadlineMs = Date.now() + (isIdle ? CASCADE_IDLE_TIMEOUT_MS : CASCADE_BUSY_TIMEOUT_MS);
       _cascadePassDeadlines.set(`${sid}:${event.id}`, deadlineMs);
+      dlog("cascade", `routed event=${event.id} → sid=${sid} idle=${isIdle}`, { deadlineMs, lane });
       enqueueToSession(sid, event, lane);
       return;
     }
@@ -152,12 +158,14 @@ export function routeToSession(event: TimelineEvent, lane: "response" | "message
     // governor mode
     const gSid = getGovernorSid();
     if (gSid > 0 && _queues.has(gSid)) {
+      dlog("route", `governor event=${event.id} → sid=${gSid}`, { lane, type: event.content.type });
       enqueueToSession(gSid, event, lane);
       return;
     }
   }
 
   // Final fallback: broadcast to all sessions
+  dlog("route", `broadcast event=${event.id} → ${_queues.size} sessions`, { mode, lane });
   for (const q of _queues.values()) {
     if (lane === "response") q.enqueueResponse(event);
     else q.enqueueMessage(event);
@@ -302,12 +310,9 @@ export function deliverDirectMessage(
   };
 
   q.enqueueMessage(event);
+  dlog("dm", `delivered DM from sid=${senderSid} → sid=${targetSid}`, { eventId: event.id });
   return true;
 }
-
-// ---------------------------------------------------------------------------
-// Pass / Route — cascade & governor delegation
-// ---------------------------------------------------------------------------
 
 /**
  * Consume and return the cascade pass deadline for a given session + event.
@@ -345,6 +350,7 @@ export function passMessage(fromSid: number, messageId: number): number {
     const targetSid = sids[i];
     const q = _queues.get(targetSid);
     if (q) {
+      dlog("cascade", `pass msg=${messageId} from sid=${fromSid} → sid=${targetSid}`);
       q.enqueueMessage(event);
       return targetSid;
     }
@@ -366,6 +372,7 @@ export function routeMessage(messageId: number, targetSid: number): boolean {
   if (!q) return false;
 
   q.enqueueMessage(event);
+  dlog("route", `governor delegated msg=${messageId} → sid=${targetSid}`);
   return true;
 }
 

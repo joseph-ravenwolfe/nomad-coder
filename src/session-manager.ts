@@ -1,4 +1,5 @@
 import { randomInt } from "node:crypto";
+import { dlog } from "./debug-log.js";
 
 // ── Types ──────────────────────────────────────────────────
 
@@ -50,6 +51,7 @@ export function createSession(name = ""): SessionCreateResult {
     createdAt: new Date().toISOString(),
   };
   _sessions.set(sid, session);
+  dlog("session", `created sid=${sid} name=${JSON.stringify(name)} total=${_sessions.size}`);
   return { sid, pin, name, sessionsActive: _sessions.size };
 }
 
@@ -63,7 +65,9 @@ export function validateSession(sid: number, pin: number): boolean {
 }
 
 export function closeSession(sid: number): boolean {
-  return _sessions.delete(sid);
+  const deleted = _sessions.delete(sid);
+  if (deleted) dlog("session", `closed sid=${sid} remaining=${_sessions.size}`);
+  return deleted;
 }
 
 export function listSessions(): SessionInfo[] {
@@ -90,7 +94,9 @@ export function activeSessionCount(): number {
 let _activeSessionId = 0;
 
 export function setActiveSession(sid: number): void {
+  const prev = _activeSessionId;
   _activeSessionId = sid;
+  if (prev !== sid) dlog("session", `active ${prev} → ${sid}`);
 }
 
 export function getActiveSession(): number {
