@@ -12,6 +12,8 @@ const mocks = vi.hoisted(() => ({
   ackAndEditSelection: vi.fn(),
   createSession: vi.fn(),
   setActiveSession: vi.fn(),
+  listSessions: vi.fn().mockReturnValue([]),
+  getRoutingMode: vi.fn().mockReturnValue("load_balance"),
 }));
 
 vi.mock("../telegram.js", async (importActual) => {
@@ -36,6 +38,15 @@ vi.mock("../message-store.js", () => ({
 vi.mock("../session-manager.js", () => ({
   createSession: (...args: unknown[]) => mocks.createSession(...args),
   setActiveSession: (...args: unknown[]) => mocks.setActiveSession(...args),
+  listSessions: (...args: unknown[]) => mocks.listSessions(...args),
+}));
+
+vi.mock("../routing-mode.js", () => ({
+  getRoutingMode: () => mocks.getRoutingMode(),
+}));
+
+vi.mock("../session-queue.js", () => ({
+  createSessionQueue: vi.fn(),
 }));
 
 vi.mock("./button-helpers.js", async (importActual) => {

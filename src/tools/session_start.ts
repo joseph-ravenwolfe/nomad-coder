@@ -3,8 +3,9 @@ import { z } from "zod";
 import { getApi, toResult, toError, resolveChat } from "../telegram.js";
 import { markdownToV2 } from "../markdown.js";
 import { dequeue, pendingCount } from "../message-store.js";
-import { createSession, setActiveSession } from "../session-manager.js";
+import { createSession, setActiveSession, listSessions } from "../session-manager.js";
 import { createSessionQueue } from "../session-queue.js";
+import { getRoutingMode } from "../routing-mode.js";
 import {
   pollButtonPress,
   ackAndEditSelection,
@@ -75,14 +76,19 @@ export function register(server: McpServer) {
         // 2. Check pending count
         const pending = pendingCount();
         if (pending === 0) {
-          return toResult({
+          const res: Record<string, unknown> = {
             sid: session.sid,
             pin: session.pin,
             sessions_active: session.sessionsActive,
             action: "fresh",
             pending: 0,
             intro_message_id: introId,
-          });
+          };
+          if (session.sessionsActive > 1) {
+            res.fellow_sessions = listSessions().filter(s => s.sid !== session.sid);
+            res.routing_mode = getRoutingMode();
+          }
+          return toResult(res);
         }
 
         // 3. Ask the operator
@@ -136,28 +142,38 @@ export function register(server: McpServer) {
         );
 
         if (result.data === RESUME_DATA) {
-          return toResult({
+          const res: Record<string, unknown> = {
             sid: session.sid,
             pin: session.pin,
             sessions_active: session.sessionsActive,
             action: "resume",
             pending,
             intro_message_id: introId,
-          });
+          };
+          if (session.sessionsActive > 1) {
+            res.fellow_sessions = listSessions().filter(s => s.sid !== session.sid);
+            res.routing_mode = getRoutingMode();
+          }
+          return toResult(res);
         }
 
         // 5. Drain all pending messages
         let discarded = 0;
         while (dequeue() !== undefined) discarded++;
 
-        return toResult({
+        const freshRes: Record<string, unknown> = {
           sid: session.sid,
           pin: session.pin,
           sessions_active: session.sessionsActive,
           action: "fresh",
           discarded,
           intro_message_id: introId,
-        });
+        };
+        if (session.sessionsActive > 1) {
+          freshRes.fellow_sessions = listSessions().filter(s => s.sid !== session.sid);
+          freshRes.routing_mode = getRoutingMode();
+        }
+        return toResult(freshRes);
       } catch (err) {
         return toError(err);
       }

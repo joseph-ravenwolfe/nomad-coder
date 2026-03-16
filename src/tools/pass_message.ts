@@ -10,7 +10,10 @@ const DESCRIPTION =
   "Use this when you receive a message that isn't relevant to your " +
   "session's focus. Only works in cascade routing mode. The message " +
   "is forwarded to the next session in SID order; the last session " +
-  "cannot pass.";
+  "cannot pass. " +
+  "Cascade routing delivers messages with a deadline: check `pass_by` " +
+  "on the dequeued event (ISO timestamp) — 15 s from delivery for idle " +
+  "sessions, 30 s for busy ones. Pass or claim before the deadline.";
 
 export function register(server: McpServer) {
   server.registerTool(

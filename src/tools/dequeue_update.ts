@@ -6,7 +6,8 @@ import {
   type TimelineEvent,
 } from "../message-store.js";
 import { getActiveSession } from "../session-manager.js";
-import { getSessionQueue } from "../session-queue.js";
+import { getSessionQueue, popCascadePassDeadline } from "../session-queue.js";
+import { getRoutingMode } from "../routing-mode.js";
 
 /** Auto-salute voice messages on dequeue so the user knows we received them. */
 function ackVoice(event: TimelineEvent): void {
@@ -15,14 +16,19 @@ function ackVoice(event: TimelineEvent): void {
 }
 
 /** Strip _update and timestamp for the compact dequeue format. */
-function compactEvent(event: TimelineEvent): Record<string, unknown> {
+function compactEvent(event: TimelineEvent, sid: number): Record<string, unknown> {
   const { _update: _, timestamp: __, ...rest } = event;
-  return rest;
+  const result: Record<string, unknown> = rest;
+  if (sid > 0 && getRoutingMode() === "cascade") {
+    const deadline = popCascadePassDeadline(sid, event.id);
+    if (deadline !== undefined) result.pass_by = new Date(deadline).toISOString();
+  }
+  return result;
 }
 
 /** Compact a batch of events for the response. */
-function compactBatch(events: TimelineEvent[]): Record<string, unknown>[] {
-  return events.map(compactEvent);
+function compactBatch(events: TimelineEvent[], sid: number): Record<string, unknown>[] {
+  return events.map(e => compactEvent(e, sid));
 }
 
 const DESCRIPTION =
@@ -78,7 +84,7 @@ export function register(server: McpServer) {
       if (batch.length > 0) {
         for (const evt of batch) ackVoice(evt);
         const pending = pendingCountAny();
-        const result: Record<string, unknown> = { updates: compactBatch(batch) };
+        const result: Record<string, unknown> = { updates: compactBatch(batch, sid) };
         if (pending > 0) result.pending = pending;
         return toResult(result);
       }
@@ -107,7 +113,7 @@ export function register(server: McpServer) {
         if (batch.length > 0) {
           for (const evt of batch) ackVoice(evt);
           const pending = pendingCountAny();
-          const result: Record<string, unknown> = { updates: compactBatch(batch) };
+          const result: Record<string, unknown> = { updates: compactBatch(batch, sid) };
           if (pending > 0) result.pending = pending;
           return toResult(result);
         }
