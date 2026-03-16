@@ -14,7 +14,7 @@
 
 import { TwoLaneQueue } from "./two-lane-queue.js";
 import type { TimelineEvent } from "./message-store.js";
-import { getRoutingMode } from "./routing-mode.js";
+import { getRoutingMode, getGovernorSid } from "./routing-mode.js";
 
 // ---------------------------------------------------------------------------
 // Voice-ready predicate (shared with message-store's queue)
@@ -101,8 +101,9 @@ export function getMessageOwner(messageId: number): number {
  * Routing rules:
  *   1. Targeted (reply-to, callback, reaction on owned message) → owner only
  *   2. Ambiguous (no reply context) → depends on routing mode:
- *      - load_balance: first idle session (hasPendingWaiters), lowest SID tie-break
- *      - cascade / governor: broadcast for now (Phase 4 will refine)
+ *      - load_balance: round-robin among idle sessions (fair distribution)
+ *      - cascade: lowest-SID idle session first (priority hierarchy)
+ *      - governor: deliver to the governor session only
  *
  * The global queue in message-store is NOT touched here — it's
  * populated by recordInbound as before. This is additive.
@@ -118,17 +119,31 @@ export function routeToSession(event: TimelineEvent, lane: "response" | "message
     return;
   }
 
-  // Ambiguous routing
+  // Ambiguous routing — strategy depends on mode
   const mode = getRoutingMode();
+
   if (mode === "load_balance") {
-    const sid = pickIdleSession();
+    const sid = pickRoundRobin();
     if (sid > 0) {
       enqueueToSession(sid, event, lane);
       return;
     }
+  } else if (mode === "cascade") {
+    const sid = pickCascade();
+    if (sid > 0) {
+      enqueueToSession(sid, event, lane);
+      return;
+    }
+  } else {
+    // governor mode
+    const gSid = getGovernorSid();
+    if (gSid > 0 && _queues.has(gSid)) {
+      enqueueToSession(gSid, event, lane);
+      return;
+    }
   }
 
-  // Fallback (cascade/governor or no idle session): broadcast to all
+  // Final fallback: broadcast to all sessions
   for (const q of _queues.values()) {
     if (lane === "response") q.enqueueResponse(event);
     else q.enqueueMessage(event);
@@ -165,12 +180,41 @@ function enqueueToSession(
   else q.enqueueMessage(event);
 }
 
+/** Last SID routed to in load_balance mode (for round-robin). */
+let _lastRoutedSid = 0;
+
 /**
- * Pick the idle session with the lowest SID (load-balance mode).
- * A session is "idle" if it has a waiter (blocked on dequeue_update).
+ * Round-robin among idle sessions (load_balance mode).
+ * Starts after `_lastRoutedSid` and wraps around.
+ * Falls back to the lowest-SID session if none are idle.
+ */
+function pickRoundRobin(): number {
+  const sids = [..._queues.keys()].sort((a, b) => a - b);
+  if (sids.length === 0) return 0;
+
+  // Find idle sessions via round-robin starting after _lastRoutedSid
+  const startIdx = sids.findIndex(s => s > _lastRoutedSid);
+  const ordered = startIdx > 0
+    ? [...sids.slice(startIdx), ...sids.slice(0, startIdx)]
+    : sids; // startIdx 0 or -1 means start from beginning
+
+  for (const sid of ordered) {
+    if (_queues.get(sid)?.hasPendingWaiters()) {
+      _lastRoutedSid = sid;
+      return sid;
+    }
+  }
+
+  // No idle sessions — fall back to next in round-robin order
+  _lastRoutedSid = ordered[0];
+  return ordered[0];
+}
+
+/**
+ * Cascade: always prefer the lowest-SID idle session (priority hierarchy).
  * Falls back to the lowest SID if none are idle.
  */
-function pickIdleSession(): number {
+function pickCascade(): number {
   let idleSid = 0;
   let fallbackSid = 0;
   for (const [sid, q] of _queues) {
@@ -221,4 +265,5 @@ export function notifySessionWaiters(): void {
 export function resetSessionQueuesForTest(): void {
   _queues.clear();
   _messageOwnership.clear();
+  _lastRoutedSid = 0;
 }

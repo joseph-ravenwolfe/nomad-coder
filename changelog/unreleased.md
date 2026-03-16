@@ -17,7 +17,9 @@
 
 - Restored `@tsdotnet/queue` dependency — replaces hand-rolled `SimpleQueue<T>` inline class; uses `Queue<T>` directly (no shims) thanks to pnpm patches
 - Refactored `message-store` to delegate queue operations to `TwoLaneQueue<T>` — inbound events are also routed to per-session queues via `routeToSession`
-- Ambiguous inbound messages now use load-balance routing (first idle session) instead of broadcast when multiple sessions are active
+- Ambiguous inbound messages now use load-balance routing (round-robin among idle sessions) instead of broadcast when multiple sessions are active
+- Implemented cascade routing mode — always prefers lowest-SID idle session (priority hierarchy), falls back to lowest SID
+- Implemented governor routing mode — routes ambiguous messages to the designated governor session only
 - Fixed lint errors in `close_session` — removed unnecessary `async` and type assertions
 
 - Added session manager with incrementing SIDs and 6-digit PINs (crypto.randomInt)
