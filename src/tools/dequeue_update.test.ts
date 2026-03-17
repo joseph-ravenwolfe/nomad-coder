@@ -370,7 +370,7 @@ describe("dequeue_update tool", () => {
     expect(mocks.setActiveSession).not.toHaveBeenCalled();
   });
 
-  it("skips setActiveSession when explicit sid matches active", async () => {
+  it("always re-syncs setActiveSession on return when explicit sid provided", async () => {
     mocks.getActiveSession.mockReturnValue(3);
     const mockSessionQueue = {
       dequeueBatch: vi.fn(() => [] as TimelineEvent[]),
@@ -382,7 +382,8 @@ describe("dequeue_update tool", () => {
     );
 
     await call({ sid: 3, timeout: 0 });
-    expect(mocks.setActiveSession).not.toHaveBeenCalled();
+    // resync always fires so subsequent tool calls see the correct session
+    expect(mocks.setActiveSession).toHaveBeenCalledWith(3);
   });
 
   // =========================================================================

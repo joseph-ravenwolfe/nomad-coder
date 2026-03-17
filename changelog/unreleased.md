@@ -39,6 +39,9 @@
 - Added cursor-based pagination to debug log — entries have auto-incrementing `id`; `get_debug_log` accepts `since` parameter to fetch only entries newer than a known id, reducing token cost for polling
 - Added `docs/multi-session-test-script.md` — detailed phase-by-phase manual test guide for multi-session features (6 phases, 20+ scenarios)
 - Added 9 integration tests for queue isolation and delivery exactness — round-robin uniqueness, targeted routing exclusivity, session queue independence, cascade/governor single-delivery, DM confinement, mixed routing scenarios
+- Added `session-context` module — per-request `AsyncLocalStorage` context for session identity; `runInSessionContext(sid, fn)` / `getCallerSid()` replace the racy global `getActiveSession()` for outbound attribution
+- Added `registerTool` middleware in server — automatically injects optional `sid` parameter into every tool's input schema and wraps callbacks with `runInSessionContext`, eliminating per-tool changes
+- Added `session-context.test.ts` — 8 tests covering context persistence across awaits, concurrent isolation, nested contexts, and fallback to `getActiveSession`
 - Added 9 integration tests: cross-session isolation e2e (SID leak prevention, wrong-SID empty result, close-session message isolation), high-concurrency stress (50 msgs / 5 sessions, mixed routing modes), DM edge cases (non-existent session, closed session, orphaned permission, revokeAll both directions)
 
 ## Changed
@@ -70,8 +73,9 @@
 
 ## Fixed
 
-- Fixed `dequeue_update` using global `_activeSessionId` when multiple sessions share the same server process — added optional `sid` parameter; when provided, the correct session queue is used directly instead of relying on last-writer-wins global state
-- Fixed `dequeue_update` not syncing `_activeSessionId` when explicit `sid` is provided — subsequent outbound tool calls (`send_text`, `notify`, etc.) were misattributing messages to the wrong session, causing outbound broadcasts to echo back to the sender
+- Fixed outbound message ownership tagging using wrong session in multi-session scenarios — `recordOutgoing` and `recordOutgoingEdit` now use `getCallerSid()` (AsyncLocalStorage) instead of `getActiveSession()` (global last-writer-wins), ensuring messages are attributed to the correct session even when sessions execute tool calls concurrently
+- Fixed `dequeue_update` not re-syncing `_activeSessionId` before returning — concurrent tool calls from other sessions could overwrite the global during the long wait; now re-synced on every return path so subsequent tool calls (e.g. `send_text`) see the correct session context
+- Fixed outbound proxy (`sendMessage`, file sends) not preserving session context across awaits — now snapshots `getCallerSid()` at call entry and passes it explicitly to `recordOutgoing`, preventing corruption by concurrent async operations
 - Removed unreachable deadline check inside `setInterval` callback in `typing-state.ts`
 - Simplified `_clearSlot` in `temp-reaction.ts` — removed unused `fireRestore` parameter that was never passed as `true`
 - Fixed `session_start` never calling `setActiveSession` — per-session queues were created but never activated in production

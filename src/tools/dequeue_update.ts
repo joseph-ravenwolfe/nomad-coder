@@ -72,11 +72,15 @@ export function register(server: McpServer) {
       const sid = explicitSid ?? getActiveSession();
       const sessionQueue = sid > 0 ? getSessionQueue(sid) : undefined;
 
-      // Keep active session in sync so subsequent outbound tool calls
-      // (send_text, notify, etc.) attribute messages to the correct SID.
-      if (explicitSid !== undefined && explicitSid !== getActiveSession()) {
-        setActiveSession(explicitSid);
+      // Keep active session in sync — set at the start AND re-set before
+      // each return so the global is correct when the next tool call dispatches.
+      // (Concurrent tool calls from other sessions can overwrite the global
+      // during the long wait; re-syncing here restores it.)
+      function resyncActiveSession(): void {
+        if (explicitSid !== undefined) setActiveSession(explicitSid);
       }
+
+      resyncActiveSession();
 
       function dequeueBatchAny(): TimelineEvent[] {
         if (sessionQueue) {
@@ -102,6 +106,7 @@ export function register(server: McpServer) {
         const pending = pendingCountAny();
         const result: Record<string, unknown> = { updates: compactBatch(batch, sid) };
         if (pending > 0) result.pending = pending;
+        resyncActiveSession();
         return toResult(result);
       }
 
@@ -131,10 +136,12 @@ export function register(server: McpServer) {
           const pending = pendingCountAny();
           const result: Record<string, unknown> = { updates: compactBatch(batch, sid) };
           if (pending > 0) result.pending = pending;
+          resyncActiveSession();
           return toResult(result);
         }
       }
 
+      resyncActiveSession();
       return toResult({ empty: true, pending: pendingCountAny() });
     },
   );

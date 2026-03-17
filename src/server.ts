@@ -2,6 +2,9 @@ import { readFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { z } from "zod";
+import { runInSessionContext } from "./session-context.js";
+import { getActiveSession } from "./session-manager.js";
 
 import { register as registerDequeueUpdate } from "./tools/dequeue_update.js";
 import { register as registerGetMessage } from "./tools/get_message.js";
@@ -54,6 +57,48 @@ export function createServer(): McpServer {
     name: "telegram-bridge-mcp",
     version: "3.0.0",
   });
+
+  // ── Session context middleware ──────────────────────────────────────────
+  // Wrap every tool handler in AsyncLocalStorage so outbound messages
+  // are attributed to the correct session even when multiple sessions
+  // interleave tool calls concurrently.
+  const _origRegisterTool = server.registerTool.bind(server);
+  type AnyConfig = Parameters<typeof _origRegisterTool>[1];
+  type AnyCallback = Parameters<typeof _origRegisterTool>[2];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  type CallableCb = (...a: any[]) => unknown;
+  server.registerTool = ((
+    name: string,
+    config: AnyConfig,
+    cb: AnyCallback,
+  ) => {
+    // Inject optional `sid` into every tool's inputSchema so agents
+    // can identify themselves without per-tool changes.
+    const cfg = config as Record<string, unknown>;
+    const schema = cfg.inputSchema as
+      Record<string, unknown> | undefined;
+    if (schema && !("sid" in schema)) {
+      schema.sid = z.number()
+        .int().positive().optional()
+        .describe("Session ID (from session_start). " +
+          "Pass this in multi-session setups.");
+    }
+    const original = cb as unknown as CallableCb;
+    const wrappedCb = (
+      (args: Record<string, unknown>, extra: unknown) => {
+        const sid = typeof args.sid === "number"
+          ? args.sid
+          : getActiveSession();
+        if (sid > 0) {
+          return runInSessionContext(sid, () =>
+            original(args, extra),
+          );
+        }
+        return original(args, extra);
+      }
+    ) as typeof cb;
+    return _origRegisterTool(name, config, wrappedCb);
+  }) as typeof server.registerTool;
 
   // ── High-level agent tools (use these 99% of the time) ─────────────────
   registerGetAgentGuide(server);

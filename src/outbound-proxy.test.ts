@@ -26,6 +26,10 @@ vi.mock("./message-store.js", () => ({
   recordOutgoing: mocks.recordOutgoing,
 }));
 
+vi.mock("./session-context.js", () => ({
+  getCallerSid: () => 0,
+}));
+
 import {
   createOutboundProxy,
   registerSendInterceptor,

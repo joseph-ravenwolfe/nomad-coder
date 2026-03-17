@@ -19,7 +19,7 @@
 
 import type { Update } from "grammy/types";
 import { recordUpdate, recordBotMessage } from "./session-recording.js";
-import { getActiveSession } from "./session-manager.js";
+import { getCallerSid } from "./session-context.js";
 import { TwoLaneQueue } from "./two-lane-queue.js";
 import { routeToSession, trackMessageOwner, notifySessionWaiters, broadcastOutbound } from "./session-queue.js";
 
@@ -420,6 +420,7 @@ export function recordOutgoing(
   text?: string,
   caption?: string,
   fileId?: string,
+  sid?: number,
 ): void {
   recordBotMessage({
     message_id: messageId,
@@ -431,7 +432,7 @@ export function recordOutgoing(
   if (text !== undefined) content.text = text;
   if (caption !== undefined) content.caption = caption;
   if (fileId !== undefined) content.file_id = fileId;
-  const activeSid = getActiveSession();
+  const activeSid = sid ?? getCallerSid();
   const evt: TimelineEvent = {
     id: messageId,
     timestamp: now(),
@@ -453,6 +454,7 @@ export function recordOutgoingEdit(
   messageId: number,
   contentType: string,
   text?: string,
+  sid?: number,
 ): void {
   recordBotMessage({
     message_id: messageId,
@@ -462,7 +464,7 @@ export function recordOutgoingEdit(
   const versions = _index.get(messageId);
   if (!versions) {
     // Message was evicted — record as edit (not "sent") to preserve intent
-    const activeSid = getActiveSession();
+    const activeSid = sid ?? getCallerSid();
     const evt: TimelineEvent = {
       id: messageId,
       timestamp: now(),
@@ -482,7 +484,7 @@ export function recordOutgoingEdit(
     versions.set(nextVersion, current);
   }
 
-  const activeSidEdit = getActiveSession();
+  const activeSidEdit = sid ?? getCallerSid();
   const evt: TimelineEvent = {
     id: messageId,
     timestamp: now(),
