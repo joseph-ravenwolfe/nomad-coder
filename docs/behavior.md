@@ -546,6 +546,25 @@ Bad topics: `Working`, `Agent`, `Session 2`
 | Send a private message directly to another session | `send_direct_message` |
 | Request DM access from another session | `request_dm_access` |
 
+### Slash commands in multi-session mode
+
+Slash commands are plain Telegram messages — they follow the same routing rules as all other operator messages.
+
+| Scenario | Routing |
+| --- | --- |
+| Operator sends `/cancel` as a **reply** to one of your bot messages | Targeted → your queue |
+| Operator sends `/cancel` with no reply context | Ambiguous → governor's queue |
+| Single-session mode | Command always goes to the single active session |
+
+The governor handles ambiguous slash commands exactly as it handles ambiguous text. Apply conversational context to decide which session the command is meant for, then use `route_message` to forward it if appropriate.
+
+**Etiquette for multi-session agents:**
+
+- Prefer the governor-registers-all pattern — only the governor calls `set_commands`. Worker sessions announce their capabilities to the governor via a DM, and the governor registers a unified command menu.
+- If sessions do register their own commands independently, use distinct names to avoid collisions: `/worker_status`, `/governor_status` rather than both registering `/status`.
+- If you receive a command that is clearly not meant for you, forward it with `route_message` or ignore it silently — do not reply with an error that confuses the operator.
+- Never silently swallow a command that affects the operator's expectations. If you cannot handle it, acknowledge and pass it along.
+
 ### Don't assume you're alone
 
 When `sessions_active > 1`, a parallel agent may be working on related tasks. Avoid redundant work — check `fellow_sessions` and coordinate before acting on shared resources.

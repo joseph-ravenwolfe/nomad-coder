@@ -23,6 +23,7 @@
 - Outbound messages now include `🤖 {name}` session header when 2+ sessions are active — injected by outbound proxy for `sendMessage`, `editMessageText`, and file send captions; single-session mode unchanged
 - `dequeue_update` events now always include `routing: "targeted"|"ambiguous"` field — targeted when replying to a known bot message, ambiguous otherwise
 - `close_session` governor promotion — when the governor session closes with other sessions active, the lowest-SID remaining session is automatically promoted to governor (instead of resetting to `load_balance`)
+- Added slash command routing documentation to multi-session section of `docs/behavior.md` — behavior table (targeted vs ambiguous), governor-registers-all etiquette, and naming conventions for multi-session command menus
 - Added multi-session behavior documentation in `docs/behavior.md` and `docs/communication.md` — routing modes, ambiguous message protocol, governor responsibilities, coordination tools
 
 - New test files: `config.test.ts` (100% coverage), `rate-limiter.test.ts` (100% coverage)
