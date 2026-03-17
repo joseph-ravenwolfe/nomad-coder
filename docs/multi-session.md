@@ -48,7 +48,7 @@ Since we control the store, we can attach arbitrary metadata (session IDs, owner
 Every session has three identifiers:
 
 - **Session ID (`sid`)** — server-generated, incrementing integer (1, 2, 3...). Public — appears in timeline metadata, visible to other sessions. Self-describing: if your ID is 1, you're the only session.
-- **Session PIN (`pin`)** — server-generated, 6-digit numeric code. Private — returned only to the session that called `session_start`. Never exposed in messages, timeline, or session record dumps. Required alongside the session ID on all tool calls as proof of ownership.
+- **Session PIN (`pin`)** — server-generated, 6-digit numeric code. Private — returned only to the session that called `session_start`. Never exposed in messages, timeline, or session record dumps. Required alongside `sid` on auth-required tool calls (see below) as proof of ownership.
 - **Session name** — optional, human-friendly, used as the topic prefix in Telegram messages. Provided by the agent at `session_start`. Cosmetic only. Encouraged when `session_id > 1`.
 
 This two-factor model prevents impersonation:

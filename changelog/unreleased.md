@@ -28,8 +28,6 @@
 - Added cascade pass-by deadlines — cascade-routed events include a `pass_by` ISO timestamp (15 s for idle sessions, 30 s for busy)
 - Added session directory to `session_start` — when `sessions_active > 1`, response includes `fellow_sessions` (list of other sessions) and `routing_mode`
 - Added auto-routing prompt — when the 2nd session joins, `session_start` sends the routing mode selection panel to the operator automatically (previously required manual `/routing` command)
-- Added `.npmrc` with `node-linker=hoisted` — flattens `node_modules` for reliable type resolution across transitive deps
-- Added `pnpm patch` files for `@tsdotnet/queue`, `collection-base`, `compare`, `exceptions` — adds `.js` extensions to relative `.d.ts` imports for `moduleResolution: "node16"` compatibility
 - Added Claude Code Docker config example to README
 - Added Claude Code configuration instructions (project-scoped `.mcp.json`) to setup guide and README
 - Added Kokoro quick-start guide to README — Docker pull, env vars, `/voice` panel, and voice table
@@ -49,9 +47,10 @@
 
 - `session_start` intro message now includes session identity (SID and name) when multiple sessions are active or a name is provided
 - Softened session-start hint from prescriptive "Requires an active session — call session_start once before using this tool" to subtle "Ensure session_start has been called" across all 12 tool descriptions
+- Softened `send_text` session hint to clarify session_start is recommended, not enforced
 - Pending-updates guard on blocking tools now auto-bypasses when `reply_to_message_id` is set (targeted replies don't need queue draining)
 - Updated pending guard description in blocking tools to document the reply-to exception
-- Restored `@tsdotnet/queue` dependency — replaces hand-rolled `SimpleQueue<T>` inline class; uses `Queue<T>` directly (no shims) thanks to pnpm patches
+- Restored `@tsdotnet/queue` dependency — replaces hand-rolled `SimpleQueue<T>` inline class; uses `Queue<T>` directly (upstream 1.3.x ships `.js` extensions in `.d.ts` files natively)
 - Refactored `message-store` to delegate queue operations to `TwoLaneQueue<T>` — inbound events are also routed to per-session queues via `routeToSession`
 - Ambiguous inbound messages now use load-balance routing (round-robin among idle sessions) instead of broadcast when multiple sessions are active
 - Implemented cascade routing mode — always prefers lowest-SID idle session (priority hierarchy), falls back to lowest SID
@@ -66,11 +65,6 @@
 - Added active session context (`setActiveSession`/`getActiveSession`) for tool-call scoping
 - Improved `/voice` panel empty-state hint to mention built-in fallback and link to Kokoro setup
 - Replaced VS Code-specific language with client-agnostic terms across README, LOOP-PROMPT, docs, tool descriptions, and pairing wizard output
-
-## Removed
-
-- Removed pnpm patches for `@tsdotnet/queue`, `collection-base`, `compare`, `exceptions` — upstream 1.3.x ships `.js` extensions in `.d.ts` files natively
-- Removed `.npmrc` with `node-linker=hoisted` — no longer needed now that upstream types resolve correctly with pnpm's default symlink layout
 
 ## Fixed
 
