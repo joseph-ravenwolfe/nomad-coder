@@ -38,6 +38,7 @@
 - Added Claude Code configuration instructions (project-scoped `.mcp.json`) to setup guide and README
 - Added Kokoro quick-start guide to README — Docker pull, env vars, `/voice` panel, and voice table
 - Added troubleshooting entry for multiple instances competing for the same bot token
+- Added `src/tools/multi-session-integration.test.ts` — 22 integration tests wiring real session-manager, session-queue, and routing-mode with only the Telegram network layer mocked; covers 8 scenarios: two-session queue isolation, SID_REQUIRED/AUTH_FAILED enforcement across tools (`dequeue_update` sid-gate and `send_text` identity-gate), voice ack via session queue path, session close / governor routing reset, rapid create-close SID monotonicity, non-blocking concurrent dequeue, cross-session cascade message passing, and load-balance queue independence
 - Added `debug-log` module — structured, bounded (2 000 entries) trace logger with categories (session, route, queue, cascade, dm, animation, tool); enable via `TELEGRAM_MCP_DEBUG=1` env var
 - Added debug instrumentation across `session-manager`, `session-queue`, `dm-permissions`, `animation-state`, and `session-auth` — all lifecycle events, routing decisions, and DM operations are now traced
 - Added `get_debug_log` tool — agent-readable access to the in-memory debug trace buffer with category filtering, count limits, and runtime toggle
