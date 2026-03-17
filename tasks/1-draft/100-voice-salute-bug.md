@@ -1,5 +1,11 @@
 # Bug: Voice salute (🫡) not appearing on dequeue
 
+## Status: CLOSED
+
+**Root cause identified and fixed** in commit `e4bd7a2` (2026-03-17). See `tasks/4-completed/2026-03-17/100-voice-salute-testing.md` for full completion report.
+
+**Root cause:** Poller only checked global queue state (`hasPendingWaiters`, `isMessageConsumed`). In multi-session mode, messages route to session queues, so the global queue was empty — the poller would set 😴 even when a session agent was actively waiting. Fix: check `hasAnySessionWaiter()` and `isSessionMessageConsumed()` from session-queue.
+
 ## Type
 
 Bug
