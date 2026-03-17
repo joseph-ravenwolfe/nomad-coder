@@ -35,10 +35,12 @@ const DESCRIPTION =
   "Consume queued updates in a single batch. Non-content events (reactions, " +
   "callbacks) are drained first, then up to one content event (user message " +
   "with text, media, or voice) is appended. Returns `{ updates: [{ id, event, from, content }, ...] }` " +
-  "with optional `pending` (count of remaining queued updates, when > 0), or `{ empty: true }` on timeout. " +
+  "with optional `pending` (count of remaining queued updates, when > 0). " +
+  "When no update is available: returns `{ timed_out: true }` when a blocking wait expires (call again " +
+  "immediately to keep the loop alive), or `{ empty: true }` for instant polls (timeout: 0). " +
   "Voice messages arrive pre-transcribed as { type: \"voice\", text: \"...\" }. " +
   "pending > 0 means more updates are queued — call again. " +
-  "Two modes: omit timeout (default 60 s) to block until an update arrives; " +
+  "Two modes: omit timeout (default 300 s) to block up to 300 s for the next update; " +
   "pass timeout: 0 for an instant non-blocking poll (use only for startup drain loops). " +
   "Pass sid (from session_start result) when multiple sessions share the same server process — " +
   "this pins the queue to the correct session instead of relying on global active-session state. " +
@@ -55,8 +57,8 @@ export function register(server: McpServer) {
           .int()
           .min(0)
           .max(300)
-          .default(60)
-          .describe("Seconds to block when queue is empty. Default 60 blocks until an update arrives (normal loop). Pass 0 for an instant non-blocking poll (drain loops only). Max 300 (5 min)."),
+          .default(300)
+          .describe("Seconds to block when queue is empty. Default 300 (5 min) blocks up to 300 s for the next update — optimized for agent listen loops. Pass 0 for an instant non-blocking poll (drain loops only). Max 300."),
         sid: z
           .number()
           .int()
@@ -164,7 +166,7 @@ export function register(server: McpServer) {
       }
 
       resyncActiveSession();
-      return toResult({ empty: true, pending: pendingCountAny() });
+      return toResult({ timed_out: true, pending: pendingCountAny() });
     },
   );
 }

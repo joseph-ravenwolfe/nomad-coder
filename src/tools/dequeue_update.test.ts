@@ -128,12 +128,13 @@ describe("dequeue_update tool", () => {
     expect(data.pending).toBeUndefined();
   });
 
-  it("returns empty when queue is empty and timeout is 0", async () => {
+  it("returns empty when queue is empty and timeout is 0 (instant poll)", async () => {
     mocks.dequeueBatch.mockReturnValue([]);
     const result = await call({ timeout: 0 });
     expect(isError(result)).toBe(false);
     const data = parseResult(result);
     expect(data.empty).toBe(true);
+    expect(data.timed_out).toBeUndefined();
     expect(data.pending).toBe(0);
   });
 
@@ -150,7 +151,7 @@ describe("dequeue_update tool", () => {
     expect(data.updates[0].event).toBe("message");
   });
 
-  it("returns empty after timeout expires with no events", async () => {
+  it("returns timed_out after timeout expires with no events", async () => {
     mocks.dequeueBatch.mockReturnValue([]);
     // waitForEnqueue resolves but dequeue still returns nothing
     mocks.waitForEnqueue.mockImplementation(
@@ -158,7 +159,7 @@ describe("dequeue_update tool", () => {
     );
     const result = await call({ timeout: 1 });
     const data = parseResult(result);
-    expect(data.empty).toBe(true);
+    expect(data.timed_out).toBe(true);
     expect(data.pending).toBe(0);
   });
 
@@ -185,7 +186,7 @@ describe("dequeue_update tool", () => {
     );
     const result = await call({ timeout: 1 });
     const data = parseResult(result);
-    expect(data.empty).toBe(true);
+    expect(data.timed_out).toBe(true);
     expect(data.pending).toBe(3);
   });
 
@@ -195,7 +196,22 @@ describe("dequeue_update tool", () => {
     const result = await call({ timeout: 0 });
     const data = parseResult(result);
     expect(data.empty).toBe(true);
+    expect(data.timed_out).toBeUndefined();
     expect(data.pending).toBe(0);
+  });
+
+  it("defaults to 300 s timeout (max) when no timeout arg is provided", async () => {
+    // Verify the default is NOT 0 (instant): if it were 0, waitForEnqueue would
+    // never be called. Instead we should see it called, then receive the event.
+    const evt = makeEvent(99, "Default timeout test");
+    mocks.dequeueBatch
+      .mockReturnValueOnce([])   // empty on first check → triggers block wait
+      .mockReturnValueOnce([evt]); // event arrives after enqueue
+    mocks.waitForEnqueue.mockResolvedValue(undefined);
+    const result = await call({});
+    expect(mocks.waitForEnqueue).toHaveBeenCalled();
+    const data = parseResult(result);
+    expect(data.updates).toHaveLength(1);
   });
 
   // =========================================================================
@@ -518,7 +534,7 @@ describe("dequeue_update tool", () => {
     void Promise.resolve().then(() => { controller.abort(); });
     const result = await call({ sid: 4, timeout: 60 }, { signal: controller.signal });
     const data = parseResult(result);
-    expect(data.empty).toBe(true);
+    expect(data.timed_out).toBe(true);
     // resync must fire even on abort path
     expect(mocks.setActiveSession).toHaveBeenCalledWith(4);
   });
@@ -539,7 +555,7 @@ describe("dequeue_update tool", () => {
     controller.abort();
     const result = await call({ timeout: 60 }, { signal: controller.signal });
     const data = parseResult(result);
-    expect(data.empty).toBe(true);
+    expect(data.timed_out).toBe(true);
   });
 
   it("stops waiting when signal is aborted while blocking", async () => {
@@ -549,7 +565,7 @@ describe("dequeue_update tool", () => {
     void Promise.resolve().then(() => { controller.abort(); });
     const result = await call({ timeout: 60 }, { signal: controller.signal });
     const data = parseResult(result);
-    expect(data.empty).toBe(true);
+    expect(data.timed_out).toBe(true);
   });
 
   it("returns error when explicit sid has no session queue", async () => {
