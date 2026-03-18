@@ -444,7 +444,7 @@ describe("outbound-proxy", () => {
       await (p as unknown as FakeApi).sendMessage(42, "Hello world");
 
       const [, sentText] = raw.sendMessage.mock.calls[0] as [number, string, unknown];
-      expect(sentText).toBe("🤖 Scout\nHello world");
+      expect(sentText).toBe("🤖 `Scout`\nHello world");
     });
 
     it("omits header in single-session mode (sendMessage)", async () => {
@@ -470,7 +470,7 @@ describe("outbound-proxy", () => {
       );
 
       const [, sentText] = raw.sendMessage.mock.calls[0] as [number, string, unknown];
-      expect(sentText).toMatch(/🤖 Scout\\_2\n/);
+      expect(sentText).toMatch(/🤖 `Scout\_2`\n/);
     });
 
     it("prepends header to _rawText in multi-session mode", async () => {
@@ -485,7 +485,7 @@ describe("outbound-proxy", () => {
       );
 
       const [, , recordedText] = mocks.recordOutgoing.mock.calls[0] as [number, string, string];
-      expect(recordedText).toBe("🤖 Scout\noriginal text");
+      expect(recordedText).toBe("🤖 `Scout`\noriginal text");
     });
 
     it("uses 'Session N' as fallback when session has no name", async () => {
@@ -498,7 +498,7 @@ describe("outbound-proxy", () => {
       await (p as unknown as FakeApi).sendMessage(42, "text");
 
       const [, sentText] = raw.sendMessage.mock.calls[0] as [number, string, unknown];
-      expect(sentText).toBe("🤖 Session 3\ntext");
+      expect(sentText).toBe("🤖 `Session 3`\ntext");
     });
 
     it("prepends header to file caption in multi-session mode (sendPhoto)", async () => {
@@ -514,7 +514,7 @@ describe("outbound-proxy", () => {
       );
 
       const [, , opts] = raw.sendPhoto.mock.calls[0] as [number, string, { caption: string }];
-      expect(opts.caption).toBe("🤖 Scout\nA photo caption");
+      expect(opts.caption).toBe("🤖 `Scout`\nA photo caption");
     });
 
     it("omits caption header when no caption provided (sendPhoto)", async () => {
@@ -543,7 +543,7 @@ describe("outbound-proxy", () => {
       await (p as unknown as FakeApi).editMessageText(42, 10, "edited content");
 
       const [, , editedText] = raw.editMessageText.mock.calls[0] as [number, number, string];
-      expect(editedText).toBe("🤖 Scout\nedited content");
+      expect(editedText).toBe("🤖 `Scout`\nedited content");
     });
 
     it("omits header in editMessageText in single-session mode", async () => {

@@ -34,8 +34,8 @@ function buildHeader(escape: boolean): { plain: string; formatted: string } {
   const session = sid > 0 ? getSession(sid) : undefined;
   const name = session?.name || (sid > 0 ? `Session ${sid}` : "");
   if (!name) return { plain: "", formatted: "" };
-  const formatted = escape ? `🤖 ${escapeV2(name)}\n` : `🤖 ${name}\n`;
-  return { plain: `🤖 ${name}\n`, formatted };
+  const formatted = escape ? `🤖 \`${escapeV2(name)}\`\n` : `🤖 \`${name}\`\n`;
+  return { plain: `🤖 \`${name}\`\n`, formatted };
 }
 
 // ---------------------------------------------------------------------------
