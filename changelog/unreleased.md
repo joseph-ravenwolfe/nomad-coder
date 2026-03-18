@@ -38,6 +38,7 @@
 - Added slash command routing documentation to multi-session section of `docs/behavior.md` — behavior table (targeted vs ambiguous), governor-registers-all etiquette, and naming conventions for multi-session command menus
 - Added inter-session communication documentation to `docs/behavior.md` — `route_message` and `send_direct_message` detailed when/how/etiquette guidance replacing the bare coordination tools table
 - Added `route_message` and `send_direct_message` to the tool selection table in `docs/communication.md`
+- `docs/inter-agent-communication.md` — new comprehensive guide covering inter-agent message types (routed vs. DM vs. operator), trust boundaries (server-injected fields vs. free-form text), governor protocol and promotion, service message event types, etiquette patterns, and a complete delegation flow example; referenced from the multi-session section of `docs/behavior.md`
 - Created `docs/multi-session-prompts.md` — governor, worker, and topic discipline prompt templates with a two-session quick-start guide
 - Added multi-session behavior documentation in `docs/behavior.md` and `docs/communication.md` — routing modes, ambiguous message protocol, governor responsibilities, coordination tools
 

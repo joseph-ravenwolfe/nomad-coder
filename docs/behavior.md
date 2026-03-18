@@ -488,6 +488,8 @@ After calling `shutdown` (or the server restarts for any reason):
 When 2+ agent sessions are active simultaneously, additional rules apply.
 
 > **Full protocol:** See [multi-session-protocol.md](multi-session-protocol.md) for the complete routing protocol, governor duties, cascade fallback, and human experience design.
+>
+> **Inter-agent communication:** See [inter-agent-communication.md](inter-agent-communication.md) for message envelopes, trust boundaries, DM vs. routed message semantics, and governor protocol.
 
 ### Session identity
 
