@@ -1,240 +1,174 @@
-# Manual Test Walkthrough
+# Manual Regression Test Suite
 
-Live test plan executed by the overseer agent while the operator observes on Telegram. Each scenario is a self-contained test with expected outcome.
+Reusable manual test plan for the Telegram Bridge MCP server. Run through these scenarios after any significant change to verify core functionality.
 
-## Setup
+**Notation:**
 
-1. Build, lint, and run full test suite
-2. Restart the MCP server (fresh state)
-3. Create a Telegram topic for test output
-4. Agent executes each scenario and reports pass/fail
+- **[Agent]** = agent calls MCP tool
+- **[Op]** = operator action on Telegram
+- **[Verify]** = expected outcome to confirm
 
----
+## Prerequisites
 
-## Scenario 1 — Session Basics
-
-### 1.1 Session Identity
-
-- Call `list_sessions`
-- Verify: response includes this session (SID 1, name "Primary")
-- Verify: `sessions_active: 1`
-
-### 1.2 Bot Info
-
-- Call `get_me`
-- Verify: response includes bot username, MCP version, build info
-
-### 1.3 Topic Label
-
-- Call `set_topic` with topic "🧪 Test"
-- Send a message
-- Verify: message has `**[🧪 Test]**` prefix in Telegram
-- Clear topic (empty string)
-- Send another message
-- Verify: no prefix
+1. `pnpm build` — clean
+2. `pnpm lint` — clean
+3. `pnpm test` — all passing
+4. Restart the MCP server (`shutdown` → call any tool to restart)
+5. `session_start` — fresh session (SID 1)
+6. `set_topic` with a test label (e.g. "🧪 Test")
 
 ---
 
-## Scenario 2 — Messaging
+## Part A — Single-Session Tests
 
-### 2.1 Send Text
+### A1. Session Basics
 
-- `send_text` with a short message
-- Verify: appears in Telegram chat
+| Step | Action | Expected |
+| --- | --- | --- |
+| A1.1 | [Agent] `list_sessions` | Returns SID 1 "Primary", `active_sid: 1` |
+| A1.2 | [Agent] `get_me` | Returns bot username, MCP version, commit hash, build time |
+| A1.3 | [Agent] `set_topic("🧪 Test")` then `send_text` | Message appears with `**[🧪 Test]**` prefix |
+| A1.4 | [Agent] `set_topic("")` then `send_text` | Message appears without prefix |
 
-### 2.2 Send with Keyboard
+### A2. Messaging
 
-- `send_message` with inline keyboard (2 buttons)
-- Verify: message appears with buttons
-- Operator presses a button
-- Verify: callback received via `dequeue_update`
+| Step | Action | Expected |
+| --- | --- | --- |
+| A2.1 | [Agent] `send_text("Hello")` | Message appears in Telegram |
+| A2.2 | [Agent] `send_message` with 2-button inline keyboard | Message + buttons appear |
+| A2.3 | [Op] Press a button | [Agent] receives callback via `dequeue_update` with `data`, `qid`, `target` |
+| A2.4 | [Agent] `answer_callback_query(qid)` | Toast notification shown to operator |
+| A2.5 | [Agent] `notify(title, text, severity: "info")` | Notification appears in chat |
+| A2.6 | [Agent] `send_text` → capture msg\_id → `edit_message_text(msg_id, new_text)` | Message content updated in-place |
+| A2.7 | [Agent] `send_text` → `append_text(msg_id, extra)` | Message now has original + appended text |
+| A2.8 | [Agent] `send_text` → `delete_message(msg_id)` | Message removed from chat |
+| A2.9 | [Agent] `send_text` → `pin_message(msg_id)` | Message pinned in chat |
 
-### 2.3 Notify
+### A3. Interactive Tools
 
-- `notify` with severity "info" and a status message
-- Verify: notification appears in chat
+| Step | Action | Expected |
+| --- | --- | --- |
+| A3.1 | [Agent] `confirm("Test?")` → [Op] presses Yes | Returns `{ confirmed: true }` |
+| A3.2 | [Agent] `confirm("Test?")` → [Op] presses No | Returns `{ confirmed: false }` |
+| A3.3 | [Agent] `choose(3 options)` → [Op] picks one | Returns `{ label, value }` matching selection |
+| A3.4 | [Agent] `ask("Type something")` → [Op] types response | Returns `{ text }` with operator's input |
+| A3.5 | [Agent] `send_choice(2 options)` → [Op] presses one | Callback received via `dequeue_update` |
 
-### 2.4 Edit Message
+### A4. Animations and Typing
 
-- `send_text` a message, capture message_id
-- `edit_message_text` to change the content
-- Verify: message updated in Telegram
+| Step | Action | Expected |
+| --- | --- | --- |
+| A4.1 | [Agent] `show_animation(preset: "thinking")` | Animated message appears, frames cycling |
+| A4.2 | Wait 3s → [Agent] `cancel_animation` | Animation stops, static text remains |
+| A4.3 | [Agent] `show_typing` | Typing indicator appears in chat |
+| A4.4 | [Agent] `set_default_animation(preset: "working")` → `show_animation()` (no preset) | Working animation plays using new default |
+| A4.5 | [Agent] `cancel_animation` | Stops cleanly |
 
-### 2.5 Append Text
+### A5. Reactions
 
-- `send_text` a message, capture message_id
-- `append_text` to add content
-- Verify: message now has both original + appended text
+| Step | Action | Expected |
+| --- | --- | --- |
+| A5.1 | [Op] Sends a message → [Agent] `set_reaction(msg_id, "👍")` | 👍 reaction appears on operator's message |
 
-### 2.6 Delete Message
+### A6. Checklist and Progress
 
-- `send_text` a throwaway message, capture message_id
-- `delete_message` to remove it
-- Verify: message gone from chat
+| Step | Action | Expected |
+| --- | --- | --- |
+| A6.1 | [Agent] `send_new_checklist(title, 3 pending steps)` | Checklist message with 3 unchecked items |
+| A6.2 | [Agent] `update_checklist(msg_id, step 1 done)` | First item shows checked |
+| A6.3 | [Agent] `update_checklist(msg_id, all done)` | All items checked |
+| A6.4 | [Agent] `send_new_progress(label, 0%)` | Progress bar at 0% |
+| A6.5 | [Agent] `update_progress(msg_id, 50%)` | Bar at 50% |
+| A6.6 | [Agent] `update_progress(msg_id, 100%)` | Bar at 100% |
 
-### 2.7 Pin Message
+### A7. Message Inspection
 
-- `send_text` a message, capture message_id
-- `pin_message`
-- Verify: message is pinned in chat
+| Step | Action | Expected |
+| --- | --- | --- |
+| A7.1 | [Agent] `send_text` → `get_message(msg_id)` | Returns content, timestamp, sid, versions |
+| A7.2 | [Agent] `get_chat` → [Op] presses Allow | Returns chat id, type, title, description |
 
----
+### A8. Diagnostics
 
-## Scenario 3 — Interactive Tools
+| Step | Action | Expected |
+| --- | --- | --- |
+| A8.1 | [Agent] `get_debug_log` | Returns recent entries with categories: session, route, animation, queue |
+| A8.2 | [Agent] `dump_session_record` | Returns file with full event timeline |
 
-### 3.1 Confirm (Yes/No)
+### A9. Reply-To and Callback Routing
 
-- `confirm` with a test question
-- Operator presses Yes
-- Verify: tool returns confirmed=true
+| Step | Action | Expected |
+| --- | --- | --- |
+| A9.1 | [Agent] `send_text` → [Op] replies to it → [Agent] `dequeue_update` | Reply received with `reply_to` field, `routing: "targeted"` |
+| A9.2 | [Agent] `confirm` → [Op] presses button | Callback has `routing: "targeted"`, `target` = prompt msg\_id |
 
-### 3.2 Confirm (Deny)
+### A10. Edge Cases
 
-- `confirm` with a test question
-- Operator presses No
-- Verify: tool returns confirmed=false
-
-### 3.3 Choose (Single Selection)
-
-- `choose` with 3 options
-- Operator selects one
-- Verify: tool returns the selected value
-
-### 3.4 Ask (Open-Ended)
-
-- `ask` with a question
-- Operator types a response
-- Verify: tool returns the operator's text
-
-### 3.5 Choice Buttons (Non-Blocking)
-
-- `send_choice` with options
-- Operator presses one
-- Verify: callback received via `dequeue_update`
-
----
-
-## Scenario 4 — Animations and Typing
-
-### 4.1 Show Animation
-
-- `show_animation` with preset "thinking"
-- Verify: animated message appears
-- Wait 3 seconds
-- `cancel_animation`
-- Verify: animation stops, message remains as static text
-
-### 4.2 Show Typing
-
-- `show_typing`
-- Verify: typing indicator appears briefly
-
-### 4.3 Default Animation
-
-- `set_default_animation` with a preset
-- `show_animation` (no preset — uses default)
-- Verify: default animation plays
-- `cancel_animation`
+| Step | Action | Expected |
+| --- | --- | --- |
+| A10.1 | [Op] Sends 5 messages rapidly → [Agent] `dequeue_update` loop | All 5 received in order, no drops, no duplicates |
+| A10.2 | [Op] Sends voice message → [Agent] `dequeue_update` | Voice event with `text` (transcription) and `file_id`; 🫡 reaction auto-set |
+| A10.3 | [Agent] `set_commands([{command: "test", description: "Test"}])` → [Op] sends `/test` | Command received as message event |
 
 ---
 
-## Scenario 5 — Reactions
+## Part B — Multi-Session Tests
 
-### 5.1 Set Reaction
+> Requires 2+ MCP clients connected simultaneously.
+> See `docs/multi-session-test-script.md` for the full multi-session test plan.
 
-- `send_text` a message, capture message_id
-- Operator sends a reply
-- Agent uses `set_reaction` with an emoji on the operator's message
-- Verify: reaction appears on the message
+### B1. Session Lifecycle
 
----
+| Step | Action | Expected |
+| --- | --- | --- |
+| B1.1 | [S1] already connected → [S2] `session_start(name: "Scout")` | S2 gets SID 2, `sessions_active: 2`, `fellow_sessions` lists S1 |
+| B1.2 | [S2] `list_sessions` | Both sessions listed with SIDs and names |
+| B1.3 | [S2] `close_session` → [S2] `session_start(name: "Scout")` | Fresh SID, clean rejoin |
 
-## Scenario 6 — Checklist and Progress
+### B2. Targeted Routing
 
-### 6.1 Checklist
+| Step | Action | Expected |
+| --- | --- | --- |
+| B2.1 | [S1] `send_text("I'm S1")` → [Op] replies | Only S1 receives reply (`routing: "targeted"`) |
+| B2.2 | [S2] `send_text("I'm S2")` → [Op] replies | Only S2 receives reply |
+| B2.3 | [S1] `confirm` prompt → [Op] presses button | Only S1 receives callback |
 
-- `send_new_checklist` with 3 items (all unchecked)
-- Verify: checklist message appears
-- `update_checklist` — mark item 1 done
-- Verify: item 1 shows checked
-- `update_checklist` — mark all done
-- Verify: all items checked
+### B3. Governor Routing
 
-### 6.2 Progress Bar
+| Step | Action | Expected |
+| --- | --- | --- |
+| B3.1 | [Op] Sends plain message (not a reply) | Only governor (S1, lowest SID) receives it |
+| B3.2 | [S1] `route_message(msg_id, target_sid: 2)` | S2 receives the message |
+| B3.3 | [S1] `close_session` → [Op] sends plain message | S2 (now governor) receives it |
 
-- `send_new_progress` with label and 0%
-- Verify: progress bar appears
-- `update_progress` to 50%
-- Verify: bar updates
-- `update_progress` to 100%
-- Verify: bar shows complete
+### B4. DM Permissions
 
----
+| Step | Action | Expected |
+| --- | --- | --- |
+| B4.1 | DM auto-granted on session approval | S1↔S2 bidirectional after S2 approved |
+| B4.2 | [S2] `send_direct_message(target_sid: 1, text)` | S1 receives `direct_message` event |
+| B4.3 | [S2] `close_session` | DM permissions for S2 revoked |
 
-## Scenario 7 — Message Inspection
+### B5. Health Check
 
-### 7.1 Get Message
-
-- `send_text` a message, capture message_id
-- `get_message` with that ID
-- Verify: returns message content, date, chat info
-
-### 7.2 Get Chat
-
-- `get_chat`
-- Verify: returns chat title, type, ID
+| Step | Action | Expected |
+| --- | --- | --- |
+| B5.1 | Governor stops polling for >6 minutes | Operator gets 3-option prompt (reroute/promote/wait) |
+| B5.2 | Governor resumes polling | "Session is back online" notification |
 
 ---
 
-## Scenario 8 — Debug and Diagnostics
+## Known Issues
 
-### 8.1 Debug Log
-
-- `get_debug_log`
-- Verify: returns recent debug entries (routing, session events)
-
-### 8.2 Session Recording
-
-- `dump_session_record`
-- Verify: returns timeline of events for this session
+- **`get_chat` timeout**: The 60-second approval prompt may time out before the operator can respond. The `pollButtonPress` mechanism may have a race condition with session-queue routing. Tracked for investigation.
 
 ---
 
-## Scenario 9 — Reply-To Routing (Single Session)
+## Test Run Log
 
-### 9.1 Reply Targeting
+### 2026-03-18 — v4-multi-session (commit 91d5bb0)
 
-- Agent sends a message via `send_text`
-- Operator replies to it
-- Agent calls `dequeue_update`
-- Verify: the reply is received with `reply_to` metadata pointing to the original message
-
-### 9.2 Callback Targeting
-
-- Agent sends `confirm` prompt
-- Operator presses button
-- Verify: callback is received by the same session that sent the prompt
-
----
-
-## Scenario 10 — Edge Cases
-
-### 10.1 Rapid Messages
-
-- Operator sends 5 messages quickly
-- Agent calls `dequeue_update`
-- Verify: all 5 received, no drops, correct order
-
-### 10.2 Voice Message (if available)
-
-- Operator sends a voice message
-- Agent calls `dequeue_update`
-- Verify: voice event received with transcription (if configured)
-- Verify: 🫡 reaction set on the voice message
-
-### 10.3 Slash Commands
-
-- `set_commands` to register a `/test` command
-- Operator sends `/test`
-- Agent calls `dequeue_update`
-- Verify: command received as a message event
+- **Part A**: All scenarios passed except A7.2 (`get_chat` timed out twice)
+- **Part B**: Not yet tested (requires second MCP client)
+- **Test suite**: 72 files, 1394 tests passing
+- **Build**: Clean (tsc + eslint)
