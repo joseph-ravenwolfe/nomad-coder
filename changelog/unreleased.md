@@ -1,5 +1,9 @@
 # [Unreleased]
 
+## Fixed
+
+- Converted `topic-state`, `typing-state`, `temp-message`, and `temp-reaction` from module-level singletons to per-SID `Map` instances — eliminates cross-session state corruption when multiple sessions are active simultaneously
+
 ## Added
 
 - `session_start` now validates session names — rejects names containing special characters, emoji, or non-Latin unicode; only letters (a–z, A–Z), digits, and spaces are allowed; returns `INVALID_NAME` error code; leading/trailing whitespace is trimmed before validation
