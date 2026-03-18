@@ -24,6 +24,7 @@ import { deliverDirectMessage } from "./session-queue.js";
 import { getApi, resolveChat, sendServiceMessage } from "./telegram.js";
 import { markdownToV2 } from "./markdown.js";
 import { dlog } from "./debug-log.js";
+import { hasActiveAnimation } from "./animation-state.js";
 
 // ── Constants ──────────────────────────────────────────────
 
@@ -150,6 +151,7 @@ async function runHealthCheck(thresholdMs: number): Promise<void> {
   // ── Newly unhealthy sessions ──────────────────────────
   for (const session of unhealthy) {
     if (_flaggedSids.has(session.sid)) continue; // already handled
+    if (hasActiveAnimation(session.sid)) continue; // animation = proof of life
     _flaggedSids.add(session.sid);
     markUnhealthy(session.sid);
     dlog("health", `session unhealthy sid=${session.sid} name=${session.name}`);

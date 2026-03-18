@@ -557,6 +557,9 @@ export function isAnimationActive(sid: number): boolean {
   return _states.has(sid);
 }
 
+/** Alias for `isAnimationActive` — used by health-check as a proof-of-life signal. */
+export const hasActiveAnimation = isAnimationActive;
+
 /** Returns true if the active animation for the session is persistent (survives show_typing). */
 export function isAnimationPersistent(sid: number): boolean {
   return _states.get(sid)?.persistent ?? false;

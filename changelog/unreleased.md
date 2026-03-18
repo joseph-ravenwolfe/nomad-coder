@@ -3,6 +3,7 @@
 ## Fixed
 
 - Converted `topic-state`, `typing-state`, `temp-message`, and `temp-reaction` from module-level singletons to per-SID `Map` instances — eliminates cross-session state corruption when multiple sessions are active simultaneously
+- Health check no longer flags sessions with an active animation as unresponsive — an active animation is proof of life; added `hasActiveAnimation(sid)` export to `animation-state.ts`
 
 ## Added
 
