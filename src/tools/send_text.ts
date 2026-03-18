@@ -41,7 +41,7 @@ export function register(server: McpServer) {
           .optional()
           .describe(
             "Identity tuple [sid, pin] from session_start. " +
-            "Required when multiple sessions share the same server process.",
+            "Always required — pass your [sid, pin] on every tool call.",
           ),
 },
     },

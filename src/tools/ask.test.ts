@@ -1,6 +1,7 @@
 import { vi, describe, it, expect, beforeEach } from "vitest";
 import { createMockServer, parseResult, isError, errorCode } from "./test-utils.js";
 import type { TimelineEvent } from "../message-store.js";
+import { runInSessionContext } from "../session-context.js";
 
 const mocks = vi.hoisted(() => ({
   activeSessionCount: vi.fn(() => 0),
@@ -109,6 +110,8 @@ describe("ask tool", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.validateSession.mockReturnValue(true);
+    mocks.validateSession.mockReturnValue(true);
     mocks._storeQueue.length = 0;
     mocks._waitResolvers.length = 0;
     const server = createMockServer();
@@ -120,7 +123,7 @@ describe("ask tool", () => {
     mocks.sendMessage.mockResolvedValue(BASE_MSG);
     // Reply must have a higher message_id than the sent question (message_id: 10)
     mocks._storeQueue.push(makeTextEvent(11, "sure"));
-    const result = await call({ question: "Continue?", timeout_seconds: 1 });
+    const result = await call({ question: "Continue?", timeout_seconds: 1, identity: [1, 123456]});
     expect(isError(result)).toBe(false);
     const data = parseResult(result);
     expect(data.timed_out).toBe(false);
@@ -131,14 +134,14 @@ describe("ask tool", () => {
     mocks.sendMessage.mockResolvedValue(BASE_MSG); // sent message_id: 10
     // Stale message with same message_id as the sent question — should be ignored
     mocks._storeQueue.push(makeTextEvent(10, "old voice reply"));
-    const result = await call({ question: "Continue?", timeout_seconds: 1 });
+    const result = await call({ question: "Continue?", timeout_seconds: 1, identity: [1, 123456]});
     expect((parseResult(result)).timed_out).toBe(true);
   });
 
   it("returns timed_out when no matching update arrives", async () => {
     mocks.sendMessage.mockResolvedValue(BASE_MSG);
     // Empty queue
-    const result = await call({ question: "Continue?", timeout_seconds: 1 });
+    const result = await call({ question: "Continue?", timeout_seconds: 1, identity: [1, 123456]});
     const data = parseResult(result);
     expect(data.timed_out).toBe(true);
   });
@@ -146,7 +149,7 @@ describe("ask tool", () => {
   it("returns voice transcription from pre-transcribed store event", async () => {
     mocks.sendMessage.mockResolvedValue(BASE_MSG);
     mocks._storeQueue.push(makeVoiceEvent(11, "transcribed text"));
-    const result = await call({ question: "Continue?", timeout_seconds: 1 });
+    const result = await call({ question: "Continue?", timeout_seconds: 1, identity: [1, 123456]});
     const data = parseResult(result);
     expect(data.timed_out).toBe(false);
     expect(data.text).toBe("transcribed text");
@@ -156,12 +159,12 @@ describe("ask tool", () => {
   it("sets 🫡 reaction on voice message dequeue", async () => {
     mocks.sendMessage.mockResolvedValue(BASE_MSG);
     mocks._storeQueue.push(makeVoiceEvent(11, "hello"));
-    await call({ question: "Continue?", timeout_seconds: 1 });
+    await call({ question: "Continue?", timeout_seconds: 1, identity: [1, 123456]});
     expect(mocks.ackVoiceMessage).toHaveBeenCalledWith(11);
   });
 
   it("validates question text before sending", async () => {
-    const result = await call({ question: "" });
+    const result = await call({ question: "", identity: [1, 123456]});
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("EMPTY_MESSAGE");
     expect(mocks.sendMessage).not.toHaveBeenCalled();
@@ -174,7 +177,7 @@ describe("ask tool", () => {
   it("returns command as a break signal instead of ignoring (#4)", async () => {
     mocks.sendMessage.mockResolvedValue(BASE_MSG);
     mocks._storeQueue.push(makeCommandEvent(11, "cancel"));
-    const result = await call({ question: "Continue?", timeout_seconds: 1 });
+    const result = await call({ question: "Continue?", timeout_seconds: 1, identity: [1, 123456]});
     const data = parseResult(result);
     // Should not time out — command should be treated as a response
     expect(data.timed_out).toBe(false);
@@ -183,7 +186,7 @@ describe("ask tool", () => {
 
   it("rejects with PENDING_UPDATES when queue is non-empty", async () => {
     mocks.pendingCount.mockReturnValue(5);
-    const result = await call({ question: "Continue?", timeout_seconds: 1 });
+    const result = await call({ question: "Continue?", timeout_seconds: 1, identity: [1, 123456]});
     expect(isError(result)).toBe(true);
     const data = parseResult(result);
     expect(data.code).toBe("PENDING_UPDATES");
@@ -198,8 +201,7 @@ describe("ask tool", () => {
     const result = await call({
       question: "Continue?",
       timeout_seconds: 1,
-      ignore_pending: true,
-    });
+      ignore_pending: true, identity: [1, 123456]});
     expect(isError(result)).toBe(false);
     const data = parseResult(result);
     expect(data.timed_out).toBe(false);
@@ -213,8 +215,7 @@ describe("ask tool", () => {
     const result = await call({
       question: "Continue?",
       timeout_seconds: 1,
-      reply_to_message_id: 99,
-    });
+      reply_to_message_id: 99, identity: [1, 123456]});
     expect(isError(result)).toBe(false);
     const data = parseResult(result);
     expect(data.timed_out).toBe(false);
@@ -222,23 +223,20 @@ describe("ask tool", () => {
   });
 
 describe("identity gate", () => {
-  it("returns SID_REQUIRED when multiple sessions active and no identity", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(2);
+  it("returns SID_REQUIRED when no identity provided", async () => {
     const result = await call({"question":"x"});
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("SID_REQUIRED");
   });
 
   it("returns AUTH_FAILED when identity has wrong pin", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(2);
     mocks.validateSession.mockReturnValueOnce(false);
     const result = await call({"question":"x","identity":[1,99999]});
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("AUTH_FAILED");
   });
 
-  it("proceeds when multiple sessions active and identity is valid", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(2);
+  it("proceeds when identity is valid", async () => {
     mocks.validateSession.mockReturnValueOnce(true);
     let code: string | undefined;
     try { code = errorCode(await call({"question":"x","identity":[1,99999]})); } catch { /* gate passed, other error ok */ }
@@ -246,12 +244,6 @@ describe("identity gate", () => {
     expect(code).not.toBe("AUTH_FAILED");
   });
 
-  it("proceeds when single session active and no identity (backward compat)", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(1);
-    let code: string | undefined;
-    try { code = errorCode(await call({"question":"x"})); } catch { /* gate passed, other error ok */ }
-    expect(code).not.toBe("SID_REQUIRED");
-  });
 });
 
 // =========================================================================
@@ -261,9 +253,6 @@ describe("identity gate", () => {
 describe("cross-session isolation", () => {
   it("session 2 reads from its own queue, not session 1's", async () => {
     mocks.sendMessage.mockResolvedValue(BASE_MSG);
-    // All getActiveSession calls return 2 for this test so that
-    // both the pending-guard and getCallerSid() fallback resolve to session 2
-    mocks.getActiveSession.mockReturnValue(2);
 
     // Session 1 has a text reply in its dedicated queue
     mocks.sessionQueue1.dequeueMatch.mockImplementationOnce(
@@ -274,7 +263,8 @@ describe("cross-session isolation", () => {
       (predicate: (e: TimelineEvent) => unknown) => predicate(makeTextEvent(12, "s2 reply")),
     );
 
-    const result = await call({ question: "Continue?", timeout_seconds: 1 });
+    // runInSessionContext(2) sets getCallerSid() to 2 so ask polls from sessionQueue2
+    const result = await runInSessionContext(2, () => call({ question: "Continue?", timeout_seconds: 1, identity: [2, 123456] }));
     const data = parseResult(result);
 
     // Got session 2's own event, not session 1's
@@ -283,8 +273,6 @@ describe("cross-session isolation", () => {
     expect(mocks.sessionQueue2.dequeueMatch).toHaveBeenCalled();
     // Session 1's queue was never touched
     expect(mocks.sessionQueue1.dequeueMatch).not.toHaveBeenCalled();
-
-    mocks.getActiveSession.mockReturnValue(0); // restore
   });
 });
 

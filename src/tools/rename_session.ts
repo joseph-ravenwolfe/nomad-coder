@@ -2,7 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { toResult, toError } from "../telegram.js";
 import { listSessions, renameSession } from "../session-manager.js";
-import { SESSION_AUTH_SCHEMA, checkAuth } from "../session-auth.js";
+import { requireAuth } from "../session-gate.js";
 
 const DESCRIPTION =
   "Rename the current session. The new name must not be taken " +
@@ -15,15 +15,22 @@ export function register(server: McpServer) {
     {
       description: DESCRIPTION,
       inputSchema: {
-        ...SESSION_AUTH_SCHEMA,
+        identity: z
+          .tuple([z.number().int(), z.number().int()])
+          .optional()
+          .describe(
+            "Identity tuple [sid, pin] from session_start. " +
+            "Always required — pass your [sid, pin] on every tool call.",
+          ),
         new_name: z
           .string()
           .describe("New session name. Must be alphanumeric (letters, digits, spaces only)."),
       },
     },
-    ({ sid, pin, new_name }) => {
-      const authErr = checkAuth(sid, pin);
-      if (authErr) return authErr;
+    ({ identity, new_name }) => {
+      const _sid = requireAuth(identity);
+      if (typeof _sid !== "number") return toError(_sid);
+      const sid = _sid;
 
       const trimmed = new_name.trim();
 

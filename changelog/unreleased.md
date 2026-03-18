@@ -2,6 +2,12 @@
 
 ## Changed
 
+- `identity: [sid, pin]` is now required on **every** tool call — `requireAuth()` always validates via `validateSession()` with no single-session bypass; omitting `identity` returns `SID_REQUIRED` regardless of how many sessions are active
+- `dequeue_update` migrated to `identity: [sid, pin]` format — removed legacy `session-auth.js` / `checkAuth` dependency; always uses `getSessionQueue(sid)` with no global message-store fallback
+- Pattern A tools (`close_session`, `route_message`, `rename_session`, `send_direct_message`) migrated from `{ sid, pin }` to `{ identity: [sid, pin] }` parameter shape
+- All 35 Pattern B tools have `identity` schema updated to `.optional()` with descriptive text; auth response is structured `SID_REQUIRED`/`AUTH_FAILED` error instead of a Zod validation error
+- `session-gate.ts` — removed `activeSessionCount()`/`getActiveSession()` single-session bypass; `requireAuth(undefined)` always returns `SID_REQUIRED`
+
 - Replaced `TwoLaneQueue` with `TemporalQueue` — events are now delivered in strict arrival order; heavyweight events (user text, voice) act as temporal batch delimiters instead of having separate lanes; `two-lane-queue.ts` is now a backward-compatibility shim re-exporting `TemporalQueue`; `enqueueResponse`/`enqueueMessage` kept as deprecated aliases for `enqueue()`
 - `route_message` now injects a server-stamped `routed_by` field into the event copy delivered to the target session — identifies which session SID performed the routing; cannot be forged by any agent; original event in the global timeline is unmodified
 - Agent guide (`docs/behavior.md`) documents DM and routing trust boundaries: `direct_message` events are always agent-originated (never operator), `routed_by` is server-injected proof of routing attribution
@@ -19,7 +25,7 @@
 - `touchSession(sid)` in `session-manager.ts` — records `lastPollAt` and resets `healthy = true`; called by `dequeue_update` on every poll to serve as a heartbeat
 - `markUnhealthy(sid)`, `isHealthy(sid)`, `getUnhealthySessions(thresholdMs)` in `session-manager.ts` — health state accessors used by the health-check timer
 - `lastPollAt` and `healthy` fields added to the `Session` interface in `session-manager.ts`
-- Auto-grant bidirectional DM on session approval — when `session_start` creates a new session (after operator approval), `grantDm` is called in both directions between the new session and every existing session; operator approval is the trust gate so no separate `request_dm_access` step is needed
+- Removed `request_dm_access` tool — DM permission is now implicit for all approved sessions; `hasDmPermission()` always returns `true`; explicit grant/revoke tracking eliminated
 - Session close teardown contract — `close_session` now: (1) drains orphaned queue items and reroutes them to remaining sessions, (2) always sends operator disconnect notification "🤖 {name} has disconnected.", (3) replaces any pending `choose`/`confirm`/`send_choice` callback hooks owned by the closing session with a "Session closed" ack so late button presses are handled gracefully
 - `drainQueue(sid)` in `session-queue.ts` — returns all pending events from a session queue before removal, enabling orphan rerouting on close
 - `replaceSessionCallbackHooks(sid, fn)` in `message-store.ts` — replaces all callback hooks registered by a session with a substitution function; used during teardown to install "Session closed" ack handlers

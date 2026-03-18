@@ -27,8 +27,18 @@ Session color tags must be **on by default** — not behind a feature flag. If t
 
 ## Acceptance Criteria
 
-- [ ] No `sessionColorTags` config option exists
-- [ ] `buildHeader()` always uses color in multi-session mode
-- [ ] Tests updated — no flag toggling, color always present
-- [ ] Build passes, lint clean, all tests pass
-- [ ] `changelog/unreleased.md` updated
+- [x] No `sessionColorTags` config option exists
+- [x] `buildHeader()` always uses color in multi-session mode
+- [x] Tests updated — no flag toggling, color always present
+- [x] Build passes, lint clean, all tests pass
+- [ ] `changelog/unreleased.md` updated (skipped per worker rules)
+
+## Completion
+
+- Removed `sessionColorTags?: boolean` from `McpConfig` interface in `src/config.ts`
+- Removed `isSessionColorTagsEnabled()` and `setSessionColorTags()` from `src/config.ts`
+- Simplified `buildHeader()` in `src/outbound-proxy.ts`: `const colorPrefix = session?.color ? \`${session.color} \` : ""`
+- Removed `vi.mock("./config.js")` and `isSessionColorTagsEnabled` mock from `src/outbound-proxy.test.ts`
+- Rewrote 3 color tests → 2 tests (no flag toggling)
+- Updated `docs/multi-session.md`: removed "when enabled" condition and `### Feature Flag` subsection
+- 78 files, 1473 tests pass. Lint clean. Build clean.

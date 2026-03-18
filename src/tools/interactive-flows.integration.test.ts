@@ -106,6 +106,7 @@ function voiceUpdate() {
 const SENT_MSG = { message_id: 5, chat: { id: 42 }, date: 0 };
 
 let sid: number;
+let pin: number;
 let handlers: {
   confirm: ToolHandler;
   choose: ToolHandler;
@@ -134,6 +135,7 @@ describe("interactive flows — end-to-end integration", () => {
     setActiveSession(session.sid);
     createSessionQueue(session.sid);
     sid = session.sid;
+    pin = session.pin;
 
     const server = createMockServer();
     registerConfirm(server);
@@ -157,7 +159,7 @@ describe("interactive flows — end-to-end integration", () => {
 
   it("SC-1a: confirm resolves confirmed:true when user presses Yes", async () => {
     const toolPromise = runInSessionContext(sid, () =>
-      handlers.confirm({ text: "Proceed?", ignore_pending: true }),
+      handlers.confirm({ text: "Proceed?", ignore_pending: true, identity: [sid, pin] }),
     );
     await new Promise<void>((r) => { setTimeout(r, 20); });
 
@@ -177,7 +179,7 @@ describe("interactive flows — end-to-end integration", () => {
 
   it("SC-1b: confirm resolves confirmed:false when user presses No", async () => {
     const toolPromise = runInSessionContext(sid, () =>
-      handlers.confirm({ text: "Delete everything?", ignore_pending: true }),
+      handlers.confirm({ text: "Delete everything?", ignore_pending: true, identity: [sid, pin] }),
     );
     await new Promise<void>((r) => { setTimeout(r, 20); });
 
@@ -201,7 +203,7 @@ describe("interactive flows — end-to-end integration", () => {
       { label: "Gamma", value: "c" },
     ];
     const toolPromise = runInSessionContext(sid, () =>
-      handlers.choose({ question: "Pick one:", options: opts, ignore_pending: true }),
+      handlers.choose({ question: "Pick one:", options: opts, ignore_pending: true, identity: [sid, pin] }),
     );
     await new Promise<void>((r) => { setTimeout(r, 20); });
 
@@ -224,7 +226,7 @@ describe("interactive flows — end-to-end integration", () => {
 
   it("SC-3: ask resolves with the user's text reply", async () => {
     const toolPromise = runInSessionContext(sid, () =>
-      handlers.ask({ question: "What is your name?", ignore_pending: true }),
+      handlers.ask({ question: "What is your name?", ignore_pending: true, identity: [sid, pin] }),
     );
     await new Promise<void>((r) => { setTimeout(r, 20); });
 
@@ -244,7 +246,7 @@ describe("interactive flows — end-to-end integration", () => {
 
   it("SC-4: ask resolves with transcribed voice text and acks the voice message", async () => {
     const toolPromise = runInSessionContext(sid, () =>
-      handlers.ask({ question: "Tell me something", ignore_pending: true }),
+      handlers.ask({ question: "Tell me something", ignore_pending: true, identity: [sid, pin] }),
     );
     await new Promise<void>((r) => { setTimeout(r, 20); });
 
@@ -269,6 +271,7 @@ describe("interactive flows — end-to-end integration", () => {
       handlers.send_choice({
         text: "Choose:",
         options: [{ label: "Yes", value: "yes" }, { label: "No", value: "no" }],
+        identity: [sid, pin],
       }),
     );
     expect(isError(sendResult)).toBe(false);
@@ -278,7 +281,7 @@ describe("interactive flows — end-to-end integration", () => {
     recordInbound(cbUpdate(5, "yes"));
 
     // dequeue_update should surface the callback event
-    const dqResult = await handlers.dequeue_update({ timeout: 0 });
+    const dqResult = await handlers.dequeue_update({ timeout: 0, identity: [sid, pin] });
     // Allow the fire-and-forget hook chain (answerCallbackQuery → editMessageReplyMarkup)
     // to complete — it needs one extra microtask tick after dequeue_update resolves.
     await Promise.resolve();
@@ -305,7 +308,7 @@ describe("interactive flows — end-to-end integration", () => {
 
   it("SC-6: late callback after confirm timeout still fires the hook and appears in dequeue_update", async () => {
     const confirmResult = await runInSessionContext(sid, () =>
-      handlers.confirm({ text: "Time-sensitive?", timeout_seconds: 1, ignore_pending: true }),
+      handlers.confirm({ text: "Time-sensitive?", timeout_seconds: 1, ignore_pending: true, identity: [sid, pin] }),
     );
     expect(isError(confirmResult)).toBe(false);
     expect(parseResult(confirmResult).timed_out).toBe(true);
@@ -316,7 +319,7 @@ describe("interactive flows — end-to-end integration", () => {
 
     // dequeue_update surfaces the event; an extra yield lets the hook's
     // fire-and-forget chain (answerCallbackQuery → editMessageText) complete.
-    const dqResult = await handlers.dequeue_update({ timeout: 0 });
+    const dqResult = await handlers.dequeue_update({ timeout: 0, identity: [sid, pin] });
     await Promise.resolve();
 
     expect(mocks.answerCallbackQuery.mock.calls.length).toBeGreaterThan(ackCallsBefore);
@@ -336,7 +339,7 @@ describe("interactive flows — end-to-end integration", () => {
   it("SC-7: choose returns skipped+voice when user sends a transcribed voice message", async () => {
     const opts = [{ label: "A", value: "a" }, { label: "B", value: "b" }];
     const toolPromise = runInSessionContext(sid, () =>
-      handlers.choose({ question: "A or B?", options: opts, ignore_pending: true }),
+      handlers.choose({ question: "A or B?", options: opts, ignore_pending: true, identity: [sid, pin] }),
     );
     await new Promise<void>((r) => { setTimeout(r, 20); });
 
@@ -358,7 +361,7 @@ describe("interactive flows — end-to-end integration", () => {
 
   it("SC-8: confirm returns skipped+text when user sends a text message instead of pressing a button", async () => {
     const toolPromise = runInSessionContext(sid, () =>
-      handlers.confirm({ text: "Go ahead?", ignore_pending: true }),
+      handlers.confirm({ text: "Go ahead?", ignore_pending: true, identity: [sid, pin] }),
     );
     await new Promise<void>((r) => { setTimeout(r, 20); });
 

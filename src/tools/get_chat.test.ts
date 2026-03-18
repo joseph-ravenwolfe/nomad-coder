@@ -51,6 +51,8 @@ describe("get_chat tool", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.validateSession.mockReturnValue(true);
+    mocks.validateSession.mockReturnValue(true);
     mocks.sendMessage.mockResolvedValue({ message_id: 1 });
     mocks.ackAndEditSelection.mockResolvedValue(undefined);
     mocks.editWithTimedOut.mockResolvedValue(undefined);
@@ -64,7 +66,7 @@ describe("get_chat tool", () => {
       kind: "button", callback_query_id: "q1", data: "get_chat_yes", message_id: 1,
     });
     mocks.getChat.mockResolvedValue({ id: 99, type: "group", title: "Dev Chat" });
-    const result = await call({});
+    const result = await call({ identity: [1, 123456] });
     expect(isError(result)).toBe(false);
     expect(parseResult(result)).toMatchObject({
       approved: true,
@@ -77,7 +79,7 @@ describe("get_chat tool", () => {
       kind: "button", callback_query_id: "q1", data: "get_chat_yes", message_id: 1,
     });
     mocks.getChat.mockResolvedValue({ id: 99, type: "private" });
-    await call({});
+    await call({ identity: [1, 123456] });
     expect(mocks.sendMessage).toHaveBeenCalledWith(
       99,
       expect.any(String),
@@ -97,7 +99,7 @@ describe("get_chat tool", () => {
     mocks.pollButtonPress.mockResolvedValue({
       kind: "button", callback_query_id: "q2", data: "get_chat_no", message_id: 1,
     });
-    const result = await call({});
+    const result = await call({ identity: [1, 123456] });
     expect(isError(result)).toBe(false);
     expect(parseResult(result)).toMatchObject({ approved: false, timed_out: false });
     expect(mocks.getChat).not.toHaveBeenCalled();
@@ -105,7 +107,7 @@ describe("get_chat tool", () => {
 
   it("returns approved:false timed_out:true on timeout", async () => {
     mocks.pollButtonPress.mockResolvedValue(null);
-    const result = await call({});
+    const result = await call({ identity: [1, 123456] });
     expect(isError(result)).toBe(false);
     expect(parseResult(result)).toMatchObject({ approved: false, timed_out: true });
     expect(mocks.editWithTimedOut).toHaveBeenCalled();
@@ -120,28 +122,25 @@ describe("get_chat tool", () => {
     mocks.getChat.mockRejectedValue(
       new GrammyError("e", { ok: false, error_code: 400, description: "Bad Request: chat not found" }, "getChat", {}),
     );
-    const result = await call({});
+    const result = await call({ identity: [1, 123456] });
     expect(isError(result)).toBe(true);
   });
 
 describe("identity gate", () => {
-  it("returns SID_REQUIRED when multiple sessions active and no identity", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(2);
+  it("returns SID_REQUIRED when no identity provided", async () => {
     const result = await call({});
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("SID_REQUIRED");
   });
 
   it("returns AUTH_FAILED when identity has wrong pin", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(2);
     mocks.validateSession.mockReturnValueOnce(false);
     const result = await call({"identity":[1,99999]});
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("AUTH_FAILED");
   });
 
-  it("proceeds when multiple sessions active and identity is valid", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(2);
+  it("proceeds when identity is valid", async () => {
     mocks.validateSession.mockReturnValueOnce(true);
     let code: string | undefined;
     try { code = errorCode(await call({"identity":[1,99999]})); } catch { /* gate passed, other error ok */ }
@@ -149,12 +148,6 @@ describe("identity gate", () => {
     expect(code).not.toBe("AUTH_FAILED");
   });
 
-  it("proceeds when single session active and no identity (backward compat)", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(1);
-    let code: string | undefined;
-    try { code = errorCode(await call({})); } catch { /* gate passed, other error ok */ }
-    expect(code).not.toBe("SID_REQUIRED");
-  });
 });
 
 });

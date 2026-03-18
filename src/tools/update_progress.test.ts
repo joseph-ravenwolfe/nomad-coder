@@ -34,6 +34,8 @@ describe("update_progress tool", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.validateSession.mockReturnValue(true);
+    mocks.validateSession.mockReturnValue(true);
     const server = createMockServer();
     register(server);
     call = server.getHandler("update_progress");
@@ -41,7 +43,7 @@ describe("update_progress tool", () => {
 
   it("edits message in-place and returns updated: true", async () => {
     mocks.editMessageText.mockResolvedValue({ message_id: 10 });
-    const result = await call({ message_id: 10, percent: 75 });
+    const result = await call({ message_id: 10, percent: 75, identity: [1, 123456]});
     expect(isError(result)).toBe(false);
     const data = parseResult(result);
     expect(data.updated).toBe(true);
@@ -51,7 +53,7 @@ describe("update_progress tool", () => {
 
   it("renders updated bar with bold title", async () => {
     mocks.editMessageText.mockResolvedValue({ message_id: 10 });
-    await call({ message_id: 10, percent: 100, title: "Building" });
+    await call({ message_id: 10, percent: 100, title: "Building", identity: [1, 123456]});
     const [, , text] = mocks.editMessageText.mock.calls[0] as [unknown, unknown, string];
     expect(text).toContain("<b>Building</b>");
     expect(text).toContain("▓▓▓▓▓▓▓▓▓▓  100%");
@@ -59,7 +61,7 @@ describe("update_progress tool", () => {
 
   it("renders bar-only when no title", async () => {
     mocks.editMessageText.mockResolvedValue({ message_id: 10 });
-    await call({ message_id: 10, percent: 50 });
+    await call({ message_id: 10, percent: 50, identity: [1, 123456]});
     const [, , text] = mocks.editMessageText.mock.calls[0] as [unknown, unknown, string];
     expect(text).not.toContain("<b>");
     expect(text).toContain("▓▓▓▓▓░░░░░  50%");
@@ -67,14 +69,14 @@ describe("update_progress tool", () => {
 
   it("renders subtext when provided", async () => {
     mocks.editMessageText.mockResolvedValue({ message_id: 10 });
-    await call({ message_id: 10, percent: 50, subtext: "half done" });
+    await call({ message_id: 10, percent: 50, subtext: "half done", identity: [1, 123456]});
     const [, , text] = mocks.editMessageText.mock.calls[0] as [unknown, unknown, string];
     expect(text).toContain("<i>half done</i>");
   });
 
   it("handles boolean result from editMessageText (Telegram unchanged)", async () => {
     mocks.editMessageText.mockResolvedValue(true);
-    const result = await call({ message_id: 10, percent: 50 });
+    const result = await call({ message_id: 10, percent: 50, identity: [1, 123456]});
     expect(isError(result)).toBe(false);
     const data = parseResult(result);
     expect(data.message_id).toBe(10);
@@ -86,7 +88,7 @@ describe("update_progress tool", () => {
       code: "UNAUTHORIZED_CHAT",
       message: "no chat",
     });
-    const result = await call({ message_id: 10, percent: 50 });
+    const result = await call({ message_id: 10, percent: 50, identity: [1, 123456]});
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("UNAUTHORIZED_CHAT");
   });
@@ -96,29 +98,26 @@ describe("update_progress tool", () => {
       code: "TEXT_TOO_LONG",
       message: "too long",
     });
-    const result = await call({ message_id: 10, percent: 50 });
+    const result = await call({ message_id: 10, percent: 50, identity: [1, 123456]});
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("TEXT_TOO_LONG");
   });
 
 describe("identity gate", () => {
-  it("returns SID_REQUIRED when multiple sessions active and no identity", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(2);
+  it("returns SID_REQUIRED when no identity provided", async () => {
     const result = await call({"message_id":1,"percent":50});
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("SID_REQUIRED");
   });
 
   it("returns AUTH_FAILED when identity has wrong pin", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(2);
     mocks.validateSession.mockReturnValueOnce(false);
     const result = await call({"message_id":1,"percent":50,"identity":[1,99999]});
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("AUTH_FAILED");
   });
 
-  it("proceeds when multiple sessions active and identity is valid", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(2);
+  it("proceeds when identity is valid", async () => {
     mocks.validateSession.mockReturnValueOnce(true);
     let code: string | undefined;
     try { code = errorCode(await call({"message_id":1,"percent":50,"identity":[1,99999]})); } catch { /* gate passed, other error ok */ }
@@ -126,12 +125,6 @@ describe("identity gate", () => {
     expect(code).not.toBe("AUTH_FAILED");
   });
 
-  it("proceeds when single session active and no identity (backward compat)", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(1);
-    let code: string | undefined;
-    try { code = errorCode(await call({"message_id":1,"percent":50})); } catch { /* gate passed, other error ok */ }
-    expect(code).not.toBe("SID_REQUIRED");
-  });
 });
 
 });

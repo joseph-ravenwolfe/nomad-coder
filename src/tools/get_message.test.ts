@@ -45,6 +45,8 @@ describe("get_message tool", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.validateSession.mockReturnValue(true);
+    mocks.validateSession.mockReturnValue(true);
     const server = createMockServer();
     register(server);
     call = server.getHandler("get_message");
@@ -54,7 +56,7 @@ describe("get_message tool", () => {
     const event = makeEvent(10, "Hello world");
     mocks.getMessage.mockReturnValue(event);
     mocks.getVersions.mockReturnValue([-1, 0]);
-    const result = await call({ message_id: 10 });
+    const result = await call({ message_id: 10, identity: [1, 123456]});
     expect(isError(result)).toBe(false);
     const data = parseResult(result);
     expect(data.id).toBe(10);
@@ -67,7 +69,7 @@ describe("get_message tool", () => {
     const event = makeEvent(10, "Original");
     mocks.getMessage.mockReturnValue(event);
     mocks.getVersions.mockReturnValue([-1, 0, 1]);
-    const result = await call({ message_id: 10, version: 0 });
+    const result = await call({ message_id: 10, version: 0, identity: [1, 123456]});
     expect(isError(result)).toBe(false);
     const data = parseResult(result);
     expect(data.id).toBe(10);
@@ -76,14 +78,14 @@ describe("get_message tool", () => {
 
   it("returns MESSAGE_NOT_FOUND for missing message_id", async () => {
     mocks.getMessage.mockReturnValue(undefined);
-    const result = await call({ message_id: 999 });
+    const result = await call({ message_id: 999, identity: [1, 123456]});
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("MESSAGE_NOT_FOUND");
   });
 
   it("returns MESSAGE_NOT_FOUND for missing version", async () => {
     mocks.getMessage.mockReturnValue(undefined);
-    const result = await call({ message_id: 10, version: 5 });
+    const result = await call({ message_id: 10, version: 5, identity: [1, 123456]});
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("MESSAGE_NOT_FOUND");
   });
@@ -92,7 +94,7 @@ describe("get_message tool", () => {
     const event = makeEvent(10, "Current text");
     mocks.getMessage.mockReturnValue(event);
     mocks.getVersions.mockReturnValue([-1, 0, 1, 2]);
-    const result = await call({ message_id: 10 });
+    const result = await call({ message_id: 10, identity: [1, 123456]});
     const data = parseResult(result);
     expect(data.versions).toEqual([-1, 0, 1, 2]);
   });
@@ -104,7 +106,7 @@ describe("get_message tool", () => {
     });
     mocks.getMessage.mockReturnValue(event);
     mocks.getVersions.mockReturnValue([-1]);
-    const result = await call({ message_id: 10 });
+    const result = await call({ message_id: 10, identity: [1, 123456]});
     const data = parseResult(result);
     expect(data.raw).toBeUndefined();
     expect(data._update).toBeUndefined();
@@ -117,7 +119,7 @@ describe("get_message tool", () => {
     });
     mocks.getMessage.mockReturnValue(event);
     mocks.getVersions.mockReturnValue([-1]);
-    const result = await call({ message_id: 10 });
+    const result = await call({ message_id: 10, identity: [1, 123456]});
     const data = parseResult(result);
     expect(data.raw).toBeUndefined();
   });
@@ -128,29 +130,26 @@ describe("get_message tool", () => {
     });
     mocks.getMessage.mockReturnValue(event);
     mocks.getVersions.mockReturnValue([-1]);
-    const result = await call({ message_id: 10 });
+    const result = await call({ message_id: 10, identity: [1, 123456]});
     const data = parseResult(result);
     expect(data._update).toBeUndefined();
   });
 
 describe("identity gate", () => {
-  it("returns SID_REQUIRED when multiple sessions active and no identity", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(2);
+  it("returns SID_REQUIRED when no identity provided", async () => {
     const result = await call({"message_id":1});
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("SID_REQUIRED");
   });
 
   it("returns AUTH_FAILED when identity has wrong pin", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(2);
     mocks.validateSession.mockReturnValueOnce(false);
     const result = await call({"message_id":1,"identity":[1,99999]});
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("AUTH_FAILED");
   });
 
-  it("proceeds when multiple sessions active and identity is valid", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(2);
+  it("proceeds when identity is valid", async () => {
     mocks.validateSession.mockReturnValueOnce(true);
     let code: string | undefined;
     try { code = errorCode(await call({"message_id":1,"identity":[1,99999]})); } catch { /* gate passed, other error ok */ }
@@ -158,12 +157,6 @@ describe("identity gate", () => {
     expect(code).not.toBe("AUTH_FAILED");
   });
 
-  it("proceeds when single session active and no identity (backward compat)", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(1);
-    let code: string | undefined;
-    try { code = errorCode(await call({"message_id":1})); } catch { /* gate passed, other error ok */ }
-    expect(code).not.toBe("SID_REQUIRED");
-  });
 });
 
 });

@@ -28,6 +28,8 @@ describe("pin_message tool", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.validateSession.mockReturnValue(true);
+    mocks.validateSession.mockReturnValue(true);
     const server = createMockServer();
     register(server);
     call = server.getHandler("pin_message");
@@ -35,14 +37,14 @@ describe("pin_message tool", () => {
 
   it("returns ok: true on success", async () => {
     mocks.pinChatMessage.mockResolvedValue(true);
-    const result = await call({ message_id: 5 });
+    const result = await call({ message_id: 5, identity: [1, 123456]});
     expect(isError(result)).toBe(false);
     expect((parseResult(result)).ok).toBe(true);
   });
 
   it("passes disable_notification option", async () => {
     mocks.pinChatMessage.mockResolvedValue(true);
-    await call({ message_id: 5, disable_notification: true });
+    await call({ message_id: 5, disable_notification: true, identity: [1, 123456]});
     const [, , opts] = mocks.pinChatMessage.mock.calls[0];
     expect(opts.disable_notification).toBe(true);
   });
@@ -52,13 +54,13 @@ describe("pin_message tool", () => {
     mocks.pinChatMessage.mockRejectedValue(
       new GrammyError("e", { ok: false, error_code: 400, description: "Bad Request: not enough rights" }, "pinChatMessage", {})
     );
-    const result = await call({ message_id: 5 });
+    const result = await call({ message_id: 5, identity: [1, 123456]});
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("NOT_ENOUGH_RIGHTS");
   });
 
   it("returns MISSING_MESSAGE_ID when pinning without a message_id", async () => {
-    const result = await call({});
+    const result = await call({ identity: [1, 123456] });
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("MISSING_MESSAGE_ID");
     expect(mocks.pinChatMessage).not.toHaveBeenCalled();
@@ -66,7 +68,7 @@ describe("pin_message tool", () => {
 
   it("unpins with message_id when provided", async () => {
     mocks.unpinChatMessage.mockResolvedValue(true);
-    const result = await call({ message_id: 5, unpin: true });
+    const result = await call({ message_id: 5, unpin: true, identity: [1, 123456]});
     expect(isError(result)).toBe(false);
     expect((parseResult(result) as { unpinned: boolean }).unpinned).toBe(true);
     expect(mocks.unpinChatMessage).toHaveBeenCalledWith(1, 5);
@@ -74,7 +76,7 @@ describe("pin_message tool", () => {
 
   it("unpins most recent when unpin: true and no message_id", async () => {
     mocks.unpinChatMessage.mockResolvedValue(true);
-    const result = await call({ unpin: true });
+    const result = await call({ unpin: true, identity: [1, 123456]});
     expect(isError(result)).toBe(false);
     expect(mocks.unpinChatMessage).toHaveBeenCalledWith(1);
   });
@@ -84,29 +86,26 @@ describe("pin_message tool", () => {
       code: "UNAUTHORIZED_CHAT",
       message: "no chat",
     });
-    const result = await call({ message_id: 5 });
+    const result = await call({ message_id: 5, identity: [1, 123456]});
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("UNAUTHORIZED_CHAT");
   });
 
 describe("identity gate", () => {
-  it("returns SID_REQUIRED when multiple sessions active and no identity", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(2);
+  it("returns SID_REQUIRED when no identity provided", async () => {
     const result = await call({});
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("SID_REQUIRED");
   });
 
   it("returns AUTH_FAILED when identity has wrong pin", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(2);
     mocks.validateSession.mockReturnValueOnce(false);
     const result = await call({"identity":[1,99999]});
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("AUTH_FAILED");
   });
 
-  it("proceeds when multiple sessions active and identity is valid", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(2);
+  it("proceeds when identity is valid", async () => {
     mocks.validateSession.mockReturnValueOnce(true);
     let code: string | undefined;
     try { code = errorCode(await call({"identity":[1,99999]})); } catch { /* gate passed, other error ok */ }
@@ -114,12 +113,6 @@ describe("identity gate", () => {
     expect(code).not.toBe("AUTH_FAILED");
   });
 
-  it("proceeds when single session active and no identity (backward compat)", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(1);
-    let code: string | undefined;
-    try { code = errorCode(await call({})); } catch { /* gate passed, other error ok */ }
-    expect(code).not.toBe("SID_REQUIRED");
-  });
 });
 
 });

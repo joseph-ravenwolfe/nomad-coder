@@ -83,6 +83,8 @@ describe("choose tool", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.validateSession.mockReturnValue(true);
+    mocks.validateSession.mockReturnValue(true);
     mocks.ackAndEditSelection.mockResolvedValue(undefined);
     mocks.editWithSkipped.mockResolvedValue(undefined);
     const server = createMockServer();
@@ -93,7 +95,7 @@ describe("choose tool", () => {
   it("returns chosen label and value", async () => {
     mocks.sendMessage.mockResolvedValue(SENT_MSG);
     mocks.pollButtonOrTextOrVoice.mockResolvedValue(makeButtonResult("opt_a"));
-    const result = await call({ question: "Pick one", options: OPTIONS });
+    const result = await call({ question: "Pick one", options: OPTIONS, identity: [1, 123456]});
     expect(isError(result)).toBe(false);
     const data = parseResult(result);
     expect(data.timed_out).toBe(false);
@@ -104,14 +106,14 @@ describe("choose tool", () => {
   it("registers a callback hook for the sent message", async () => {
     mocks.sendMessage.mockResolvedValue(SENT_MSG);
     mocks.pollButtonOrTextOrVoice.mockResolvedValue(makeButtonResult("opt_b"));
-    await call({ question: "Pick", options: OPTIONS });
+    await call({ question: "Pick", options: OPTIONS, identity: [1, 123456]});
     expect(mocks.registerCallbackHook).toHaveBeenCalledWith(7, expect.any(Function), expect.any(Number));
   });
 
   it("calls ackAndEditSelection when hook fires", async () => {
     mocks.sendMessage.mockResolvedValue(SENT_MSG);
     mocks.pollButtonOrTextOrVoice.mockResolvedValue(makeButtonResult("opt_b"));
-    await call({ question: "Pick", options: OPTIONS });
+    await call({ question: "Pick", options: OPTIONS, identity: [1, 123456]});
     const hookFn = mocks.registerCallbackHook.mock.calls[0][1];
     hookFn({ content: { data: "opt_b", qid: "cq1" } });
     await new Promise((r) => setTimeout(r, 0));
@@ -123,7 +125,7 @@ describe("choose tool", () => {
   it("hook shows correct label via ackAndEditSelection", async () => {
     mocks.sendMessage.mockResolvedValue(SENT_MSG);
     mocks.pollButtonOrTextOrVoice.mockResolvedValue(makeButtonResult("opt_a"));
-    await call({ question: "Pick one", options: OPTIONS });
+    await call({ question: "Pick one", options: OPTIONS, identity: [1, 123456]});
     const hookFn = mocks.registerCallbackHook.mock.calls[0][1];
     hookFn({ content: { data: "opt_a", qid: "cq1" } });
     await new Promise((r) => setTimeout(r, 0));
@@ -135,7 +137,7 @@ describe("choose tool", () => {
   it("keeps buttons live on timeout (hook handles late clicks)", async () => {
     mocks.sendMessage.mockResolvedValue(SENT_MSG);
     mocks.pollButtonOrTextOrVoice.mockResolvedValue(null);
-    await call({ question: "Pick", options: OPTIONS, timeout_seconds: 1 });
+    await call({ question: "Pick", options: OPTIONS, timeout_seconds: 1, identity: [1, 123456]});
     // No edit on timeout — buttons stay live for the hook
     expect(mocks.ackAndEditSelection).not.toHaveBeenCalled();
     expect(mocks.editWithSkipped).not.toHaveBeenCalled();
@@ -144,12 +146,12 @@ describe("choose tool", () => {
   it("returns timed_out when no button is pressed", async () => {
     mocks.sendMessage.mockResolvedValue(SENT_MSG);
     mocks.pollButtonOrTextOrVoice.mockResolvedValue(null);
-    const result = await call({ question: "Pick", options: OPTIONS, timeout_seconds: 1 });
+    const result = await call({ question: "Pick", options: OPTIONS, timeout_seconds: 1, identity: [1, 123456]});
     expect((parseResult(result)).timed_out).toBe(true);
   });
 
   it("validates question text", async () => {
-    const result = await call({ question: "", options: OPTIONS });
+    const result = await call({ question: "", options: OPTIONS, identity: [1, 123456]});
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("EMPTY_MESSAGE");
   });
@@ -159,7 +161,7 @@ describe("choose tool", () => {
       { label: "A", value: "a".repeat(65) },
       { label: "B", value: "b" },
     ];
-    const result = await call({ question: "Pick", options: badOptions });
+    const result = await call({ question: "Pick", options: badOptions, identity: [1, 123456]});
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("CALLBACK_DATA_TOO_LONG");
   });
@@ -169,7 +171,7 @@ describe("choose tool", () => {
       { label: "A very long label text", value: "a" },
       { label: "B", value: "b" },
     ];
-    const result = await call({ question: "Pick", options: longOptions, columns: 2 });
+    const result = await call({ question: "Pick", options: longOptions, columns: 2, identity: [1, 123456]});
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("BUTTON_LABEL_TOO_LONG");
   });
@@ -181,7 +183,7 @@ describe("choose tool", () => {
       { label: "A somewhat longer label text ok", value: "a" },
       { label: "B", value: "b" },
     ];
-    const result = await call({ question: "Pick", options: longOptions, columns: 1, timeout_seconds: 1 });
+    const result = await call({ question: "Pick", options: longOptions, columns: 1, timeout_seconds: 1, identity: [1, 123456]});
     expect(isError(result)).toBe(false);
   });
 
@@ -193,7 +195,7 @@ describe("choose tool", () => {
       { label: "B", value: "b" },
       { label: "C", value: "c" },
     ];
-    await call({ question: "Pick", options: threeOptions, columns: 3, timeout_seconds: 1 });
+    await call({ question: "Pick", options: threeOptions, columns: 3, timeout_seconds: 1, identity: [1, 123456]});
     const [, , opts] = mocks.sendMessage.mock.calls[0];
     // All 3 options in a single row when columns=3
     expect(opts.reply_markup.inline_keyboard[0]).toHaveLength(3);
@@ -202,7 +204,7 @@ describe("choose tool", () => {
   it("returns skipped with text when user types instead of pressing button", async () => {
     mocks.sendMessage.mockResolvedValue(SENT_MSG);
     mocks.pollButtonOrTextOrVoice.mockResolvedValue(makeTextResult(20, "hello"));
-    const result = await call({ question: "Pick", options: OPTIONS, timeout_seconds: 1 });
+    const result = await call({ question: "Pick", options: OPTIONS, timeout_seconds: 1, identity: [1, 123456]});
     const data = parseResult(result);
     expect(data.skipped).toBe(true);
     expect(data.text_response).toBe("hello");
@@ -214,7 +216,7 @@ describe("choose tool", () => {
   it("returns skipped with voice transcription when user sends a voice message", async () => {
     mocks.sendMessage.mockResolvedValue(SENT_MSG);
     mocks.pollButtonOrTextOrVoice.mockResolvedValue(makeVoiceResult(20, "transcribed text"));
-    const result = await call({ question: "Pick", options: OPTIONS });
+    const result = await call({ question: "Pick", options: OPTIONS, identity: [1, 123456]});
     const data = parseResult(result);
     expect(data.skipped).toBe(true);
     expect(data.voice).toBe(true);
@@ -225,21 +227,21 @@ describe("choose tool", () => {
 
   it("returns error when sendMessage throws", async () => {
     mocks.sendMessage.mockRejectedValue(new Error("Network error"));
-    const result = await call({ question: "Pick", options: OPTIONS });
+    const result = await call({ question: "Pick", options: OPTIONS, identity: [1, 123456]});
     expect(isError(result)).toBe(true);
   });
 
   it("registers a message hook on timeout to clean up stale buttons", async () => {
     mocks.sendMessage.mockResolvedValue(SENT_MSG);
     mocks.pollButtonOrTextOrVoice.mockResolvedValue(null);
-    await call({ question: "Pick", options: OPTIONS });
+    await call({ question: "Pick", options: OPTIONS, identity: [1, 123456]});
     expect(mocks.registerMessageHook).toHaveBeenCalledWith(7, expect.any(Function));
   });
 
   it("message hook clears callback hook and edits with skipped", async () => {
     mocks.sendMessage.mockResolvedValue(SENT_MSG);
     mocks.pollButtonOrTextOrVoice.mockResolvedValue(null);
-    await call({ question: "Pick", options: OPTIONS });
+    await call({ question: "Pick", options: OPTIONS, identity: [1, 123456]});
     const hookFn = mocks.registerMessageHook.mock.calls[0][1];
     hookFn();
     await new Promise((r) => setTimeout(r, 0));
@@ -250,7 +252,7 @@ describe("choose tool", () => {
   it("callback hook clears message hook on late button press", async () => {
     mocks.sendMessage.mockResolvedValue(SENT_MSG);
     mocks.pollButtonOrTextOrVoice.mockResolvedValue(makeButtonResult("a"));
-    await call({ question: "Pick", options: OPTIONS });
+    await call({ question: "Pick", options: OPTIONS, identity: [1, 123456]});
     const hookFn = mocks.registerCallbackHook.mock.calls[0][1];
     hookFn({ content: { data: "a", qid: "cq1" } });
     expect(mocks.clearMessageHook).toHaveBeenCalledWith(7);
@@ -260,7 +262,7 @@ describe("choose tool", () => {
     const commandResult = { kind: "command", message_id: 8, command: "/help", args: "fast" };
     mocks.sendMessage.mockResolvedValue(SENT_MSG);
     mocks.pollButtonOrTextOrVoice.mockResolvedValue(commandResult);
-    const result = await call({ question: "Pick", options: OPTIONS });
+    const result = await call({ question: "Pick", options: OPTIONS, identity: [1, 123456]});
     expect(isError(result)).toBe(false);
     const data = parseResult(result);
     expect(data.skipped).toBe(true);
@@ -277,7 +279,7 @@ describe("choose tool", () => {
       onVoiceDetected();
       return Promise.resolve(makeVoiceResult(20, "pick the second one"));
     });
-    const result = await call({ question: "Pick", options: OPTIONS });
+    const result = await call({ question: "Pick", options: OPTIONS, identity: [1, 123456]});
     const data = parseResult(result);
     expect(data.skipped).toBe(true);
     expect(data.voice).toBe(true);
@@ -288,7 +290,7 @@ describe("choose tool", () => {
   it("callback hook handles ackAndEditSelection failures gracefully", async () => {
     mocks.sendMessage.mockResolvedValue(SENT_MSG);
     mocks.pollButtonOrTextOrVoice.mockResolvedValue(makeButtonResult("opt_a"));
-    await call({ question: "Pick", options: OPTIONS });
+    await call({ question: "Pick", options: OPTIONS, identity: [1, 123456]});
     mocks.ackAndEditSelection.mockRejectedValueOnce(new Error("network"));
     const hookFn = mocks.registerCallbackHook.mock.calls[0][1];
     hookFn({ content: { data: "opt_a", qid: "cq1" } });
@@ -299,7 +301,7 @@ describe("choose tool", () => {
 
   it("rejects with PENDING_UPDATES when queue is non-empty", async () => {
     mocks.pendingCount.mockReturnValue(2);
-    const result = await call({ question: "Pick", options: OPTIONS });
+    const result = await call({ question: "Pick", options: OPTIONS, identity: [1, 123456]});
     expect(isError(result)).toBe(true);
     const data = parseResult(result);
     expect(data.code).toBe("PENDING_UPDATES");
@@ -316,8 +318,7 @@ describe("choose tool", () => {
     const result = await call({
       question: "Pick",
       options: OPTIONS,
-      ignore_pending: true,
-    });
+      ignore_pending: true, identity: [1, 123456]});
     expect(isError(result)).toBe(false);
     const data = parseResult(result);
     expect(data.timed_out).toBe(false);
@@ -333,8 +334,7 @@ describe("choose tool", () => {
     const result = await call({
       question: "Pick",
       options: OPTIONS,
-      reply_to_message_id: 55,
-    });
+      reply_to_message_id: 55, identity: [1, 123456]});
     expect(isError(result)).toBe(false);
     const data = parseResult(result);
     expect(data.timed_out).toBe(false);
@@ -342,23 +342,20 @@ describe("choose tool", () => {
   });
 
 describe("identity gate", () => {
-  it("returns SID_REQUIRED when multiple sessions active and no identity", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(2);
+  it("returns SID_REQUIRED when no identity provided", async () => {
     const result = await call({"question":"x","options":[{"label":"A","value":"a"},{"label":"B","value":"b"}]});
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("SID_REQUIRED");
   });
 
   it("returns AUTH_FAILED when identity has wrong pin", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(2);
     mocks.validateSession.mockReturnValueOnce(false);
     const result = await call({"question":"x","options":[{"label":"A","value":"a"},{"label":"B","value":"b"}],"identity":[1,99999]});
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("AUTH_FAILED");
   });
 
-  it("proceeds when multiple sessions active and identity is valid", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(2);
+  it("proceeds when identity is valid", async () => {
     mocks.validateSession.mockReturnValueOnce(true);
     let code: string | undefined;
     try { code = errorCode(await call({"question":"x","options":[{"label":"A","value":"a"},{"label":"B","value":"b"}],"identity":[1,99999]})); } catch { /* gate passed, other error ok */ }
@@ -366,12 +363,6 @@ describe("identity gate", () => {
     expect(code).not.toBe("AUTH_FAILED");
   });
 
-  it("proceeds when single session active and no identity (backward compat)", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(1);
-    let code: string | undefined;
-    try { code = errorCode(await call({"question":"x","options":[{"label":"A","value":"a"},{"label":"B","value":"b"}]})); } catch { /* gate passed, other error ok */ }
-    expect(code).not.toBe("SID_REQUIRED");
-  });
 });
 
 });

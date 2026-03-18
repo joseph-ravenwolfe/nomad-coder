@@ -47,6 +47,8 @@ describe("send_file tool", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.validateSession.mockReturnValue(true);
+    mocks.validateSession.mockReturnValue(true);
     mocks.showTyping.mockResolvedValue(undefined);
     mocks.resolveMediaSource.mockReturnValue({ source: "/path/to/file" });
     const server = createMockServer();
@@ -58,7 +60,7 @@ describe("send_file tool", () => {
 
   it("auto-detects photo by extension and sends", async () => {
     mocks.sendPhoto.mockResolvedValue({ message_id: 10, caption: "hi" });
-    const result = await call({ file: "/img/photo.jpg" });
+    const result = await call({ file: "/img/photo.jpg", identity: [1, 123456]});
     expect(isError(result)).toBe(false);
     const data = parseResult(result);
     expect(data.message_id).toBe(10);
@@ -68,7 +70,7 @@ describe("send_file tool", () => {
 
   it("auto-detects .png as photo", async () => {
     mocks.sendPhoto.mockResolvedValue({ message_id: 11 });
-    await call({ file: "/img/shot.png" });
+    await call({ file: "/img/shot.png", identity: [1, 123456]});
     expect(mocks.sendPhoto).toHaveBeenCalledOnce();
   });
 
@@ -79,7 +81,7 @@ describe("send_file tool", () => {
       message_id: 12,
       document: { file_id: "doc1", file_name: "report.pdf" },
     });
-    const result = await call({ file: "/docs/report.pdf" });
+    const result = await call({ file: "/docs/report.pdf", identity: [1, 123456]});
     expect(isError(result)).toBe(false);
     const data = parseResult(result);
     expect(data.type).toBe("document");
@@ -93,7 +95,7 @@ describe("send_file tool", () => {
       message_id: 13,
       video: { file_id: "vid1", duration: 10 },
     });
-    const result = await call({ file: "/vids/clip.mp4" });
+    const result = await call({ file: "/vids/clip.mp4", identity: [1, 123456]});
     expect(isError(result)).toBe(false);
     const data = parseResult(result);
     expect(data.type).toBe("video");
@@ -107,7 +109,7 @@ describe("send_file tool", () => {
       message_id: 14,
       audio: { file_id: "aud1", title: "Song" },
     });
-    const result = await call({ file: "/music/song.mp3" });
+    const result = await call({ file: "/music/song.mp3", identity: [1, 123456]});
     expect(isError(result)).toBe(false);
     const data = parseResult(result);
     expect(data.type).toBe("audio");
@@ -121,7 +123,7 @@ describe("send_file tool", () => {
       message_id: 15,
       voice: { file_id: "vce1" },
     });
-    const result = await call({ file: "/audio/note.ogg" });
+    const result = await call({ file: "/audio/note.ogg", identity: [1, 123456]});
     expect(isError(result)).toBe(false);
     const data = parseResult(result);
     expect(data.type).toBe("voice");
@@ -135,7 +137,7 @@ describe("send_file tool", () => {
       message_id: 16,
       document: { file_id: "doc2", file_name: "image.jpg" },
     });
-    const result = await call({ file: "/img/image.jpg", type: "document" });
+    const result = await call({ file: "/img/image.jpg", type: "document", identity: [1, 123456]});
     expect(isError(result)).toBe(false);
     const data = parseResult(result);
     expect(data.type).toBe("document");
@@ -146,7 +148,7 @@ describe("send_file tool", () => {
 
   it("passes caption to the send method", async () => {
     mocks.sendPhoto.mockResolvedValue({ message_id: 17, caption: "Look!" });
-    await call({ file: "/img/photo.jpg", caption: "Look!" });
+    await call({ file: "/img/photo.jpg", caption: "Look!", identity: [1, 123456]});
     expect(mocks.sendPhoto).toHaveBeenCalledWith(
       42,
       "/path/to/file",
@@ -158,7 +160,7 @@ describe("send_file tool", () => {
 
   it("returns error when resolveMediaSource fails", async () => {
     mocks.resolveMediaSource.mockReturnValue({ code: "INVALID_SOURCE", message: "bad" });
-    const result = await call({ file: "http://insecure.com/file.txt" });
+    const result = await call({ file: "http://insecure.com/file.txt", identity: [1, 123456]});
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("INVALID_SOURCE");
   });
@@ -170,7 +172,7 @@ describe("send_file tool", () => {
     mocks.sendPhoto.mockRejectedValue(
       new GrammyError("e", { ok: false, error_code: 400, description: "Bad Request" }, "sendPhoto", {}),
     );
-    const result = await call({ file: "/img/photo.jpg" });
+    const result = await call({ file: "/img/photo.jpg", identity: [1, 123456]});
     expect(isError(result)).toBe(true);
   });
 
@@ -178,7 +180,7 @@ describe("send_file tool", () => {
 
   it("passes reply_parameters for reply_to_message_id", async () => {
     mocks.sendPhoto.mockResolvedValue({ message_id: 21 });
-    await call({ file: "/img/pic.jpg", reply_to_message_id: 3 });
+    await call({ file: "/img/pic.jpg", reply_to_message_id: 3, identity: [1, 123456]});
     expect(mocks.sendPhoto).toHaveBeenCalledWith(
       42,
       "/path/to/file",
@@ -201,29 +203,25 @@ describe("send_file tool", () => {
     });
     const result = await call({
       file: "http://evil.com/voice.ogg",
-      type: "voice",
-    });
+      type: "voice", identity: [1, 123456]});
     expect(isError(result)).toBe(true);
   });
 
 describe("identity gate", () => {
-  it("returns SID_REQUIRED when multiple sessions active and no identity", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(2);
+  it("returns SID_REQUIRED when no identity provided", async () => {
     const result = await call({"file":"x"});
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("SID_REQUIRED");
   });
 
   it("returns AUTH_FAILED when identity has wrong pin", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(2);
     mocks.validateSession.mockReturnValueOnce(false);
     const result = await call({"file":"x","identity":[1,99999]});
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("AUTH_FAILED");
   });
 
-  it("proceeds when multiple sessions active and identity is valid", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(2);
+  it("proceeds when identity is valid", async () => {
     mocks.validateSession.mockReturnValueOnce(true);
     let code: string | undefined;
     try { code = errorCode(await call({"file":"x","identity":[1,99999]})); } catch { /* gate passed, other error ok */ }
@@ -231,12 +229,6 @@ describe("identity gate", () => {
     expect(code).not.toBe("AUTH_FAILED");
   });
 
-  it("proceeds when single session active and no identity (backward compat)", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(1);
-    let code: string | undefined;
-    try { code = errorCode(await call({"file":"x"})); } catch { /* gate passed, other error ok */ }
-    expect(code).not.toBe("SID_REQUIRED");
-  });
 });
 
 });

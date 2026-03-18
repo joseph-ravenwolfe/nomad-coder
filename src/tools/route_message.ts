@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { toResult, toError } from "../telegram.js";
-import { SESSION_AUTH_SCHEMA, checkAuth } from "../session-auth.js";
+import { requireAuth } from "../session-gate.js";
 import { getGovernorSid } from "../routing-mode.js";
 import { getSession } from "../session-manager.js";
 import { routeMessage } from "../session-queue.js";
@@ -18,7 +18,13 @@ export function register(server: McpServer) {
     {
       description: DESCRIPTION,
       inputSchema: {
-        ...SESSION_AUTH_SCHEMA,
+        identity: z
+          .tuple([z.number().int(), z.number().int()])
+          .optional()
+          .describe(
+            "Identity tuple [sid, pin] from session_start. " +
+            "Always required — pass your [sid, pin] on every tool call.",
+          ),
         message_id: z
           .number()
           .int()
@@ -31,9 +37,9 @@ export function register(server: McpServer) {
           .describe("Session ID to route the message to"),
       },
     },
-    ({ sid, pin, message_id, target_sid }) => {
-      const authErr = checkAuth(sid, pin);
-      if (authErr) return authErr;
+    ({ identity, message_id, target_sid }) => {
+      const _sid = requireAuth(identity);
+      if (typeof _sid !== "number") return toError(_sid);
 
       if (getGovernorSid() === 0) {
         return toError({
@@ -42,7 +48,7 @@ export function register(server: McpServer) {
         });
       }
 
-      if (sid !== getGovernorSid()) {
+      if (_sid !== getGovernorSid()) {
         return toError({
           code: "NOT_GOVERNOR",
           message: "Only the governor session can route messages",
@@ -56,7 +62,7 @@ export function register(server: McpServer) {
         });
       }
 
-      const delivered = routeMessage(message_id, target_sid, sid);
+      const delivered = routeMessage(message_id, target_sid, _sid);
       if (!delivered) {
         return toError({
           code: "ROUTE_FAILED",

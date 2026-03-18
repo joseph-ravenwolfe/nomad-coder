@@ -23,7 +23,6 @@ interface McpConfig {
   defaultVoice?: string;
   voices?: VoiceEntry[];
   debug?: boolean;
-  sessionColorTags?: boolean;
 }
 
 export interface VoiceEntry {
@@ -152,23 +151,4 @@ export function setConfiguredVoices(voices: VoiceEntry[]): void {
 /** For testing only. */
 export function resetConfigForTest(): void {
   _config = {};
-}
-
-// ---------------------------------------------------------------------------
-// Session color tags
-// ---------------------------------------------------------------------------
-
-/** Whether session color tag prefixes are enabled (off by default). */
-export function isSessionColorTagsEnabled(): boolean {
-  return _config.sessionColorTags === true;
-}
-
-/** Enable or disable session color tags and persist to disk. */
-export function setSessionColorTags(enabled: boolean): void {
-  if (enabled) {
-    _config.sessionColorTags = true;
-  } else {
-    delete _config.sessionColorTags;
-  }
-  save();
 }

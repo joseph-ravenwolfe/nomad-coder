@@ -66,7 +66,7 @@ This two-factor model prevents impersonation:
 
 ### Tool Call Authentication
 
-**Session-management tools require `sid` and `pin`** — both as integer parameters. These include `close_session`, `send_direct_message`, `pass_message`, `route_message`, and `request_dm_access`. These tools call `checkAuth()` explicitly and will reject with an auth error if the credentials are missing or wrong.
+**Session-management tools require `sid` and `pin`** — both as integer parameters. These include `close_session`, `send_direct_message`, `pass_message`, and `route_message`. These tools call `checkAuth()` explicitly and will reject with an auth error if the credentials are missing or wrong.
 
 All other tools receive the caller's session identity automatically via server middleware (AsyncLocalStorage context set by `runInSessionContext`). They do not require explicit `sid`/`pin` parameters — the session is identified from the tool-call context, not from parameters the agent types.
 
@@ -130,7 +130,7 @@ With session IDs and cross-session visibility, you get a team dynamic:
 - **Parallel work** — multiple sessions work independently, each branded with their topic
 - **Shared context** — any session can look back at what others said
 - **Governor outbound** — outbound events from worker sessions are automatically forwarded to the governor. No tools needed.
-- **Color tags** — each session is assigned a color square emoji (🟦 🟩 🟨 🟧 🟥 🟪) that prefixes messages when the feature is enabled.
+- **Color tags** — each session is assigned a color square emoji (🟦 🟩 🟨 🟧 🟥 🟪) that prefixes outbound messages in multi-session mode.
 - **Fake personas** — each session appears as a different "person" in the chat (topic prefix), but they're all the same bot. Like creating virtual team members.
 
 ## Outbound Forwarding (Governor-Only)
@@ -148,7 +148,7 @@ worker sessions see only their own dequeue stream.
 
 ## Session Color Tags
 
-Each session is assigned a **color square emoji** from the rainbow palette (🟦 🟩 🟨 🟧 🟥 🟪). When color tags are enabled, the color prefix appears before the `🤖` robot emoji in every outbound message.
+Each session is assigned a **color square emoji** from the rainbow palette (🟦 🟩 🟨 🟧 🟥 🟪). In multi-session mode, the color prefix always appears before the `🤖` robot emoji in every outbound message.
 
 **Example:** `🟦 🤖 \`Scout\`` (instead of `🤖 \`Scout\``)
 
@@ -171,10 +171,6 @@ Role suggestions are conventions only — the server does not enforce meaning.
 - Pass a `color` parameter to `session_start` to request a specific emoji.
 - If the requested color is already taken, the next available color is used.
 - If all 6 are exhausted, assignment wraps back to 🟦.
-
-### Feature Flag
-
-Color tags are **off by default**. The feature is controlled by the `sessionColorTags` field in `mcp-config.json`. When off, the header format is unchanged (`🤖 \`Name\``).
 
 ## Resolved Decisions
 

@@ -38,6 +38,8 @@ describe("edit_message_text tool", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.validateSession.mockReturnValue(true);
+    mocks.validateSession.mockReturnValue(true);
     const server = createMockServer();
     register(server);
     call = server.getHandler("edit_message_text");
@@ -45,13 +47,13 @@ describe("edit_message_text tool", () => {
 
   it("calls API with correct positional args", async () => {
     mocks.editMessageText.mockResolvedValue({ message_id: 1 });
-    await call({ message_id: 1, text: "Updated" });
+    await call({ message_id: 1, text: "Updated", identity: [1, 123456]});
     expect(mocks.editMessageText).toHaveBeenCalledWith(42, 1, "Updated", expect.any(Object));
   });
 
   it("returns result from API", async () => {
     mocks.editMessageText.mockResolvedValue({ message_id: 1, text: "Updated" });
-    const result = await call({ message_id: 1, text: "Updated" });
+    const result = await call({ message_id: 1, text: "Updated", identity: [1, 123456]});
     expect(isError(result)).toBe(false);
     expect(parseResult(result)).toMatchObject({ message_id: 1 });
   });
@@ -61,7 +63,7 @@ describe("edit_message_text tool", () => {
     mocks.editMessageText.mockRejectedValue(
       new GrammyError("e", { ok: false, error_code: 400, description: "Bad Request: message can't be edited" }, "editMessageText", {})
     );
-    const result = await call({ message_id: 99, text: "x" });
+    const result = await call({ message_id: 99, text: "x", identity: [1, 123456]});
     expect(isError(result)).toBe(true);
   });
 
@@ -70,7 +72,7 @@ describe("edit_message_text tool", () => {
       code: "UNAUTHORIZED_CHAT",
       message: "no chat",
     });
-    const result = await call({ message_id: 1, text: "x" });
+    const result = await call({ message_id: 1, text: "x", identity: [1, 123456]});
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("UNAUTHORIZED_CHAT");
   });
@@ -80,36 +82,33 @@ describe("edit_message_text tool", () => {
       code: "TEXT_TOO_LONG",
       message: "too long",
     });
-    const result = await call({ message_id: 1, text: "x" });
+    const result = await call({ message_id: 1, text: "x", identity: [1, 123456]});
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("TEXT_TOO_LONG");
   });
 
   it("handles boolean result from API (channel case)", async () => {
     mocks.editMessageText.mockResolvedValue(true);
-    const result = await call({ message_id: 7, text: "Updated" });
+    const result = await call({ message_id: 7, text: "Updated", identity: [1, 123456]});
     expect(isError(result)).toBe(false);
     expect(parseResult(result)).toMatchObject({ message_id: 7 });
   });
 
 describe("identity gate", () => {
-  it("returns SID_REQUIRED when multiple sessions active and no identity", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(2);
+  it("returns SID_REQUIRED when no identity provided", async () => {
     const result = await call({"message_id":1,"text":"x"});
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("SID_REQUIRED");
   });
 
   it("returns AUTH_FAILED when identity has wrong pin", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(2);
     mocks.validateSession.mockReturnValueOnce(false);
     const result = await call({"message_id":1,"text":"x","identity":[1,99999]});
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("AUTH_FAILED");
   });
 
-  it("proceeds when multiple sessions active and identity is valid", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(2);
+  it("proceeds when identity is valid", async () => {
     mocks.validateSession.mockReturnValueOnce(true);
     let code: string | undefined;
     try { code = errorCode(await call({"message_id":1,"text":"x","identity":[1,99999]})); } catch { /* gate passed, other error ok */ }
@@ -117,12 +116,6 @@ describe("identity gate", () => {
     expect(code).not.toBe("AUTH_FAILED");
   });
 
-  it("proceeds when single session active and no identity (backward compat)", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(1);
-    let code: string | undefined;
-    try { code = errorCode(await call({"message_id":1,"text":"x"})); } catch { /* gate passed, other error ok */ }
-    expect(code).not.toBe("SID_REQUIRED");
-  });
 });
 
 });

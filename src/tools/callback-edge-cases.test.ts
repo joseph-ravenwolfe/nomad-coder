@@ -80,6 +80,7 @@ function cbUpdate(targetMsgId: number, data: string, qid = "qid1") {
 const SENT_MSG = { message_id: 5, chat: { id: 42 }, date: 0 };
 
 let sid: number;
+let pin: number;
 let handlers: {
   confirm: ToolHandler;
   choose: ToolHandler;
@@ -106,6 +107,7 @@ describe("callback edge-cases — rapid clicks and expired queries", () => {
     setActiveSession(session.sid);
     createSessionQueue(session.sid);
     sid = session.sid;
+    pin = session.pin;
 
     const server = createMockServer();
     registerConfirm(server);
@@ -127,7 +129,7 @@ describe("callback edge-cases — rapid clicks and expired queries", () => {
 
   it("SC-1: second callback_query on confirm is ignored — no crash, confirm resolves once", async () => {
     const toolPromise = runInSessionContext(sid, () =>
-      handlers.confirm({ text: "Proceed?", ignore_pending: true }),
+      handlers.confirm({ text: "Proceed?", ignore_pending: true, identity: [sid, pin] }),
     );
     await new Promise<void>((r) => { setTimeout(r, 20); });
 
@@ -161,7 +163,7 @@ describe("callback edge-cases — rapid clicks and expired queries", () => {
       { label: "Gamma", value: "c" },
     ];
     const toolPromise = runInSessionContext(sid, () =>
-      handlers.choose({ question: "Pick one:", options: opts, ignore_pending: true }),
+      handlers.choose({ question: "Pick one:", options: opts, ignore_pending: true, identity: [sid, pin] }),
     );
     await new Promise<void>((r) => { setTimeout(r, 20); });
 
@@ -192,7 +194,7 @@ describe("callback edge-cases — rapid clicks and expired queries", () => {
     );
 
     const toolPromise = runInSessionContext(sid, () =>
-      handlers.confirm({ text: "Still there?", ignore_pending: true }),
+      handlers.confirm({ text: "Still there?", ignore_pending: true, identity: [sid, pin] }),
     );
     await new Promise<void>((r) => { setTimeout(r, 20); });
 
@@ -222,6 +224,7 @@ describe("callback edge-cases — rapid clicks and expired queries", () => {
       handlers.send_choice({
         text: "Pick an option:",
         options: [{ label: "Option A", value: "a" }, { label: "Option B", value: "b" }],
+        identity: [sid, pin],
       }),
     );
     expect(isError(sendResult)).toBe(false);
@@ -246,7 +249,7 @@ describe("callback edge-cases — rapid clicks and expired queries", () => {
 
     // Second callback appears in dequeue_update as an unhandled event
     const dqResult = await runInSessionContext(sid, () =>
-      handlers.dequeue_update({ timeout: 0 }),
+      handlers.dequeue_update({ timeout: 0, identity: [sid, pin] }),
     );
     expect(isError(dqResult)).toBe(false);
     const dq = parseResult(dqResult);

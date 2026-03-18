@@ -48,7 +48,6 @@ import {
   resetRoutingModeForTest,
 } from "./routing-mode.js";
 import {
-  grantDm,
   hasDmPermission,
   revokeAllForSession,
   resetDmPermissionsForTest,
@@ -162,20 +161,13 @@ describe("multi-session integration", () => {
       expect(getMessageOwner(200)).toBe(0); // cleaned up
     });
 
-    it("closing a session revokes all its DM permissions", () => {
+    it("closing a session does not throw (revokeAllForSession is a no-op)", () => {
       const s1 = setupSession("A");
       const s2 = setupSession("B");
-      const s3 = setupSession("C");
 
-      grantDm(s1.sid, s2.sid);
-      grantDm(s2.sid, s1.sid);
-      grantDm(s3.sid, s2.sid);
-
-      revokeAllForSession(s2.sid);
-
-      expect(hasDmPermission(s1.sid, s2.sid)).toBe(false);
-      expect(hasDmPermission(s2.sid, s1.sid)).toBe(false);
-      expect(hasDmPermission(s3.sid, s2.sid)).toBe(false);
+      expect(() => { revokeAllForSession(s2.sid); }).not.toThrow();
+      // DM permissions are always-on; hasDmPermission still returns true
+      expect(hasDmPermission(s1.sid, s2.sid)).toBe(true);
     });
   });
 
@@ -373,11 +365,9 @@ describe("multi-session integration", () => {
   // =========================================================================
 
   describe("direct messages", () => {
-    it("delivers DM when permission is granted", () => {
+    it("delivers DM between sessions", () => {
       const s1 = setupSession("A");
       const s2 = setupSession("B");
-
-      grantDm(s1.sid, s2.sid);
 
       const ok = deliverDirectMessage(s1.sid, s2.sid, "hello from A");
       expect(ok).toBe(true);
@@ -392,22 +382,17 @@ describe("multi-session integration", () => {
       expect(drain(s1.sid)).toEqual([]);
     });
 
-    it("DM permission is unidirectional", () => {
+    it("DM is always permitted between sessions", () => {
       const s1 = setupSession("A");
       const s2 = setupSession("B");
 
-      grantDm(s1.sid, s2.sid); // A → B only
-
       expect(hasDmPermission(s1.sid, s2.sid)).toBe(true);
-      expect(hasDmPermission(s2.sid, s1.sid)).toBe(false);
+      expect(hasDmPermission(s2.sid, s1.sid)).toBe(true);
     });
 
     it("bidirectional DM exchange", () => {
       const s1 = setupSession("A");
       const s2 = setupSession("B");
-
-      grantDm(s1.sid, s2.sid);
-      grantDm(s2.sid, s1.sid);
 
       deliverDirectMessage(s1.sid, s2.sid, "ping");
       deliverDirectMessage(s2.sid, s1.sid, "pong");
@@ -425,8 +410,6 @@ describe("multi-session integration", () => {
     it("DM fails when target session is closed", () => {
       const s1 = setupSession("A");
       const s2 = setupSession("B");
-
-      grantDm(s1.sid, s2.sid);
 
       closeSession(s2.sid);
       removeSessionQueue(s2.sid);
@@ -480,7 +463,6 @@ describe("multi-session integration", () => {
       setGovernorSid(0); // clear governor for remaining assertions
 
       // DM from s3 to s1
-      grantDm(s3.sid, s1.sid);
       deliverDirectMessage(s3.sid, s1.sid, "task update");
       const dm = drain(s1.sid);
       expect(dm).toHaveLength(1);
@@ -987,23 +969,22 @@ describe("multi-session integration", () => {
       expect(delivered).toBe(false);
     });
 
-    it("DM permission survives queue removal (grant is separate)",
+    it("DM delivery fails when target queue is removed (permissions always-on)",
       () => {
         const s1 = setupSession("A");
         const s2 = setupSession("B");
 
-        grantDm(s1.sid, s2.sid);
+        // Permissions are always-on
         expect(hasDmPermission(s1.sid, s2.sid)).toBe(true);
 
         // Close and remove S2's queue
         closeSession(s2.sid);
         removeSessionQueue(s2.sid);
 
-        // Permission still exists (orphaned — cleaned on
-        // revokeAllForSession)
+        // Permission still true (always-on)
         expect(hasDmPermission(s1.sid, s2.sid)).toBe(true);
 
-        // Delivery fails despite permission
+        // Delivery fails because queue is gone
         const delivered = deliverDirectMessage(
           s1.sid,
           s2.sid,
@@ -1012,21 +993,5 @@ describe("multi-session integration", () => {
         expect(delivered).toBe(false);
       },
     );
-
-    it("revokeAllForSession cleans both directions", () => {
-      const s1 = setupSession("A");
-      const s2 = setupSession("B");
-      const s3 = setupSession("C");
-
-      grantDm(s1.sid, s2.sid);  // A→B
-      grantDm(s2.sid, s1.sid);  // B→A
-      grantDm(s3.sid, s2.sid);  // C→B
-
-      revokeAllForSession(s2.sid);
-
-      expect(hasDmPermission(s1.sid, s2.sid)).toBe(false);
-      expect(hasDmPermission(s2.sid, s1.sid)).toBe(false);
-      expect(hasDmPermission(s3.sid, s2.sid)).toBe(false);
-    });
   });
 });

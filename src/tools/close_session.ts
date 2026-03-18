@@ -1,10 +1,11 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { getApi, toResult, sendServiceMessage, resolveChat } from "../telegram.js";
+import { z } from "zod";
+import { getApi, toResult, toError, sendServiceMessage, resolveChat } from "../telegram.js";
 import { closeSession, getSession, getActiveSession, setActiveSession, listSessions } from "../session-manager.js";
 import { removeSessionQueue, drainQueue, deliverDirectMessage, deliverServiceMessage, routeToSession } from "../session-queue.js";
 import { revokeAllForSession } from "../dm-permissions.js";
 import { getGovernorSid, setGovernorSid } from "../routing-mode.js";
-import { SESSION_AUTH_SCHEMA, checkAuth } from "../session-auth.js";
+import { requireAuth } from "../session-gate.js";
 import { replaceSessionCallbackHooks } from "../message-store.js";
 
 const DESCRIPTION =
@@ -18,12 +19,19 @@ export function register(server: McpServer) {
     {
       description: DESCRIPTION,
       inputSchema: {
-        ...SESSION_AUTH_SCHEMA,
+        identity: z
+          .tuple([z.number().int(), z.number().int()])
+          .optional()
+          .describe(
+            "Identity tuple [sid, pin] from session_start. " +
+            "Always required — pass your [sid, pin] on every tool call.",
+          ),
       },
     },
-    ({ sid, pin }) => {
-      const authErr = checkAuth(sid, pin);
-      if (authErr) return authErr;
+    ({ identity }) => {
+      const _sid = requireAuth(identity);
+      if (typeof _sid !== "number") return toError(_sid);
+      const sid = _sid;
 
       // Capture session name before closing (used in notifications)
       const sessionInfo = getSession(sid);

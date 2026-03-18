@@ -1,79 +1,25 @@
 /**
  * Direct message permissions between sessions.
  *
- * Permissions are **directional**: A→B does not imply B→A.
- * Each direction requires explicit operator approval via `confirm`.
- * Permissions are ephemeral (in-memory only, reset on restart).
+ * All active sessions can DM each other — permission is implicit.
+ * Operator approval at session_start is the trust gate.
+ * Permissions are ephemeral (reset on restart).
  */
 
 import { dlog } from "./debug-log.js";
 
 // ---------------------------------------------------------------------------
-// State
-// ---------------------------------------------------------------------------
-
-/** "sender:target" → true. Only present when granted. */
-const _grants = new Set<string>();
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function key(sender: number, target: number): string {
-  return `${sender}:${target}`;
-}
-
-// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
-/** Grant directional DM permission: sender → target. */
-export function grantDm(sender: number, target: number): void {
-  _grants.add(key(sender, target));
-  dlog("dm", `granted DM sid=${sender} → sid=${target}`);
+/** Always returns true — all approved sessions can DM each other. */
+export function hasDmPermission(_sender: number, _target: number): boolean {
+  return true;
 }
 
-/** Revoke directional DM permission: sender → target. */
-export function revokeDm(sender: number, target: number): boolean {
-  return _grants.delete(key(sender, target));
-}
-
-/** Check if sender has DM permission to target. */
-export function hasDmPermission(
-  sender: number,
-  target: number,
-): boolean {
-  return _grants.has(key(sender, target));
-}
-
-/** Remove all permissions involving a session (both directions). */
+/** Remove all permissions involving a session. No-op: permissions are implicit. */
 export function revokeAllForSession(sid: number): void {
-  let count = 0;
-  for (const k of _grants) {
-    const [s, t] = k.split(":").map(Number);
-    if (s === sid || t === sid) { _grants.delete(k); count++; }
-  }
-  if (count > 0) dlog("dm", `revoked ${count} DM permission(s) for sid=${sid}`);
-}
-
-/** List all sessions that `sender` can DM. */
-export function dmTargetsFor(sender: number): number[] {
-  const targets: number[] = [];
-  for (const k of _grants) {
-    const [s, t] = k.split(":").map(Number);
-    if (s === sender) targets.push(t);
-  }
-  return targets.sort((a, b) => a - b);
-}
-
-/** List all sessions that can DM `target`. */
-export function dmSendersFor(target: number): number[] {
-  const senders: number[] = [];
-  for (const k of _grants) {
-    const [s, t] = k.split(":").map(Number);
-    if (t === target) senders.push(s);
-  }
-  return senders.sort((a, b) => a - b);
+  dlog("dm", `revokeAllForSession sid=${sid} — no-op (permissions are implicit)`);
 }
 
 // ---------------------------------------------------------------------------
@@ -81,5 +27,5 @@ export function dmSendersFor(target: number): number[] {
 // ---------------------------------------------------------------------------
 
 export function resetDmPermissionsForTest(): void {
-  _grants.clear();
+  // no state to reset
 }

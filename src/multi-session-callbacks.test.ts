@@ -235,7 +235,7 @@ describe("multi-session callback isolation", () => {
 
     // Close SID1 — this calls replaceSessionCallbackHooks(sid1, replacementFn)
     const closeResult = await runInSessionContext(sid1, () =>
-      handlers.close_session({ sid: sid1, pin: pin1 }),
+      handlers.close_session({ identity: [sid1, pin1] }),
     );
     expect(isError(closeResult)).toBe(false);
     expect(parseResult(closeResult).closed).toBe(true);

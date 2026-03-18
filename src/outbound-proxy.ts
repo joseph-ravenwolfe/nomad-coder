@@ -18,7 +18,6 @@ import { fireTempReactionRestore } from "./temp-reaction.js";
 import { getCallerSid } from "./session-context.js";
 import { activeSessionCount, getSession } from "./session-manager.js";
 import { escapeV2 } from "./markdown.js";
-import { isSessionColorTagsEnabled } from "./config.js";
 
 // ---------------------------------------------------------------------------
 // Session header injection
@@ -35,7 +34,7 @@ function buildHeader(escape: boolean): { plain: string; formatted: string } {
   const session = sid > 0 ? getSession(sid) : undefined;
   const name = session?.name || (sid > 0 ? `Session ${sid}` : "");
   if (!name) return { plain: "", formatted: "" };
-  const colorPrefix = isSessionColorTagsEnabled() && session?.color ? `${session.color} ` : "";
+  const colorPrefix = session?.color ? `${session.color} ` : "";
   const formatted = escape
     ? `${colorPrefix}🤖 \`${escapeV2(name)}\`\n`
     : `${colorPrefix}🤖 \`${name}\`\n`;

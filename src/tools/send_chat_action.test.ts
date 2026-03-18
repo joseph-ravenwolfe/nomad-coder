@@ -28,6 +28,8 @@ describe("send_chat_action tool", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.validateSession.mockReturnValue(true);
+    mocks.validateSession.mockReturnValue(true);
     const server = createMockServer();
     register(server);
     call = server.getHandler("send_chat_action");
@@ -35,7 +37,7 @@ describe("send_chat_action tool", () => {
 
   it("sends typing action by default and returns ok:true", async () => {
     mocks.sendChatAction.mockResolvedValue(undefined);
-    const result = await call({ action: "typing" });
+    const result = await call({ action: "typing", identity: [1, 123456]});
     expect(isError(result)).toBe(false);
     const data = parseResult(result);
     expect(data.ok).toBe(true);
@@ -44,46 +46,43 @@ describe("send_chat_action tool", () => {
 
   it("sends record_voice action", async () => {
     mocks.sendChatAction.mockResolvedValue(undefined);
-    await call({ action: "record_voice" });
+    await call({ action: "record_voice", identity: [1, 123456]});
     expect(mocks.sendChatAction).toHaveBeenCalledWith(123, "record_voice");
   });
 
   it("sends upload_document action", async () => {
     mocks.sendChatAction.mockResolvedValue(undefined);
-    await call({ action: "upload_document" });
+    await call({ action: "upload_document", identity: [1, 123456]});
     expect(mocks.sendChatAction).toHaveBeenCalledWith(123, "upload_document");
   });
 
   it("returns error when resolveChat returns non-number", async () => {
     mocks.resolveChat.mockReturnValueOnce({ code: "UNAUTHORIZED_CHAT", message: "test" });
-    const result = await call({ action: "typing" });
+    const result = await call({ action: "typing", identity: [1, 123456]});
     expect(isError(result)).toBe(true);
   });
 
   it("returns error when sendChatAction throws", async () => {
     mocks.sendChatAction.mockRejectedValue(new Error("API error"));
-    const result = await call({ action: "typing" });
+    const result = await call({ action: "typing", identity: [1, 123456]});
     expect(isError(result)).toBe(true);
   });
 
 describe("identity gate", () => {
-  it("returns SID_REQUIRED when multiple sessions active and no identity", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(2);
+  it("returns SID_REQUIRED when no identity provided", async () => {
     const result = await call({});
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("SID_REQUIRED");
   });
 
   it("returns AUTH_FAILED when identity has wrong pin", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(2);
     mocks.validateSession.mockReturnValueOnce(false);
     const result = await call({"identity":[1,99999]});
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("AUTH_FAILED");
   });
 
-  it("proceeds when multiple sessions active and identity is valid", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(2);
+  it("proceeds when identity is valid", async () => {
     mocks.validateSession.mockReturnValueOnce(true);
     let code: string | undefined;
     try { code = errorCode(await call({"identity":[1,99999]})); } catch { /* gate passed, other error ok */ }
@@ -91,12 +90,6 @@ describe("identity gate", () => {
     expect(code).not.toBe("AUTH_FAILED");
   });
 
-  it("proceeds when single session active and no identity (backward compat)", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(1);
-    let code: string | undefined;
-    try { code = errorCode(await call({})); } catch { /* gate passed, other error ok */ }
-    expect(code).not.toBe("SID_REQUIRED");
-  });
 });
 
 });

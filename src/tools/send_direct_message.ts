@@ -1,16 +1,14 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { toResult, toError } from "../telegram.js";
-import { SESSION_AUTH_SCHEMA, checkAuth } from "../session-auth.js";
+import { requireAuth } from "../session-gate.js";
 import { getSession } from "../session-manager.js";
-import { hasDmPermission } from "../dm-permissions.js";
 import { deliverDirectMessage } from "../session-queue.js";
 
 const DESCRIPTION =
   "Send a direct message to another session. The message is " +
   "delivered internally — it never appears in the Telegram chat. " +
-  "Requires DM permission (granted by the operator via " +
-  "request_dm_access). The target session receives the message " +
+  "All active sessions can DM each other. The target session receives the message " +
   "in its dequeue stream as a direct_message event.";
 
 export function register(server: McpServer) {
@@ -19,7 +17,13 @@ export function register(server: McpServer) {
     {
       description: DESCRIPTION,
       inputSchema: {
-        ...SESSION_AUTH_SCHEMA,
+        identity: z
+          .tuple([z.number().int(), z.number().int()])
+          .optional()
+          .describe(
+            "Identity tuple [sid, pin] from session_start. " +
+            "Always required — pass your [sid, pin] on every tool call.",
+          ),
         target_sid: z
           .number()
           .int()
@@ -31,11 +35,11 @@ export function register(server: McpServer) {
           .describe("Message text to send"),
       },
     },
-    ({ sid, pin, target_sid, text }) => {
-      const authErr = checkAuth(sid, pin);
-      if (authErr) return authErr;
+    ({ identity, target_sid, text }) => {
+      const _sid = requireAuth(identity);
+      if (typeof _sid !== "number") return toError(_sid);
 
-      if (sid === target_sid) {
+      if (_sid === target_sid) {
         return toError({
           code: "DM_SELF",
           message: "Cannot send a DM to yourself",
@@ -50,16 +54,7 @@ export function register(server: McpServer) {
         });
       }
 
-      if (!hasDmPermission(sid, target_sid)) {
-        return toError({
-          code: "DM_NOT_PERMITTED",
-          message:
-            `No DM permission for session ${sid} → ${target_sid}. ` +
-            "Use request_dm_access to ask the operator for permission.",
-        });
-      }
-
-      const delivered = deliverDirectMessage(sid, target_sid, text);
+      const delivered = deliverDirectMessage(_sid, target_sid, text);
       if (!delivered) {
         return toError({
           code: "DM_DELIVERY_FAILED",

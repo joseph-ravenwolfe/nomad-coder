@@ -28,6 +28,8 @@ describe("delete_message tool", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.validateSession.mockReturnValue(true);
+    mocks.validateSession.mockReturnValue(true);
     const server = createMockServer();
     register(server);
     call = server.getHandler("delete_message");
@@ -35,14 +37,14 @@ describe("delete_message tool", () => {
 
   it("returns ok: true on success", async () => {
     mocks.deleteMessage.mockResolvedValue(true);
-    const result = await call({ message_id: 5 });
+    const result = await call({ message_id: 5, identity: [1, 123456]});
     expect(isError(result)).toBe(false);
     expect((parseResult(result)).ok).toBe(true);
   });
 
   it("passes chat_id and message_id to API", async () => {
     mocks.deleteMessage.mockResolvedValue(true);
-    await call({ message_id: 99 });
+    await call({ message_id: 99, identity: [1, 123456]});
     expect(mocks.deleteMessage).toHaveBeenCalledWith(42, 99);
   });
 
@@ -51,7 +53,7 @@ describe("delete_message tool", () => {
     mocks.deleteMessage.mockRejectedValue(
       new GrammyError("e", { ok: false, error_code: 400, description: "Bad Request: message can't be deleted" }, "deleteMessage", {})
     );
-    const result = await call({ message_id: 1 });
+    const result = await call({ message_id: 1, identity: [1, 123456]});
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("MESSAGE_CANT_BE_DELETED");
   });
@@ -61,29 +63,26 @@ describe("delete_message tool", () => {
       code: "UNAUTHORIZED_CHAT",
       message: "no chat",
     });
-    const result = await call({ message_id: 1 });
+    const result = await call({ message_id: 1, identity: [1, 123456]});
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("UNAUTHORIZED_CHAT");
   });
 
 describe("identity gate", () => {
-  it("returns SID_REQUIRED when multiple sessions active and no identity", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(2);
+  it("returns SID_REQUIRED when no identity provided", async () => {
     const result = await call({"message_id":1});
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("SID_REQUIRED");
   });
 
   it("returns AUTH_FAILED when identity has wrong pin", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(2);
     mocks.validateSession.mockReturnValueOnce(false);
     const result = await call({"message_id":1,"identity":[1,99999]});
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("AUTH_FAILED");
   });
 
-  it("proceeds when multiple sessions active and identity is valid", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(2);
+  it("proceeds when identity is valid", async () => {
     mocks.validateSession.mockReturnValueOnce(true);
     let code: string | undefined;
     try { code = errorCode(await call({"message_id":1,"identity":[1,99999]})); } catch { /* gate passed, other error ok */ }
@@ -91,12 +90,6 @@ describe("identity gate", () => {
     expect(code).not.toBe("AUTH_FAILED");
   });
 
-  it("proceeds when single session active and no identity (backward compat)", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(1);
-    let code: string | undefined;
-    try { code = errorCode(await call({"message_id":1})); } catch { /* gate passed, other error ok */ }
-    expect(code).not.toBe("SID_REQUIRED");
-  });
 });
 
 });

@@ -27,6 +27,8 @@ describe("notify tool", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.validateSession.mockReturnValue(true);
+    mocks.validateSession.mockReturnValue(true);
     const server = createMockServer();
     register(server);
     call = server.getHandler("notify");
@@ -34,14 +36,14 @@ describe("notify tool", () => {
 
   it("sends a message and returns message_id", async () => {
     mocks.sendMessage.mockResolvedValue({ message_id: 5, chat: { id: 99 }, date: 0, text: "" });
-    const result = await call({ title: "Done", severity: "success" });
+    const result = await call({ title: "Done", severity: "success", identity: [1, 123456]});
     expect(isError(result)).toBe(false);
     expect((parseResult(result)).message_id).toBe(5);
   });
 
   it("prefixes title with correct severity emoji", async () => {
     mocks.sendMessage.mockResolvedValue({ message_id: 1, chat: { id: 1 }, date: 0, text: "" });
-    await call({ title: "Oops", severity: "error" });
+    await call({ title: "Oops", severity: "error", identity: [1, 123456]});
     const [, text] = mocks.sendMessage.mock.calls[0];
     expect(text).toContain("⛔");
     expect(text).toContain("*Oops*");
@@ -49,21 +51,21 @@ describe("notify tool", () => {
 
   it("defaults to Markdown mode and sends as MarkdownV2", async () => {
     mocks.sendMessage.mockResolvedValue({ message_id: 1, chat: { id: 1 }, date: 0, text: "" });
-    await call({ title: "T", severity: "info" });
+    await call({ title: "T", severity: "info", identity: [1, 123456]});
     const [, , opts] = mocks.sendMessage.mock.calls[0];
     expect(opts.parse_mode).toBe("MarkdownV2");
   });
 
   it("auto-converts Markdown body", async () => {
     mocks.sendMessage.mockResolvedValue({ message_id: 1, chat: { id: 1 }, date: 0, text: "" });
-    await call({ title: "T", body: "Done. **v1**", severity: "info" });
+    await call({ title: "T", body: "Done. **v1**", severity: "info", identity: [1, 123456]});
     const [, text] = mocks.sendMessage.mock.calls[0];
     expect(text).toContain("Done\\. *v1*");
   });
 
   it("uses HTML bold for title when parse_mode is HTML", async () => {
     mocks.sendMessage.mockResolvedValue({ message_id: 1, chat: { id: 1 }, date: 0, text: "" });
-    await call({ title: "Done", severity: "success", parse_mode: "HTML" });
+    await call({ title: "Done", severity: "success", parse_mode: "HTML", identity: [1, 123456]});
     const [, text, opts] = mocks.sendMessage.mock.calls[0];
     expect(text).toContain("<b>Done</b>");
     expect(opts.parse_mode).toBe("HTML");
@@ -71,20 +73,20 @@ describe("notify tool", () => {
 
   it("includes body when provided", async () => {
     mocks.sendMessage.mockResolvedValue({ message_id: 1, chat: { id: 1 }, date: 0, text: "" });
-    await call({ title: "T", body: "Details here", severity: "info" });
+    await call({ title: "T", body: "Details here", severity: "info", identity: [1, 123456]});
     const [, text] = mocks.sendMessage.mock.calls[0];
     expect(text).toContain("Details here");
   });
 
   it("defaults to info severity", async () => {
     mocks.sendMessage.mockResolvedValue({ message_id: 1, chat: { id: 1 }, date: 0, text: "" });
-    await call({ title: "Status" });
+    await call({ title: "Status", identity: [1, 123456]});
     const [, text] = mocks.sendMessage.mock.calls[0];
     expect(text).toContain("ℹ️");
   });
 
   it("returns MESSAGE_TOO_LONG when combined text exceeds limit", async () => {
-    const result = await call({ title: "T", body: "b".repeat(4200), severity: "info" });
+    const result = await call({ title: "T", body: "b".repeat(4200), severity: "info", identity: [1, 123456]});
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("MESSAGE_TOO_LONG");
     expect(mocks.sendMessage).not.toHaveBeenCalled();
@@ -100,7 +102,7 @@ describe("notify tool", () => {
         {},
       ),
     );
-    const result = await call({ title: "Done", severity: "info" });
+    const result = await call({ title: "Done", severity: "info", identity: [1, 123456]});
     expect(isError(result)).toBe(true);
   });
 
@@ -109,29 +111,26 @@ describe("notify tool", () => {
       code: "UNAUTHORIZED_CHAT",
       message: "no chat",
     });
-    const result = await call({ title: "Done" });
+    const result = await call({ title: "Done", identity: [1, 123456]});
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("UNAUTHORIZED_CHAT");
   });
 
 describe("identity gate", () => {
-  it("returns SID_REQUIRED when multiple sessions active and no identity", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(2);
+  it("returns SID_REQUIRED when no identity provided", async () => {
     const result = await call({"title":"x"});
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("SID_REQUIRED");
   });
 
   it("returns AUTH_FAILED when identity has wrong pin", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(2);
     mocks.validateSession.mockReturnValueOnce(false);
     const result = await call({"title":"x","identity":[1,99999]});
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("AUTH_FAILED");
   });
 
-  it("proceeds when multiple sessions active and identity is valid", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(2);
+  it("proceeds when identity is valid", async () => {
     mocks.validateSession.mockReturnValueOnce(true);
     let code: string | undefined;
     try { code = errorCode(await call({"title":"x","identity":[1,99999]})); } catch { /* gate passed, other error ok */ }
@@ -139,12 +138,6 @@ describe("identity gate", () => {
     expect(code).not.toBe("AUTH_FAILED");
   });
 
-  it("proceeds when single session active and no identity (backward compat)", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(1);
-    let code: string | undefined;
-    try { code = errorCode(await call({"title":"x"})); } catch { /* gate passed, other error ok */ }
-    expect(code).not.toBe("SID_REQUIRED");
-  });
 });
 
 });

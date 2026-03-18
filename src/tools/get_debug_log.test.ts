@@ -36,6 +36,7 @@ let handler: ToolHandler;
 
 beforeEach(async () => {
   vi.clearAllMocks();
+  mocks.validateSession.mockReturnValue(true);
   mocks.isDebugEnabled.mockReturnValue(false);
   mocks.debugLogSize.mockReturnValue(0);
   mocks.getDebugLog.mockReturnValue([]);
@@ -48,7 +49,7 @@ beforeEach(async () => {
 
 describe("get_debug_log", () => {
   it("returns empty state when no entries", async () => {
-    const result = parseResult(await handler({}));
+    const result = parseResult(await handler({ identity: [1, 123456] }));
     expect(result).toEqual({ enabled: false, total: 0, returned: 0, entries: [] });
   });
 
@@ -58,7 +59,7 @@ describe("get_debug_log", () => {
     mocks.debugLogSize.mockReturnValue(1);
     mocks.getDebugLog.mockReturnValue(entries);
 
-    const result = parseResult(await handler({}));
+    const result = parseResult(await handler({ identity: [1, 123456] }));
     expect(result.enabled).toBe(true);
     expect(result.entries).toEqual(entries);
     expect(mocks.getDebugLog).toHaveBeenCalledWith(50, undefined, undefined);
@@ -66,52 +67,49 @@ describe("get_debug_log", () => {
 
   it("passes count and category to getDebugLog", async () => {
     mocks.getDebugLog.mockReturnValue([]);
-    await handler({ count: 10, category: "route" });
+    await handler({ count: 10, category: "route", identity: [1, 123456] });
     expect(mocks.getDebugLog).toHaveBeenCalledWith(10, "route", undefined);
   });
 
   it("passes since for cursor-based pagination", async () => {
     mocks.getDebugLog.mockReturnValue([]);
-    await handler({ since: 42 });
+    await handler({ since: 42, identity: [1, 123456] });
     expect(mocks.getDebugLog).toHaveBeenCalledWith(50, undefined, 42);
   });
 
   it("toggles debug on when enable=true", async () => {
     mocks.getDebugLog.mockReturnValue([]);
-    await handler({ enable: true });
+    await handler({ enable: true, identity: [1, 123456] });
     expect(mocks.setDebugEnabled).toHaveBeenCalledWith(true);
   });
 
   it("toggles debug off when enable=false", async () => {
     mocks.getDebugLog.mockReturnValue([]);
-    await handler({ enable: false });
+    await handler({ enable: false, identity: [1, 123456] });
     expect(mocks.setDebugEnabled).toHaveBeenCalledWith(false);
   });
 
   it("does not call setDebugEnabled when enable is omitted", async () => {
     mocks.getDebugLog.mockReturnValue([]);
-    await handler({});
+    await handler({ identity: [1, 123456] });
     expect(mocks.setDebugEnabled).not.toHaveBeenCalled();
   });
 
 describe("identity gate", () => {
-  it("returns SID_REQUIRED when multiple sessions active and no identity", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(2);
+  it("returns SID_REQUIRED when no identity provided", async () => {
     const result = await handler({});
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("SID_REQUIRED");
   });
 
   it("returns AUTH_FAILED when identity has wrong pin", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(2);
     mocks.validateSession.mockReturnValueOnce(false);
     const result = await handler({"identity":[1,99999]});
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("AUTH_FAILED");
   });
 
-  it("proceeds when multiple sessions active and identity is valid", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(2);
+  it("proceeds when identity is valid", async () => {
     mocks.validateSession.mockReturnValueOnce(true);
     let code: string | undefined;
     try { code = errorCode(await handler({"identity":[1,99999]})); } catch { /* gate passed, other error ok */ }
@@ -119,12 +117,6 @@ describe("identity gate", () => {
     expect(code).not.toBe("AUTH_FAILED");
   });
 
-  it("proceeds when single session active and no identity (backward compat)", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(1);
-    let code: string | undefined;
-    try { code = errorCode(await handler({})); } catch { /* gate passed, other error ok */ }
-    expect(code).not.toBe("SID_REQUIRED");
-  });
 });
 
 });

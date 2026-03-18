@@ -36,7 +36,7 @@ describe("rename_session tool", () => {
     mocks.listSessions.mockReturnValue([{ sid: 1, name: "Primary" }]);
     mocks.renameSession.mockReturnValue({ old_name: "Primary", new_name: "Scout" });
 
-    const result = parseResult(await call({ sid: 1, pin: 111111, new_name: "Scout" }));
+    const result = parseResult(await call({ identity: [1, 111111], new_name: "Scout" }));
 
     expect(result).toEqual({ sid: 1, old_name: "Primary", new_name: "Scout" });
     expect(mocks.renameSession).toHaveBeenCalledWith(1, "Scout");
@@ -46,7 +46,7 @@ describe("rename_session tool", () => {
     mocks.listSessions.mockReturnValue([{ sid: 1, name: "Primary" }]);
     mocks.renameSession.mockReturnValue({ old_name: "Primary", new_name: "Scout" });
 
-    await call({ sid: 1, pin: 111111, new_name: "  Scout  " });
+    await call({ identity: [1, 111111], new_name: "  Scout  " });
 
     expect(mocks.renameSession).toHaveBeenCalledWith(1, "Scout");
   });
@@ -55,7 +55,7 @@ describe("rename_session tool", () => {
     mocks.listSessions.mockReturnValue([{ sid: 1, name: "Primary" }]);
     mocks.renameSession.mockReturnValue({ old_name: "Primary", new_name: "Primary" });
 
-    const result = parseResult(await call({ sid: 1, pin: 111111, new_name: "Primary" }));
+    const result = parseResult(await call({ identity: [1, 111111], new_name: "Primary" }));
 
     expect(result.new_name).toBe("Primary");
     expect(mocks.renameSession).toHaveBeenCalledWith(1, "Primary");
@@ -68,7 +68,7 @@ describe("rename_session tool", () => {
   it("returns AUTH_FAILED when credentials are invalid", async () => {
     mocks.validateSession.mockReturnValue(false);
 
-    const result = await call({ sid: 1, pin: 999999, new_name: "Scout" });
+    const result = await call({ identity: [1, 999999], new_name: "Scout" });
 
     expect(isError(result)).toBe(true);
     expect(JSON.stringify(result)).toContain("AUTH_FAILED");
@@ -80,7 +80,7 @@ describe("rename_session tool", () => {
   // =========================================================================
 
   it("rejects empty name → INVALID_NAME", async () => {
-    const result = await call({ sid: 1, pin: 111111, new_name: "" });
+    const result = await call({ identity: [1, 111111], new_name: "" });
 
     expect(isError(result)).toBe(true);
     expect(JSON.stringify(result)).toContain("INVALID_NAME");
@@ -88,7 +88,7 @@ describe("rename_session tool", () => {
   });
 
   it("rejects whitespace-only name → INVALID_NAME", async () => {
-    const result = await call({ sid: 1, pin: 111111, new_name: "   " });
+    const result = await call({ identity: [1, 111111], new_name: "   " });
 
     expect(isError(result)).toBe(true);
     expect(JSON.stringify(result)).toContain("INVALID_NAME");
@@ -96,7 +96,7 @@ describe("rename_session tool", () => {
   });
 
   it("rejects name with symbols → INVALID_NAME", async () => {
-    const result = await call({ sid: 1, pin: 111111, new_name: "Scout!" });
+    const result = await call({ identity: [1, 111111], new_name: "Scout!" });
 
     expect(isError(result)).toBe(true);
     expect(JSON.stringify(result)).toContain("INVALID_NAME");
@@ -104,14 +104,14 @@ describe("rename_session tool", () => {
   });
 
   it("rejects name with underscore → INVALID_NAME", async () => {
-    const result = await call({ sid: 1, pin: 111111, new_name: "Scout_2" });
+    const result = await call({ identity: [1, 111111], new_name: "Scout_2" });
 
     expect(isError(result)).toBe(true);
     expect(JSON.stringify(result)).toContain("INVALID_NAME");
   });
 
   it("rejects name with emoji → INVALID_NAME", async () => {
-    const result = await call({ sid: 1, pin: 111111, new_name: "Scout🤖" });
+    const result = await call({ identity: [1, 111111], new_name: "Scout🤖" });
 
     expect(isError(result)).toBe(true);
     expect(JSON.stringify(result)).toContain("INVALID_NAME");
@@ -121,7 +121,7 @@ describe("rename_session tool", () => {
     mocks.listSessions.mockReturnValue([{ sid: 1, name: "Old Name" }]);
     mocks.renameSession.mockReturnValue({ old_name: "Old Name", new_name: "Scout Alpha" });
 
-    const result = parseResult(await call({ sid: 1, pin: 111111, new_name: "Scout Alpha" }));
+    const result = parseResult(await call({ identity: [1, 111111], new_name: "Scout Alpha" }));
 
     expect(result.new_name).toBe("Scout Alpha");
   });
@@ -136,7 +136,7 @@ describe("rename_session tool", () => {
       { sid: 2, name: "Scout" },
     ]);
 
-    const result = await call({ sid: 1, pin: 111111, new_name: "Scout" });
+    const result = await call({ identity: [1, 111111], new_name: "Scout" });
 
     expect(isError(result)).toBe(true);
     expect(JSON.stringify(result)).toContain("NAME_TAKEN");
@@ -149,7 +149,7 @@ describe("rename_session tool", () => {
       { sid: 2, name: "scout" },
     ]);
 
-    const result = await call({ sid: 1, pin: 111111, new_name: "SCOUT" });
+    const result = await call({ identity: [1, 111111], new_name: "SCOUT" });
 
     expect(isError(result)).toBe(true);
     expect(JSON.stringify(result)).toContain("NAME_TAKEN");
@@ -159,7 +159,7 @@ describe("rename_session tool", () => {
     mocks.listSessions.mockReturnValue([{ sid: 1, name: "Primary" }]);
     mocks.renameSession.mockReturnValue({ old_name: "Primary", new_name: "Primary" });
 
-    const result = parseResult(await call({ sid: 1, pin: 111111, new_name: "Primary" }));
+    const result = parseResult(await call({ identity: [1, 111111], new_name: "Primary" }));
 
     expect(result.new_name).toBe("Primary");
   });
@@ -171,7 +171,7 @@ describe("rename_session tool", () => {
   it("returns SESSION_NOT_FOUND if renameSession returns null", async () => {
     mocks.renameSession.mockReturnValue(null);
 
-    const result = await call({ sid: 1, pin: 111111, new_name: "NewName" });
+    const result = await call({ identity: [1, 111111], new_name: "NewName" });
 
     expect(isError(result)).toBe(true);
     expect(JSON.stringify(result)).toContain("SESSION_NOT_FOUND");

@@ -50,6 +50,8 @@ describe("dump_session_record tool (V3)", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.validateSession.mockReturnValue(true);
+    mocks.validateSession.mockReturnValue(true);
     mocks.dumpTimeline.mockReturnValue([]);
     mocks.timelineSize.mockReturnValue(0);
     mocks.storeSize.mockReturnValue(0);
@@ -63,12 +65,12 @@ describe("dump_session_record tool (V3)", () => {
 
   it("returns disabled message when session log is off", async () => {
     mocks.getSessionLogMode.mockReturnValue(null);
-    const text = getText(await call({}));
+    const text = getText(await call({ identity: [1, 123456] }));
     expect(text).toContain("disabled");
   });
 
   it("returns 'no events' when timeline is empty", async () => {
-    const text = getText(await call({}));
+    const text = getText(await call({ identity: [1, 123456] }));
     expect(text).toContain("No events captured");
   });
 
@@ -85,7 +87,7 @@ describe("dump_session_record tool (V3)", () => {
       document: { file_id: "abc123" },
     });
 
-    const data = JSON.parse(getText(await call({})));
+    const data = JSON.parse(getText(await call({ identity: [1, 123456] })));
     expect(data.message_id).toBe(99);
     expect(data.event_count).toBe(2);
     expect(data.file_id).toBe("abc123");
@@ -112,39 +114,36 @@ describe("dump_session_record tool (V3)", () => {
     mocks.dumpTimeline.mockReturnValue(events);
     mocks.timelineSize.mockReturnValue(5);
 
-    const data = JSON.parse(getText(await call({ limit: 2 })));
+    const data = JSON.parse(getText(await call({ limit: 2, identity: [1, 123456]})));
     expect(data.event_count).toBe(2);
     expect(mocks.sendDocument).toHaveBeenCalledOnce();
   });
 
   it("does not call sendDocument when timeline is empty", async () => {
-    await call({});
+    await call({ identity: [1, 123456] });
     expect(mocks.sendDocument).not.toHaveBeenCalled();
   });
 
   it("does not error with default params", async () => {
-    const result = await call({});
+    const result = await call({ identity: [1, 123456] });
     expect(isError(result)).toBe(false);
   });
 
 describe("identity gate", () => {
-  it("returns SID_REQUIRED when multiple sessions active and no identity", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(2);
+  it("returns SID_REQUIRED when no identity provided", async () => {
     const result = await call({});
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("SID_REQUIRED");
   });
 
   it("returns AUTH_FAILED when identity has wrong pin", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(2);
     mocks.validateSession.mockReturnValueOnce(false);
     const result = await call({"identity":[1,99999]});
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("AUTH_FAILED");
   });
 
-  it("proceeds when multiple sessions active and identity is valid", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(2);
+  it("proceeds when identity is valid", async () => {
     mocks.validateSession.mockReturnValueOnce(true);
     let code: string | undefined;
     try { code = errorCode(await call({"identity":[1,99999]})); } catch { /* gate passed, other error ok */ }
@@ -152,12 +151,6 @@ describe("identity gate", () => {
     expect(code).not.toBe("AUTH_FAILED");
   });
 
-  it("proceeds when single session active and no identity (backward compat)", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(1);
-    let code: string | undefined;
-    try { code = errorCode(await call({})); } catch { /* gate passed, other error ok */ }
-    expect(code).not.toBe("SID_REQUIRED");
-  });
 });
 
 });

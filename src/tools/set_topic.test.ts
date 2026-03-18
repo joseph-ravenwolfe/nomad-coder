@@ -29,6 +29,8 @@ describe("set_topic tool", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.validateSession.mockReturnValue(true);
+    mocks.validateSession.mockReturnValue(true);
     mocks.getTopic.mockReturnValue(null);
     const server = createMockServer();
     register(server);
@@ -37,7 +39,7 @@ describe("set_topic tool", () => {
 
   it("sets a topic and returns { topic, previous, set: true }", async () => {
     mocks.getTopic.mockReturnValueOnce(null).mockReturnValueOnce("Refactor Agent");
-    const result = await call({ topic: "Refactor Agent" });
+    const result = await call({ topic: "Refactor Agent", identity: [1, 123456]});
     expect(isError(result)).toBe(false);
     const data = parseResult(result);
     expect(data.set).toBe(true);
@@ -48,7 +50,7 @@ describe("set_topic tool", () => {
 
   it("replaces an existing topic", async () => {
     mocks.getTopic.mockReturnValueOnce("Old Topic").mockReturnValueOnce("New Topic");
-    const result = await call({ topic: "New Topic" });
+    const result = await call({ topic: "New Topic", identity: [1, 123456]});
     const data = parseResult(result);
     expect(data.previous).toBe("Old Topic");
     expect(data.topic).toBe("New Topic");
@@ -56,7 +58,7 @@ describe("set_topic tool", () => {
 
   it("clears topic when empty string passed", async () => {
     mocks.getTopic.mockReturnValueOnce("Refactor Agent");
-    const result = await call({ topic: "" });
+    const result = await call({ topic: "", identity: [1, 123456]});
     expect(isError(result)).toBe(false);
     const data = parseResult(result);
     expect(data.cleared).toBe(true);
@@ -68,30 +70,27 @@ describe("set_topic tool", () => {
 
   it("clears topic when whitespace-only string passed", async () => {
     mocks.getTopic.mockReturnValueOnce("Test Runner");
-    const result = await call({ topic: "   " });
+    const result = await call({ topic: "   ", identity: [1, 123456]});
     const data = parseResult(result);
     expect(data.cleared).toBe(true);
     expect(mocks.clearTopic).toHaveBeenCalledOnce();
   });
 
 describe("identity gate", () => {
-  it("returns SID_REQUIRED when multiple sessions active and no identity", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(2);
+  it("returns SID_REQUIRED when no identity provided", async () => {
     const result = await call({"topic":"x"});
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("SID_REQUIRED");
   });
 
   it("returns AUTH_FAILED when identity has wrong pin", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(2);
     mocks.validateSession.mockReturnValueOnce(false);
     const result = await call({"topic":"x","identity":[1,99999]});
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("AUTH_FAILED");
   });
 
-  it("proceeds when multiple sessions active and identity is valid", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(2);
+  it("proceeds when identity is valid", async () => {
     mocks.validateSession.mockReturnValueOnce(true);
     let code: string | undefined;
     try { code = errorCode(await call({"topic":"x","identity":[1,99999]})); } catch { /* gate passed, other error ok */ }
@@ -99,12 +98,6 @@ describe("identity gate", () => {
     expect(code).not.toBe("AUTH_FAILED");
   });
 
-  it("proceeds when single session active and no identity (backward compat)", async () => {
-    mocks.activeSessionCount.mockReturnValueOnce(1);
-    let code: string | undefined;
-    try { code = errorCode(await call({"topic":"x"})); } catch { /* gate passed, other error ok */ }
-    expect(code).not.toBe("SID_REQUIRED");
-  });
 });
 
 });

@@ -74,7 +74,7 @@ describe("close_session tool", () => {
     mocks.getGovernorSid.mockReturnValue(0);
     mocks.listSessions.mockReturnValue([]);
     mocks.sendServiceMessage.mockResolvedValue(undefined);
-    mocks.getSession.mockReturnValue({ sid: 1, pin: 123456, name: "Alpha", createdAt: "2026-03-17" });
+    mocks.getSession.mockReturnValue({ identity: [1, 123456], name: "Alpha", createdAt: "2026-03-17" });
     mocks.drainQueue.mockReturnValue([]);
     mocks.resolveChat.mockReturnValue(1001);
     const server = createMockServer();
@@ -85,7 +85,7 @@ describe("close_session tool", () => {
   it("rejects invalid credentials", async () => {
     mocks.validateSession.mockReturnValue(false);
 
-    const result = await call({ sid: 1, pin: 999999 });
+    const result = await call({ identity: [1, 999999] });
 
     expect(isError(result)).toBe(true);
     const parsed = parseResult(result);
@@ -93,7 +93,7 @@ describe("close_session tool", () => {
   });
 
   it("closes an existing session", async () => {
-    const result = parseResult(await call({ sid: 1, pin: 123456 }));
+    const result = parseResult(await call({ identity: [1, 123456] }));
 
     expect(mocks.closeSession).toHaveBeenCalledWith(1);
     expect(result.closed).toBe(true);
@@ -103,14 +103,14 @@ describe("close_session tool", () => {
   it("returns not_found for nonexistent session", async () => {
     mocks.closeSession.mockReturnValue(false);
 
-    const result = parseResult(await call({ sid: 99, pin: 123456 }));
+    const result = parseResult(await call({ identity: [99, 123456] }));
 
     expect(result.closed).toBe(false);
     expect(result.sid).toBe(99);
   });
 
   it("validates credentials before closing", async () => {
-    await call({ sid: 2, pin: 654321 });
+    await call({ identity: [2, 654321] });
 
     expect(mocks.validateSession).toHaveBeenCalledWith(2, 654321);
     // validateSession is called before closeSession
@@ -122,7 +122,7 @@ describe("close_session tool", () => {
   it("does not call closeSession when auth fails", async () => {
     mocks.validateSession.mockReturnValue(false);
 
-    await call({ sid: 1, pin: 999999 });
+    await call({ identity: [1, 999999] });
 
     expect(mocks.closeSession).not.toHaveBeenCalled();
   });
@@ -130,7 +130,7 @@ describe("close_session tool", () => {
   it("resets active session to 0 when closing the active session", async () => {
     mocks.getActiveSession.mockReturnValue(1);
 
-    await call({ sid: 1, pin: 123456 });
+    await call({ identity: [1, 123456] });
 
     expect(mocks.setActiveSession).toHaveBeenCalledWith(0);
   });
@@ -138,7 +138,7 @@ describe("close_session tool", () => {
   it("does not reset active session when closing a different session", async () => {
     mocks.getActiveSession.mockReturnValue(2);
 
-    await call({ sid: 1, pin: 123456 });
+    await call({ identity: [1, 123456] });
 
     expect(mocks.setActiveSession).not.toHaveBeenCalled();
   });
@@ -146,7 +146,7 @@ describe("close_session tool", () => {
   it("clears governor SID when governor session closes", async () => {
     mocks.getGovernorSid.mockReturnValue(1);
 
-    await call({ sid: 1, pin: 123456 });
+    await call({ identity: [1, 123456] });
 
     expect(mocks.setGovernorSid).toHaveBeenCalledWith(0);
     expect(mocks.sendServiceMessage).toHaveBeenCalledWith(
@@ -157,7 +157,7 @@ describe("close_session tool", () => {
   it("does not change governor SID when non-governor closes", async () => {
     mocks.getGovernorSid.mockReturnValue(5);
 
-    await call({ sid: 1, pin: 123456 });
+    await call({ identity: [1, 123456] });
 
     expect(mocks.setGovernorSid).not.toHaveBeenCalled();
     // disconnect notification is always sent, but no routing-change message
@@ -171,7 +171,7 @@ describe("close_session tool", () => {
     mocks.getGovernorSid.mockReturnValue(1);
     mocks.sendServiceMessage.mockRejectedValue(new Error("network"));
 
-    const result = parseResult(await call({ sid: 1, pin: 123456 }));
+    const result = parseResult(await call({ identity: [1, 123456] }));
     expect(result.closed).toBe(true);
   });
 
@@ -182,7 +182,7 @@ describe("close_session tool", () => {
       { sid: 3, name: "Scout", createdAt: "2026-03-17" },
     ]);
 
-    await call({ sid: 1, pin: 123456 });
+    await call({ identity: [1, 123456] });
 
     expect(mocks.setGovernorSid).toHaveBeenCalledWith(2);
     expect(mocks.sendServiceMessage).toHaveBeenCalledWith(
@@ -194,7 +194,7 @@ describe("close_session tool", () => {
     mocks.getGovernorSid.mockReturnValue(1);
     mocks.listSessions.mockReturnValue([]); // no sessions remain
 
-    await call({ sid: 1, pin: 123456 });
+    await call({ identity: [1, 123456] });
 
     expect(mocks.setGovernorSid).toHaveBeenCalledWith(0);
     expect(mocks.sendServiceMessage).toHaveBeenCalledWith(
@@ -209,7 +209,7 @@ describe("close_session tool", () => {
       { sid: 3, name: "Early", createdAt: "2026-03-17" },
     ]);
 
-    await call({ sid: 2, pin: 123456 });
+    await call({ identity: [2, 123456] });
 
     expect(mocks.setGovernorSid).toHaveBeenCalledWith(3);
   });
@@ -221,7 +221,7 @@ describe("close_session tool", () => {
       { sid: 3, name: "Scout", createdAt: "2026-03-17" },
     ]);
 
-    await call({ sid: 1, pin: 123456 });
+    await call({ identity: [1, 123456] });
 
     expect(mocks.sendServiceMessage).toHaveBeenCalledWith(
       expect.stringContaining("Primary"),
@@ -235,7 +235,7 @@ describe("close_session tool", () => {
       { sid: 3, name: "Scout", createdAt: "2026-03-17" },
     ]);
 
-    await call({ sid: 1, pin: 123456 });
+    await call({ identity: [1, 123456] });
 
     expect(mocks.sendServiceMessage).toHaveBeenCalledWith(
       expect.stringContaining("Session 2"),
@@ -252,7 +252,7 @@ describe("close_session tool", () => {
       { sid: 2, name: "Worker", createdAt: "2026-03-17" },
     ]);
 
-    await call({ sid: 1, pin: 123456 });
+    await call({ identity: [1, 123456] });
 
     expect(mocks.setGovernorSid).toHaveBeenCalledWith(0);
     expect(mocks.sendServiceMessage).toHaveBeenCalledWith(
@@ -266,7 +266,7 @@ describe("close_session tool", () => {
       { sid: 1, name: "Primary", createdAt: "2026-03-17" },
     ]);
 
-    await call({ sid: 2, pin: 123456 });
+    await call({ identity: [2, 123456] });
 
     expect(mocks.setGovernorSid).toHaveBeenCalledWith(0);
     expect(mocks.sendServiceMessage).toHaveBeenCalledWith(
@@ -280,7 +280,7 @@ describe("close_session tool", () => {
       { sid: 2, name: "Worker", createdAt: "2026-03-17" },
     ]);
 
-    await call({ sid: 1, pin: 123456 });
+    await call({ identity: [1, 123456] });
 
     expect(mocks.deliverDirectMessage).toHaveBeenCalledWith(
       0,
@@ -293,7 +293,7 @@ describe("close_session tool", () => {
     mocks.getGovernorSid.mockReturnValue(0);
     mocks.listSessions.mockReturnValue([]);
 
-    await call({ sid: 1, pin: 123456 });
+    await call({ identity: [1, 123456] });
 
     expect(mocks.deliverDirectMessage).not.toHaveBeenCalled();
   });
@@ -306,7 +306,7 @@ describe("close_session tool", () => {
       { sid: 4, name: "C", createdAt: "2026-03-17" },
     ]);
 
-    await call({ sid: 1, pin: 123456 });
+    await call({ identity: [1, 123456] });
 
     expect(mocks.setGovernorSid).not.toHaveBeenCalled();
     // Only the disconnect notification is sent — no routing-change message
@@ -322,9 +322,9 @@ describe("close_session tool", () => {
   // =========================================================================
 
   it("always sends operator disconnect notification with session name", async () => {
-    mocks.getSession.mockReturnValue({ sid: 1, pin: 123456, name: "Orion", createdAt: "2026-03-17" });
+    mocks.getSession.mockReturnValue({ identity: [1, 123456], name: "Orion", createdAt: "2026-03-17" });
 
-    await call({ sid: 1, pin: 123456 });
+    await call({ identity: [1, 123456] });
 
     expect(mocks.sendServiceMessage).toHaveBeenCalledWith(
       expect.stringContaining("🤖 Orion has disconnected."),
@@ -332,9 +332,9 @@ describe("close_session tool", () => {
   });
 
   it("uses 'Session N' label in disconnect notification when session has no name", async () => {
-    mocks.getSession.mockReturnValue({ sid: 3, pin: 123456, name: "", createdAt: "2026-03-17" });
+    mocks.getSession.mockReturnValue({ identity: [3, 123456], name: "", createdAt: "2026-03-17" });
 
-    await call({ sid: 3, pin: 123456 });
+    await call({ identity: [3, 123456] });
 
     expect(mocks.sendServiceMessage).toHaveBeenCalledWith(
       expect.stringContaining("🤖 Session 3 has disconnected."),
@@ -344,7 +344,7 @@ describe("close_session tool", () => {
   it("uses 'Session N' label when getSession returns undefined", async () => {
     mocks.getSession.mockReturnValue(undefined);
 
-    await call({ sid: 5, pin: 123456 });
+    await call({ identity: [5, 123456] });
 
     expect(mocks.sendServiceMessage).toHaveBeenCalledWith(
       expect.stringContaining("🤖 Session 5 has disconnected."),
@@ -360,7 +360,7 @@ describe("close_session tool", () => {
     mocks.drainQueue.mockReturnValue([orphanedEvent]);
     mocks.listSessions.mockReturnValue([{ sid: 2, name: "Beta", createdAt: "2026-03-17" }]);
 
-    await call({ sid: 1, pin: 123456 });
+    await call({ identity: [1, 123456] });
 
     expect(mocks.drainQueue).toHaveBeenCalledWith(1);
     expect(mocks.routeToSession).toHaveBeenCalledWith(orphanedEvent, "message");
@@ -371,7 +371,7 @@ describe("close_session tool", () => {
     mocks.drainQueue.mockReturnValue([callbackEvent]);
     mocks.listSessions.mockReturnValue([{ sid: 2, name: "Beta", createdAt: "2026-03-17" }]);
 
-    await call({ sid: 1, pin: 123456 });
+    await call({ identity: [1, 123456] });
 
     expect(mocks.routeToSession).toHaveBeenCalledWith(callbackEvent, "response");
   });
@@ -381,7 +381,7 @@ describe("close_session tool", () => {
     mocks.drainQueue.mockReturnValue([orphanedEvent]);
     mocks.listSessions.mockReturnValue([]); // no sessions
 
-    await call({ sid: 1, pin: 123456 });
+    await call({ identity: [1, 123456] });
 
     expect(mocks.routeToSession).not.toHaveBeenCalled();
   });
@@ -390,7 +390,7 @@ describe("close_session tool", () => {
     mocks.drainQueue.mockReturnValue([]);
     mocks.listSessions.mockReturnValue([{ sid: 2, name: "Beta", createdAt: "2026-03-17" }]);
 
-    await call({ sid: 1, pin: 123456 });
+    await call({ identity: [1, 123456] });
 
     expect(mocks.routeToSession).not.toHaveBeenCalled();
   });
@@ -400,7 +400,7 @@ describe("close_session tool", () => {
   // =========================================================================
 
   it("replaces pending callback hooks with session-closed responders", async () => {
-    await call({ sid: 1, pin: 123456 });
+    await call({ identity: [1, 123456] });
 
     expect(mocks.replaceSessionCallbackHooks).toHaveBeenCalledWith(
       1,
@@ -411,7 +411,7 @@ describe("close_session tool", () => {
   it("does not replace hooks if session close fails", async () => {
     mocks.closeSession.mockReturnValue(false);
 
-    await call({ sid: 1, pin: 123456 });
+    await call({ identity: [1, 123456] });
 
     expect(mocks.replaceSessionCallbackHooks).not.toHaveBeenCalled();
   });
@@ -422,10 +422,10 @@ describe("close_session tool", () => {
 
   it("sends session_closed service message to remaining session when non-governor closes", async () => {
     mocks.getGovernorSid.mockReturnValue(0); // no governor (single-session logic)
-    mocks.getSession.mockReturnValue({ sid: 1, pin: 123456, name: "Worker", createdAt: "2026-03-17" });
+    mocks.getSession.mockReturnValue({ identity: [1, 123456], name: "Worker", createdAt: "2026-03-17" });
     mocks.listSessions.mockReturnValue([{ sid: 2, name: "Primary", createdAt: "2026-03-17" }]);
 
-    await call({ sid: 1, pin: 123456 });
+    await call({ identity: [1, 123456] });
 
     const calls = mocks.deliverServiceMessage.mock.calls;
     const toRemaining = calls.find((c: unknown[]) => c[0] === 2);
@@ -436,13 +436,13 @@ describe("close_session tool", () => {
 
   it("sends governor_promoted service message to newly promoted session", async () => {
     mocks.getGovernorSid.mockReturnValue(1); // closing session is governor
-    mocks.getSession.mockReturnValue({ sid: 1, pin: 123456, name: "Primary", createdAt: "2026-03-17" });
+    mocks.getSession.mockReturnValue({ identity: [1, 123456], name: "Primary", createdAt: "2026-03-17" });
     mocks.listSessions.mockReturnValue([
       { sid: 2, name: "Scout", createdAt: "2026-03-17" },
       { sid: 3, name: "Helper", createdAt: "2026-03-17" },
     ]);
 
-    await call({ sid: 1, pin: 123456 });
+    await call({ identity: [1, 123456] });
 
     const calls = mocks.deliverServiceMessage.mock.calls;
     const promotionMsg = calls.find((c: unknown[]) => c[2] === "governor_promoted");
@@ -459,7 +459,7 @@ describe("close_session tool", () => {
     mocks.getGovernorSid.mockReturnValue(0);
     mocks.listSessions.mockReturnValue([]);
 
-    await call({ sid: 1, pin: 123456 });
+    await call({ identity: [1, 123456] });
 
     expect(mocks.deliverServiceMessage).not.toHaveBeenCalled();
   });
@@ -473,9 +473,9 @@ describe("close_session tool", () => {
   // =========================================================================
 
   it("a session can self-close using its own credentials (no server-side restriction)", async () => {
-    mocks.getSession.mockReturnValue({ sid: 2, pin: 222222, name: "Scout", createdAt: "2026-03-17" });
+    mocks.getSession.mockReturnValue({ identity: [2, 222222], name: "Scout", createdAt: "2026-03-17" });
 
-    const result = parseResult(await call({ sid: 2, pin: 222222 }));
+    const result = parseResult(await call({ identity: [2, 222222] }));
 
     expect(result.closed).toBe(true);
     expect(result.sid).toBe(2);

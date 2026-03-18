@@ -546,7 +546,6 @@ Bad topics: `Working`, `Agent`, `Session 2`
 | --- | --- |
 | Forward an operator message to another session | `route_message` |
 | Send a private note to another session | `send_direct_message` |
-| Request DM access from another session | `request_dm_access` |
 
 **`route_message`** — Re-delivers an existing message from your queue to another session's queue. The target session sees the original message with `routing: "targeted"` and a `routed_by` field set to your session ID.
 

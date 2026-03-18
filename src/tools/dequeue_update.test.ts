@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   getSessionQueue: vi.fn(() => undefined),
   getMessageOwner: vi.fn(() => 0),
   touchSession: vi.fn(),
+  validateSession: vi.fn(() => true),
 }));
 
 vi.mock("../telegram.js", async (importActual) => {
@@ -31,6 +32,7 @@ vi.mock("../session-manager.js", () => ({
   setActiveSession: (...args: unknown[]) => mocks.setActiveSession(...args),
   activeSessionCount: () => mocks.activeSessionCount(),
   touchSession: (...args: unknown[]) => mocks.touchSession(...args),
+  validateSession: (...args: unknown[]) => mocks.validateSession(...args),
 }));
 
 vi.mock("../session-queue.js", () => ({
@@ -38,6 +40,8 @@ vi.mock("../session-queue.js", () => ({
   getSessionQueue: (...args: unknown[]) => mocks.getSessionQueue(...(args as [])),
   getMessageOwner: (...args: unknown[]) => mocks.getMessageOwner(...(args as [])),
 }));
+
+
 
 
 
@@ -81,8 +85,15 @@ describe("dequeue_update tool", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.validateSession.mockReturnValue(true);
     mocks.pendingCount.mockReturnValue(0);
     mocks.waitForEnqueue.mockResolvedValue(undefined);
+    // Default session queue for any sid proxies to the global mock fns
+    mocks.getSessionQueue.mockImplementation(() => ({
+      dequeueBatch: () => mocks.dequeueBatch(),
+      pendingCount: () => mocks.pendingCount(),
+      waitForEnqueue: () => mocks.waitForEnqueue(),
+    }));
     const server = createMockServer();
     register(server);
     call = server.getHandler("dequeue_update");
@@ -91,7 +102,7 @@ describe("dequeue_update tool", () => {
   it("returns batch of events when available", async () => {
     const evt = makeEvent(1, "Hello");
     mocks.dequeueBatch.mockReturnValueOnce([evt]);
-    const result = await call({ timeout: 0 });
+    const result = await call({ timeout: 0, identity: [1, 123456] });
     expect(isError(result)).toBe(false);
     const data = parseResult(result);
     expect(data.updates).toHaveLength(1);
@@ -103,7 +114,7 @@ describe("dequeue_update tool", () => {
   it("strips _update and timestamp from compact output", async () => {
     const evt = makeEvent(2, "Hi");
     mocks.dequeueBatch.mockReturnValueOnce([evt]);
-    const result = await call({ timeout: 0 });
+    const result = await call({ timeout: 0, identity: [1, 123456] });
     const data = parseResult(result);
     expect(data.updates[0]._update).toBeUndefined();
     expect(data.updates[0].timestamp).toBeUndefined();
@@ -113,7 +124,7 @@ describe("dequeue_update tool", () => {
     const evt = makeEvent(3, "A");
     mocks.dequeueBatch.mockReturnValueOnce([evt]);
     mocks.pendingCount.mockReturnValue(2);
-    const result = await call({ timeout: 0 });
+    const result = await call({ timeout: 0, identity: [1, 123456] });
     const data = parseResult(result);
     expect(data.pending).toBe(2);
   });
@@ -122,14 +133,14 @@ describe("dequeue_update tool", () => {
     const evt = makeEvent(4, "B");
     mocks.dequeueBatch.mockReturnValueOnce([evt]);
     mocks.pendingCount.mockReturnValue(0);
-    const result = await call({ timeout: 0 });
+    const result = await call({ timeout: 0, identity: [1, 123456] });
     const data = parseResult(result);
     expect(data.pending).toBeUndefined();
   });
 
   it("returns empty when queue is empty and timeout is 0 (instant poll)", async () => {
     mocks.dequeueBatch.mockReturnValue([]);
-    const result = await call({ timeout: 0 });
+    const result = await call({ timeout: 0, identity: [1, 123456] });
     expect(isError(result)).toBe(false);
     const data = parseResult(result);
     expect(data.empty).toBe(true);
@@ -142,7 +153,7 @@ describe("dequeue_update tool", () => {
     // First call returns nothing, second call returns event
     mocks.dequeueBatch.mockReturnValueOnce([]).mockReturnValueOnce([evt]);
     mocks.waitForEnqueue.mockResolvedValue(undefined);
-    const result = await call({ timeout: 1 });
+    const result = await call({ timeout: 1, identity: [1, 123456] });
     expect(isError(result)).toBe(false);
     const data = parseResult(result);
     expect(data.updates).toHaveLength(1);
@@ -156,7 +167,7 @@ describe("dequeue_update tool", () => {
     mocks.waitForEnqueue.mockImplementation(
       () => new Promise<void>((r) => setTimeout(r, 50)),
     );
-    const result = await call({ timeout: 1 });
+    const result = await call({ timeout: 1, identity: [1, 123456] });
     const data = parseResult(result);
     expect(data.timed_out).toBe(true);
     expect(data.pending).toBe(0);
@@ -167,13 +178,13 @@ describe("dequeue_update tool", () => {
     mocks.waitForEnqueue.mockImplementation(
       () => new Promise<void>((r) => setTimeout(r, 50)),
     );
-    await call({ timeout: 1 });
+    await call({ timeout: 1, identity: [1, 123456] });
     expect(mocks.waitForEnqueue).toHaveBeenCalled();
   });
 
   it("does not call waitForEnqueue when timeout is 0", async () => {
     mocks.dequeueBatch.mockReturnValue([]);
-    await call({ timeout: 0 });
+    await call({ timeout: 0, identity: [1, 123456] });
     expect(mocks.waitForEnqueue).not.toHaveBeenCalled();
   });
 
@@ -183,7 +194,7 @@ describe("dequeue_update tool", () => {
     mocks.waitForEnqueue.mockImplementation(
       () => new Promise<void>((r) => setTimeout(r, 50)),
     );
-    const result = await call({ timeout: 1 });
+    const result = await call({ timeout: 1, identity: [1, 123456] });
     const data = parseResult(result);
     expect(data.timed_out).toBe(true);
     expect(data.pending).toBe(3);
@@ -192,7 +203,7 @@ describe("dequeue_update tool", () => {
   it("reports pending 0 on instant poll when queue is truly empty (#7)", async () => {
     mocks.dequeueBatch.mockReturnValue([]);
     mocks.pendingCount.mockReturnValue(0);
-    const result = await call({ timeout: 0 });
+    const result = await call({ timeout: 0, identity: [1, 123456] });
     const data = parseResult(result);
     expect(data.empty).toBe(true);
     expect(data.timed_out).toBeUndefined();
@@ -207,7 +218,7 @@ describe("dequeue_update tool", () => {
       .mockReturnValueOnce([])   // empty on first check → triggers block wait
       .mockReturnValueOnce([evt]); // event arrives after enqueue
     mocks.waitForEnqueue.mockResolvedValue(undefined);
-    const result = await call({});
+    const result = await call({ identity: [1, 123456] });
     expect(mocks.waitForEnqueue).toHaveBeenCalled();
     const data = parseResult(result);
     expect(data.updates).toHaveLength(1);
@@ -221,7 +232,7 @@ describe("dequeue_update tool", () => {
     const reaction = makeReaction(10, 5);
     const message = makeEvent(11, "Hello after reaction");
     mocks.dequeueBatch.mockReturnValueOnce([reaction, message]);
-    const result = await call({ timeout: 0 });
+    const result = await call({ timeout: 0, identity: [1, 123456] });
     const data = parseResult(result);
     expect(data.updates).toHaveLength(2);
     expect(data.updates[0].event).toBe("reaction");
@@ -233,7 +244,7 @@ describe("dequeue_update tool", () => {
     const r1 = makeReaction(10, 5);
     const r2 = makeReaction(11, 6);
     mocks.dequeueBatch.mockReturnValueOnce([r1, r2]);
-    const result = await call({ timeout: 0 });
+    const result = await call({ timeout: 0, identity: [1, 123456] });
     const data = parseResult(result);
     expect(data.updates).toHaveLength(2);
     expect(data.updates[0].event).toBe("reaction");
@@ -247,14 +258,14 @@ describe("dequeue_update tool", () => {
   it("acks voice messages on dequeue", async () => {
     const evt = makeVoiceEvent(77);
     mocks.dequeueBatch.mockReturnValueOnce([evt]);
-    await call({ timeout: 0 });
+    await call({ timeout: 0, identity: [1, 123456] });
     expect(mocks.ackVoiceMessage).toHaveBeenCalledWith(77);
   });
 
   it("does not call ackVoiceMessage for non-voice events", async () => {
     const evt = makeEvent(88, "text message");
     mocks.dequeueBatch.mockReturnValueOnce([evt]);
-    await call({ timeout: 0 });
+    await call({ timeout: 0, identity: [1, 123456] });
     expect(mocks.ackVoiceMessage).not.toHaveBeenCalled();
   });
 
@@ -270,7 +281,7 @@ describe("dequeue_update tool", () => {
     mocks.getActiveSession.mockReturnValueOnce(3);
     mocks.getSessionQueue.mockReturnValueOnce(mockSessionQueue);
 
-    await call({ timeout: 0 });
+    await call({ timeout: 0, identity: [1, 123456] });
     expect(mocks.ackVoiceMessage).toHaveBeenCalledWith(90);
   });
 
@@ -285,7 +296,7 @@ describe("dequeue_update tool", () => {
     mocks.getActiveSession.mockReturnValueOnce(3);
     mocks.getSessionQueue.mockReturnValueOnce(mockSessionQueue);
 
-    await call({ timeout: 0 });
+    await call({ timeout: 0, identity: [1, 123456] });
     expect(mocks.ackVoiceMessage).toHaveBeenCalledWith(91);
     expect(mocks.ackVoiceMessage).toHaveBeenCalledWith(92);
   });
@@ -304,7 +315,7 @@ describe("dequeue_update tool", () => {
     mocks.getActiveSession.mockReturnValue(3);
     mocks.getSessionQueue.mockReturnValue(mockSessionQueue);
 
-    await call({ timeout: 1 });
+    await call({ timeout: 1, identity: [1, 123456] });
     expect(mocks.ackVoiceMessage).toHaveBeenCalledWith(93);
     mocks.getActiveSession.mockReturnValue(0);
     mocks.getSessionQueue.mockReturnValue(undefined);
@@ -321,7 +332,7 @@ describe("dequeue_update tool", () => {
     mocks.getActiveSession.mockReturnValueOnce(3);
     mocks.getSessionQueue.mockReturnValueOnce(mockSessionQueue);
 
-    await call({ timeout: 0 });
+    await call({ timeout: 0, identity: [1, 123456] });
     expect(mocks.ackVoiceMessage).toHaveBeenCalledTimes(1);
     expect(mocks.ackVoiceMessage).toHaveBeenCalledWith(94);
   });
@@ -335,7 +346,7 @@ describe("dequeue_update tool", () => {
       .mockReturnValueOnce([evt]);
     mocks.waitForEnqueue.mockResolvedValue(undefined);
 
-    await call({ timeout: 1 });
+    await call({ timeout: 1, identity: [1, 123456] });
     expect(mocks.ackVoiceMessage).toHaveBeenCalledWith(96);
   });
 
@@ -353,7 +364,7 @@ describe("dequeue_update tool", () => {
     mocks.getActiveSession.mockReturnValueOnce(7);
     mocks.getSessionQueue.mockReturnValueOnce(mockSessionQueue);
 
-    const result = await call({ timeout: 0 });
+    const result = await call({ timeout: 0, identity: [1, 123456] });
     const data = parseResult(result);
     expect(data.updates[0].id).toBe(55);
     expect(mockSessionQueue.dequeueBatch).toHaveBeenCalled();
@@ -369,7 +380,7 @@ describe("dequeue_update tool", () => {
     mocks.getActiveSession.mockReturnValue(7);
     mocks.getSessionQueue.mockReturnValue(mockSessionQueue);
 
-    const result = await call({ timeout: 1 });
+    const result = await call({ timeout: 1, identity: [1, 123456] });
     const data = parseResult(result);
     expect(data.updates[0].id).toBe(56);
     expect(mockSessionQueue.waitForEnqueue).toHaveBeenCalled();
@@ -382,7 +393,7 @@ describe("dequeue_update tool", () => {
     mocks.dequeueBatch.mockReturnValueOnce([]).mockReturnValueOnce([evt]);
     mocks.pendingCount.mockReturnValue(3);
     mocks.waitForEnqueue.mockResolvedValue(undefined);
-    const result = await call({ timeout: 1 });
+    const result = await call({ timeout: 1, identity: [1, 123456] });
     const data = parseResult(result);
     expect(data.updates[0].id).toBe(66);
     expect(data.pending).toBe(3);
@@ -401,7 +412,7 @@ describe("dequeue_update tool", () => {
       sid === 3 ? mockSessionQueue : undefined,
     );
 
-    const result = await call({ sid: 3, timeout: 0 });
+    const result = await call({ identity: [3, 1234], timeout: 0 });
     const data = parseResult(result);
     expect(data.updates[0].id).toBe(70);
     // getSessionQueue was called with the explicit sid, not the active one
@@ -411,36 +422,11 @@ describe("dequeue_update tool", () => {
     expect(mocks.setActiveSession).toHaveBeenCalledWith(3);
   });
 
-  it("falls back to getActiveSession when sid param is omitted (single session)", async () => {
-    const evt = makeEvent(71, "fallback to active");
-    const mockSessionQueue = {
-      dequeueBatch: vi.fn(() => [evt] as TimelineEvent[]),
-      pendingCount: vi.fn(() => 0),
-      waitForEnqueue: vi.fn().mockResolvedValue(undefined),
-    };
-    // Single session — fallback is allowed
-    mocks.activeSessionCount.mockReturnValueOnce(1);
-    mocks.getActiveSession.mockReturnValueOnce(5);
-    mocks.getSessionQueue.mockImplementationOnce((sid: number) =>
-      sid === 5 ? mockSessionQueue : undefined,
-    );
-
-    const result = await call({ timeout: 0 });
-    const data = parseResult(result);
-    expect(data.updates[0].id).toBe(71);
-    expect(mocks.getSessionQueue).toHaveBeenCalledWith(5);
-    // setActiveSession not called when sid is omitted
-    expect(mocks.setActiveSession).not.toHaveBeenCalled();
-  });
-
-  it("returns SID_REQUIRED error when sid omitted with multiple sessions active", async () => {
-    mocks.activeSessionCount.mockReturnValue(2);
+  it("returns SID_REQUIRED error when identity is omitted", async () => {
     const result = await call({ timeout: 0 });
     expect(isError(result)).toBe(true);
     const text = JSON.stringify(result);
     expect(text).toContain("SID_REQUIRED");
-    expect(text).toContain("Multiple sessions are active");
-    mocks.activeSessionCount.mockReturnValue(0);
   });
 
   it("always re-syncs setActiveSession on return when explicit sid provided", async () => {
@@ -454,7 +440,7 @@ describe("dequeue_update tool", () => {
       sid === 3 ? mockSessionQueue : undefined,
     );
 
-    await call({ sid: 3, timeout: 0 });
+    await call({ identity: [3, 1234], timeout: 0 });
     // resync always fires so subsequent tool calls see the correct session
     expect(mocks.setActiveSession).toHaveBeenCalledWith(3);
   });
@@ -471,7 +457,7 @@ describe("dequeue_update tool", () => {
       sid === 5 ? mockSessionQueue : undefined,
     );
 
-    const result = await call({ sid: 5, timeout: 1 });
+    const result = await call({ identity: [5, 1234], timeout: 1 });
     const data = parseResult(result);
     expect(data.updates).toBeDefined();
     // setActiveSession should have been called at least twice (start + return)
@@ -494,7 +480,7 @@ describe("dequeue_update tool", () => {
 
     const controller = new AbortController();
     void Promise.resolve().then(() => { controller.abort(); });
-    const result = await call({ sid: 4, timeout: 60 }, { signal: controller.signal });
+    const result = await call({ identity: [4, 1234], timeout: 60 }, { signal: controller.signal });
     const data = parseResult(result);
     expect(data.timed_out).toBe(true);
     // resync must fire even on abort path
@@ -503,7 +489,7 @@ describe("dequeue_update tool", () => {
 
   it("does not call setActiveSession on SESSION_NOT_FOUND error path", async () => {
     mocks.getSessionQueue.mockReturnValue(undefined);
-    await call({ sid: 99 });
+    await call({ identity: [99, 1234] });
     expect(mocks.setActiveSession).not.toHaveBeenCalled();
   });
 
@@ -515,7 +501,7 @@ describe("dequeue_update tool", () => {
     mocks.dequeueBatch.mockReturnValue([]);
     const controller = new AbortController();
     controller.abort();
-    const result = await call({ timeout: 60 }, { signal: controller.signal });
+    const result = await call({ timeout: 60, identity: [1, 123456] }, { signal: controller.signal });
     const data = parseResult(result);
     expect(data.timed_out).toBe(true);
   });
@@ -525,18 +511,65 @@ describe("dequeue_update tool", () => {
     mocks.waitForEnqueue.mockImplementation(() => new Promise(() => {})); // never resolves
     const controller = new AbortController();
     void Promise.resolve().then(() => { controller.abort(); });
-    const result = await call({ timeout: 60 }, { signal: controller.signal });
+    const result = await call({ timeout: 60, identity: [1, 123456] }, { signal: controller.signal });
     const data = parseResult(result);
     expect(data.timed_out).toBe(true);
   });
 
   it("returns error when explicit sid has no session queue", async () => {
     mocks.getSessionQueue.mockReturnValue(undefined);
-    const result = await call({ sid: 42 });
+    const result = await call({ identity: [42, 1234] });
     expect(isError(result)).toBe(true);
     const content = (result as { content: { text: string }[] }).content[0];
     expect(content.text).toContain("SESSION_NOT_FOUND");
     expect(content.text).toContain("sid=42");
+  });
+
+  // =========================================================================
+  // Auth gate — identity [sid, pin] always required
+  // =========================================================================
+
+  describe("auth gate", () => {
+    it("returns SID_REQUIRED when identity is omitted", async () => {
+      const result = await call({ timeout: 0 });
+      expect(isError(result)).toBe(true);
+      const text = JSON.stringify(result);
+      expect(text).toContain("SID_REQUIRED");
+    });
+
+    it("returns AUTH_FAILED when pin does not match", async () => {
+      mocks.validateSession.mockReturnValueOnce(false);
+      const result = await call({ identity: [3, 9999], timeout: 0 });
+      expect(isError(result)).toBe(true);
+      const text = JSON.stringify(result);
+      expect(text).toContain("AUTH_FAILED");
+    });
+
+    it("passes [sid, pin] to validateSession when identity provided", async () => {
+      const evt = makeEvent(1, "auth test");
+      const mockSessionQueue = {
+        dequeueBatch: vi.fn(() => [evt] as TimelineEvent[]),
+        pendingCount: vi.fn(() => 0),
+        waitForEnqueue: vi.fn().mockResolvedValue(undefined),
+      };
+      mocks.getSessionQueue.mockReturnValueOnce(mockSessionQueue);
+      await call({ identity: [3, 1234], timeout: 0 });
+      expect(mocks.validateSession).toHaveBeenCalledWith(3, 1234);
+    });
+
+    it("allows dequeue when identity is valid", async () => {
+      const evt = makeEvent(2, "authorized");
+      const mockSessionQueue = {
+        dequeueBatch: vi.fn(() => [evt] as TimelineEvent[]),
+        pendingCount: vi.fn(() => 0),
+        waitForEnqueue: vi.fn().mockResolvedValue(undefined),
+      };
+      mocks.getSessionQueue.mockReturnValueOnce(mockSessionQueue);
+      const result = await call({ identity: [3, 1234], timeout: 0 });
+      expect(isError(result)).toBe(false);
+      const data = parseResult(result);
+      expect(data.updates[0].id).toBe(2);
+    });
   });
 
   // =========================================================================
@@ -559,7 +592,7 @@ describe("dequeue_update tool", () => {
       mocks.getMessageOwner.mockReturnValue(0); // no owner → ambiguous
       const evt = makeEvent(10, "hello");
       mocks.dequeueBatch.mockReturnValueOnce([evt]);
-      const result = await call({ timeout: 0 });
+      const result = await call({ timeout: 0, identity: [1, 123456] });
       const data = parseResult(result);
       expect(data.updates[0].routing).toBe("ambiguous");
     });
@@ -568,7 +601,7 @@ describe("dequeue_update tool", () => {
       mocks.getMessageOwner.mockImplementation((msgId: number) => msgId === 50 ? 1 : 0);
       const evt = makeReplyEvent(10, 50);
       mocks.dequeueBatch.mockReturnValueOnce([evt]);
-      const result = await call({ timeout: 0 });
+      const result = await call({ timeout: 0, identity: [1, 123456] });
       const data = parseResult(result);
       expect(data.updates[0].routing).toBe("targeted");
     });
@@ -584,7 +617,7 @@ describe("dequeue_update tool", () => {
         _update: { update_id: 11 } as never,
       };
       mocks.dequeueBatch.mockReturnValueOnce([cbEvt]);
-      const result = await call({ timeout: 0 });
+      const result = await call({ timeout: 0, identity: [1, 123456] });
       const data = parseResult(result);
       expect(data.updates[0].routing).toBe("targeted");
     });
@@ -593,7 +626,7 @@ describe("dequeue_update tool", () => {
       mocks.getMessageOwner.mockReturnValue(0);
       const evt = makeEvent(12, "hi");
       mocks.dequeueBatch.mockReturnValueOnce([evt]);
-      const result = await call({ timeout: 0 });
+      const result = await call({ timeout: 0, identity: [1, 123456] });
       const data = parseResult(result);
       expect(data.updates[0].routing).toBe("ambiguous");
     });
@@ -603,7 +636,7 @@ describe("dequeue_update tool", () => {
       const evt1 = makeEvent(14, "first");
       const evt2 = makeEvent(15, "second");
       mocks.dequeueBatch.mockReturnValueOnce([evt1, evt2]);
-      const result = await call({ timeout: 0 });
+      const result = await call({ timeout: 0, identity: [1, 123456] });
       const data = parseResult(result);
       expect(data.updates[0].routing).toBe("ambiguous");
       expect(data.updates[1].routing).toBe("ambiguous");
@@ -614,7 +647,7 @@ describe("dequeue_update tool", () => {
       mocks.getMessageOwner.mockReturnValue(0); // untracked → 0
       const evt = makeReplyEvent(16, 999);
       mocks.dequeueBatch.mockReturnValueOnce([evt]);
-      const result = await call({ timeout: 0 });
+      const result = await call({ timeout: 0, identity: [1, 123456] });
       const data = parseResult(result);
       expect(data.updates[0].routing).toBe("ambiguous");
     });
@@ -635,24 +668,28 @@ describe("dequeue_update tool", () => {
       };
       mocks.activeSessionCount.mockReturnValue(1);
       mocks.getSessionQueue.mockReturnValueOnce(mockSessionQueue);
-      await call({ timeout: 0, sid: 5 });
+      await call({ timeout: 0, identity: [5, 1234] });
       expect(mocks.touchSession).toHaveBeenCalledWith(5);
     });
 
-    it("calls touchSession with active session sid when no explicit sid", async () => {
-      mocks.activeSessionCount.mockReturnValue(0);
-      mocks.getActiveSession.mockReturnValue(3);
+    it("calls touchSession with the sid from identity", async () => {
       mocks.dequeueBatch.mockReturnValueOnce([makeEvent(1, "hi")]);
       mocks.pendingCount.mockReturnValue(0);
-      await call({ timeout: 0 });
-      expect(mocks.touchSession).toHaveBeenCalledWith(3);
+      await call({ timeout: 0, identity: [1, 123456] });
+      expect(mocks.touchSession).toHaveBeenCalledWith(1);
     });
 
     it("does not call touchSession when sid is 0", async () => {
-      mocks.activeSessionCount.mockReturnValue(0);
-      mocks.getActiveSession.mockReturnValue(0);
-      mocks.dequeueBatch.mockReturnValueOnce([]);
-      await call({ timeout: 0 });
+      // identity [0, pin]: sid=0 → touchSession guard (sid > 0) prevents call
+      const mockQueue0 = {
+        dequeueBatch: vi.fn(() => [] as TimelineEvent[]),
+        pendingCount: vi.fn(() => 0),
+        waitForEnqueue: vi.fn().mockResolvedValue(undefined),
+      };
+      mocks.getSessionQueue.mockImplementation((sid: number) =>
+        sid === 0 ? mockQueue0 : undefined,
+      );
+      await call({ identity: [0, 123456], timeout: 0 });
       expect(mocks.touchSession).not.toHaveBeenCalled();
     });
 
@@ -668,7 +705,7 @@ describe("dequeue_update tool", () => {
       };
       mocks.activeSessionCount.mockReturnValue(1);
       mocks.getSessionQueue.mockReturnValue(mockSessionQueue);
-      await call({ timeout: 1, sid: 7 });
+      await call({ timeout: 1, identity: [7, 1234] });
       expect(mocks.touchSession).toHaveBeenCalledWith(7);
       mocks.getSessionQueue.mockReturnValue(undefined);
     });

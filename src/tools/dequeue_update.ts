@@ -1,11 +1,11 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { toResult, toError, ackVoiceMessage } from "../telegram.js";
+import { requireAuth } from "../session-gate.js";
 import {
-  dequeueBatch, pendingCount, waitForEnqueue,
   type TimelineEvent,
 } from "../message-store.js";
-import { getActiveSession, setActiveSession, activeSessionCount, touchSession } from "../session-manager.js";
+import { setActiveSession, touchSession } from "../session-manager.js";
 import { getSessionQueue, getMessageOwner } from "../session-queue.js";
 
 /** Auto-salute voice messages on dequeue so the user knows we received them. */
@@ -44,9 +44,7 @@ const DESCRIPTION =
   "pending > 0 means more updates are queued — call again. " +
   "Two modes: omit timeout (default 300 s) to block up to 300 s for the next update; " +
   "pass timeout: 0 for an instant non-blocking poll (use only for startup drain loops). " +
-  "Pass sid (from session_start result) when multiple sessions share the same server process — " +
-  "this pins the queue to the correct session instead of relying on global active-session state. " +
-  "Ensure session_start has been called.";
+  "identity [sid, pin] is always required — pass the tuple returned by session_start.";
 
 export function register(server: McpServer) {
   server.registerTool(
@@ -61,35 +59,23 @@ export function register(server: McpServer) {
           .max(300)
           .default(300)
           .describe("Seconds to block when queue is empty. Default 300 (5 min) blocks up to 300 s for the next update — optimized for agent listen loops. Pass 0 for an instant non-blocking poll (drain loops only). Max 300."),
-        sid: z
-          .number()
-          .int()
-          .min(1)
+        identity: z
+          .tuple([z.number().int(), z.number().int()])
           .optional()
-          .describe("Session ID returned by session_start. Pass this when multiple sessions share the same server process to ensure this call reads from the correct session queue."),
+          .describe(
+            "Identity tuple [sid, pin] from session_start. " +
+            "Always required — pass your [sid, pin] on every tool call.",
+          ),
       },
     },
-    async ({ timeout, sid: explicitSid }, { signal }) => {
-      // Multi-session safety: when >1 session is active, agents MUST pass
-      // sid explicitly — the global getActiveSession() fallback is a race
-      // condition that silently picks the wrong session.
-      if (explicitSid === undefined && activeSessionCount() > 1) {
-        return toError({
-          code: "SID_REQUIRED" as const,
-          message:
-            `Multiple sessions are active (${activeSessionCount()}). ` +
-            `Pass sid (from session_start) to identify your session.`,
-        });
-      }
+    async ({ timeout, identity }, { signal }) => {
+      const _sid = requireAuth(identity);
+      if (typeof _sid !== "number") return toError(_sid);
+      const sid = _sid;
 
-      // Session-aware queue selection: explicit sid takes priority over global
-      // active-session state (which is unreliable when multiple Copilot chat
-      // instances share the same server process).
-      const sid = explicitSid ?? getActiveSession();
-      const sessionQueue = sid > 0 ? getSessionQueue(sid) : undefined;
+      const sessionQueue = getSessionQueue(sid);
 
-      // Explicit sid with no queue means the session ended or never existed.
-      if (explicitSid !== undefined && sid > 0 && !sessionQueue) {
+      if (!sessionQueue) {
         return toError({
           code: "SESSION_NOT_FOUND" as const,
           message:
@@ -98,12 +84,14 @@ export function register(server: McpServer) {
         });
       }
 
+      const sq = sessionQueue;
+
       // Keep active session in sync — set at the start AND re-set before
       // each return so the global is correct when the next tool call dispatches.
       // (Concurrent tool calls from other sessions can overwrite the global
       // during the long wait; re-syncing here restores it.)
       function resyncActiveSession(): void {
-        if (explicitSid !== undefined) setActiveSession(explicitSid);
+        setActiveSession(sid);
       }
 
       resyncActiveSession();
@@ -112,20 +100,15 @@ export function register(server: McpServer) {
       if (sid > 0) touchSession(sid);
 
       function dequeueBatchAny(): TimelineEvent[] {
-        if (sessionQueue) {
-          const items = sessionQueue.dequeueBatch();
-          // Session queue stores raw TimelineEvent (not QueueItem)
-          return items;
-        }
-        return dequeueBatch();
+        return sq.dequeueBatch();
       }
 
       function pendingCountAny(): number {
-        return sessionQueue ? sessionQueue.pendingCount() : pendingCount();
+        return sq.pendingCount();
       }
 
       function waitForEnqueueAny(): Promise<void> {
-        return sessionQueue ? sessionQueue.waitForEnqueue() : waitForEnqueue();
+        return sq.waitForEnqueue();
       }
 
       // Try immediate batch dequeue
