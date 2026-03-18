@@ -40,6 +40,7 @@ vi.mock("./message-store.js", () => ({
   trackMessageId: vi.fn(),
 }));
 
+import { GrammyError } from "grammy";
 import {
   startAnimation,
   cancelAnimation,
@@ -198,6 +199,52 @@ describe("animation-state", () => {
       // First cycle fails — animation should be stopped
       await vi.advanceTimersByTimeAsync(2000);
       expect(isAnimationActive(1)).toBe(false);
+    });
+  });
+
+  // -- 429 rate-limiting ----------------------------------------------------
+
+  describe("429 rate-limiting", () => {
+    function make429(retryAfter = 0): GrammyError {
+      return new GrammyError(
+        "Too Many Requests",
+        { error_code: 429, ok: false, description: "retry after", parameters: { retry_after: retryAfter } },
+        null,
+      );
+    }
+
+    it("two concurrent 429s create only one resume interval", async () => {
+      // Set up editMessageText to hang (so two interval ticks fire before
+      // either resolves), then fail with 429, then succeed afterward.
+      let rejectFirst!: (e: unknown) => void;
+      let rejectSecond!: (e: unknown) => void;
+      mocks.editMessageText
+        .mockImplementationOnce(() => new Promise((_, rej) => { rejectFirst = rej; }))
+        .mockImplementationOnce(() => new Promise((_, rej) => { rejectSecond = rej; }))
+        .mockResolvedValue(undefined);
+
+      await startAnimation(1, ["A", "B"], 1000);
+
+      // Advance 2000 ms — fires the cycle interval at t=1000 and t=2000.
+      // Both cycleFrame calls are now in-flight (editMessageText is hanging).
+      await vi.advanceTimersByTimeAsync(2000);
+
+      // Deliver 429 errors to both in-flight frames.
+      // With the fix, the second 429 handler clears the first resumeTimer
+      // before scheduling its own — ensuring only one interval is created.
+      rejectFirst(make429(0));
+      rejectSecond(make429(0));
+
+      // Flush microtasks (catch blocks) then fire resumeTimers (setTimeout 0 ms).
+      // Use advanceTimersByTimeAsync(0) instead of runAllTimersAsync() to avoid
+      // infinitely running the newly-created setInterval.
+      await vi.advanceTimersByTimeAsync(0);
+
+      mocks.editMessageText.mockClear();
+
+      // Exactly one new cycleInterval should be running — one tick → one call
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(mocks.editMessageText).toHaveBeenCalledTimes(1);
     });
   });
 

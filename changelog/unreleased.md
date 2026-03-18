@@ -72,6 +72,7 @@
 - Added `session-context.test.ts` — 8 tests covering context persistence across awaits, concurrent isolation, nested contexts, and fallback to `getActiveSession`
 - Added 9 integration tests: cross-session isolation e2e (SID leak prevention, wrong-SID empty result, close-session message isolation), high-concurrency stress (50 msgs / 5 sessions, mixed routing modes), DM edge cases (non-existent session, closed session, orphaned permission, revokeAll both directions)
 - Added cross-session isolation tests to `button-helpers.test.ts` and `ask.test.ts` — verify that `confirm`/`choose` button callbacks and `ask` text replies are visible only to the polling session's own queue and never to another session's poll; implementation in `button-helpers.ts`, `confirm.ts`, `choose.ts`, `ask.ts`, and `dequeue_update.ts` confirmed correct
+- Added `"429 rate-limiting"` describe block to `animation-state.test.ts` — verifies that two concurrent 429 errors while a cycle is in-flight produce exactly one resume interval (not two), exercising the `clearTimeout(s.resumeTimer)` guard added in v3.1.3
 
 ## Changed
 
