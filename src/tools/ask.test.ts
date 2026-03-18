@@ -11,6 +11,16 @@ const mocks = vi.hoisted(() => ({
   pendingCount: vi.fn().mockReturnValue(0),
   _storeQueue: [] as TimelineEvent[],
   _waitResolvers: [] as (() => void)[],
+  sessionQueue1: {
+    pendingCount: vi.fn(() => 0),
+    dequeueMatch: vi.fn(() => undefined as unknown),
+    waitForEnqueue: vi.fn(() => new Promise<void>((r) => setTimeout(r, 10))),
+  },
+  sessionQueue2: {
+    pendingCount: vi.fn(() => 0),
+    dequeueMatch: vi.fn(() => undefined as unknown),
+    waitForEnqueue: vi.fn(() => new Promise<void>((r) => setTimeout(r, 10))),
+  },
 }));
 
 vi.mock("../telegram.js", async (importActual) => {
@@ -47,6 +57,14 @@ vi.mock("../session-manager.js", () => ({
   activeSessionCount: () => mocks.activeSessionCount(),
   getActiveSession: () => mocks.getActiveSession(),
   validateSession: (...args: unknown[]) => mocks.validateSession(...args),
+}));
+
+vi.mock("../session-queue.js", () => ({
+  getSessionQueue: (sid: number) => {
+    if (sid === 1) return mocks.sessionQueue1;
+    if (sid === 2) return mocks.sessionQueue2;
+    return undefined;
+  },
 }));
 
 import { register } from "./ask.js";
@@ -233,6 +251,40 @@ describe("identity gate", () => {
     let code: string | undefined;
     try { code = errorCode(await call({"question":"x"})); } catch { /* gate passed, other error ok */ }
     expect(code).not.toBe("SID_REQUIRED");
+  });
+});
+
+// =========================================================================
+// Cross-session isolation
+// =========================================================================
+
+describe("cross-session isolation", () => {
+  it("session 2 reads from its own queue, not session 1's", async () => {
+    mocks.sendMessage.mockResolvedValue(BASE_MSG);
+    // All getActiveSession calls return 2 for this test so that
+    // both the pending-guard and getCallerSid() fallback resolve to session 2
+    mocks.getActiveSession.mockReturnValue(2);
+
+    // Session 1 has a text reply in its dedicated queue
+    mocks.sessionQueue1.dequeueMatch.mockImplementationOnce(
+      (predicate: (e: TimelineEvent) => unknown) => predicate(makeTextEvent(11, "s1 reply")),
+    );
+    // Session 2 also has a reply in its own queue
+    mocks.sessionQueue2.dequeueMatch.mockImplementationOnce(
+      (predicate: (e: TimelineEvent) => unknown) => predicate(makeTextEvent(12, "s2 reply")),
+    );
+
+    const result = await call({ question: "Continue?", timeout_seconds: 1 });
+    const data = parseResult(result);
+
+    // Got session 2's own event, not session 1's
+    expect(data.text).toBe("s2 reply");
+    // Session 2's queue was queried
+    expect(mocks.sessionQueue2.dequeueMatch).toHaveBeenCalled();
+    // Session 1's queue was never touched
+    expect(mocks.sessionQueue1.dequeueMatch).not.toHaveBeenCalled();
+
+    mocks.getActiveSession.mockReturnValue(0); // restore
   });
 });
 

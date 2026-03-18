@@ -10,6 +10,10 @@ const mocks = vi.hoisted(() => ({
     dequeueMatch: vi.fn(),
     waitForEnqueue: vi.fn(),
   },
+  sessionQueue2: {
+    dequeueMatch: vi.fn(),
+    waitForEnqueue: vi.fn(),
+  },
 }));
 
 vi.mock("../telegram.js", async (importActual) => {
@@ -28,8 +32,11 @@ vi.mock("../message-store.js", () => ({
 }));
 
 vi.mock("../session-queue.js", () => ({
-  getSessionQueue: (sid: number) =>
-    sid === 1 ? mocks.sessionQueue : undefined,
+  getSessionQueue: (sid: number) => {
+    if (sid === 1) return mocks.sessionQueue;
+    if (sid === 2) return mocks.sessionQueue2;
+    return undefined;
+  },
 }));
 
 import {
@@ -343,6 +350,8 @@ describe("button-helpers", () => {
     beforeEach(() => {
       mocks.sessionQueue.dequeueMatch.mockReset();
       mocks.sessionQueue.waitForEnqueue.mockReset();
+      mocks.sessionQueue2.dequeueMatch.mockReset();
+      mocks.sessionQueue2.waitForEnqueue.mockReset();
     });
 
     it("pollButtonPress uses session queue when sid is provided", async () => {
@@ -407,6 +416,27 @@ describe("button-helpers", () => {
       const result = await pollButtonPress(123, 10, 0.01, undefined, 999);
       expect(mocks.dequeueMatch).toHaveBeenCalled();
       expect(result).toBeNull();
+    });
+
+    it("session 1's callback is invisible to session 2's poll", async () => {
+      // Session 1 has a matching callback event sitting in its queue
+      mocks.sessionQueue.dequeueMatch.mockImplementation(
+        (fn: (e: unknown) => unknown) =>
+          fn({ event: "callback", content: { target: 10, qid: "q-s1", data: "s1-result" } }),
+      );
+      // Session 2's queue is empty — times out immediately
+      mocks.sessionQueue2.dequeueMatch.mockReturnValue(undefined);
+      mocks.sessionQueue2.waitForEnqueue.mockImplementation(
+        () => new Promise((r) => setTimeout(r, 100)),
+      );
+
+      // Session 2 polls — must not consume session 1's event
+      const result = await pollButtonOrTextOrVoice(123, 10, 0.01, undefined, undefined, 2);
+      expect(result).toBeNull();
+      // Session 2's own queue was used
+      expect(mocks.sessionQueue2.dequeueMatch).toHaveBeenCalled();
+      // Session 1's queue was never touched
+      expect(mocks.sessionQueue.dequeueMatch).not.toHaveBeenCalled();
     });
   });
 });

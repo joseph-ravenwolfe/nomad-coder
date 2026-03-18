@@ -71,6 +71,7 @@
 - Added `registerTool` middleware in server — automatically injects optional `sid` parameter into every tool's input schema and wraps callbacks with `runInSessionContext`, eliminating per-tool changes
 - Added `session-context.test.ts` — 8 tests covering context persistence across awaits, concurrent isolation, nested contexts, and fallback to `getActiveSession`
 - Added 9 integration tests: cross-session isolation e2e (SID leak prevention, wrong-SID empty result, close-session message isolation), high-concurrency stress (50 msgs / 5 sessions, mixed routing modes), DM edge cases (non-existent session, closed session, orphaned permission, revokeAll both directions)
+- Added cross-session isolation tests to `button-helpers.test.ts` and `ask.test.ts` — verify that `confirm`/`choose` button callbacks and `ask` text replies are visible only to the polling session's own queue and never to another session's poll; implementation in `button-helpers.ts`, `confirm.ts`, `choose.ts`, `ask.ts`, and `dequeue_update.ts` confirmed correct
 
 ## Changed
 
