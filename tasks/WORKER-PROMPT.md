@@ -52,8 +52,8 @@ If `2-queued/` is empty and `3-in-progress/` is clear, use **exponential backoff
 
 - **Claim first, always.** The file move to `3-in-progress/` must precede all other work — no exceptions.
 - **One task at a time.** Only one file may be in `3-in-progress/` at once. Do not browse the queue, plan future tasks, or add upcoming work to your todo list while a task is active. Finish, move to completed, then look at the queue.
-- **Move, never copy.** Task files must exist in exactly one folder at all times. Use filesystem move (`mv` or equivalent) — **never** `git mv`, **never** `create_file`, **never** read-then-write. The result of a move is: file exists in the destination, file does NOT exist in the source. Verify both.
-- **No git operations.** You do not run `git add`, `git mv`, `git commit`, `git push`, or any git command. You write code and run tests. The overseer handles all version control.
+- **Move, never copy.** Task files must exist in exactly one folder at all times.
+- **No commits or pushes.** You write code and run tests. The overseer handles version control (if applicable).
 - **No changelog edits.** The overseer handles those at commit time.
 - **Scope discipline.** Only change what the task requires. No drive-by refactors, no extra features.
 - **Completion report is mandatory.** Never move to `4-completed/` without a `## Completion` section.

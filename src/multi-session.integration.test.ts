@@ -325,10 +325,11 @@ describe("multi-session integration", () => {
   // =========================================================================
 
   describe("cross-session broadcast", () => {
-    it("outbound from SID 1 appears in SID 2 and 3, not SID 1", () => {
+    it("outbound from SID 1 goes to governor only, not other sessions", () => {
       const s1 = setupSession("A");
-      const s2 = setupSession("B");
+      const s2 = setupSession("Governor");
       const s3 = setupSession("C");
+      setGovernorSid(s2.sid);
 
       const outEvent = makeEvent({
         event: "message",
@@ -340,17 +341,30 @@ describe("multi-session integration", () => {
       broadcastOutbound(outEvent, s1.sid);
 
       expect(drain(s1.sid)).toEqual([]);
-      expect(drain(s2.sid)).toEqual([outEvent]);
-      expect(drain(s3.sid)).toEqual([outEvent]);
+      expect(drain(s2.sid)).toEqual([outEvent]); // governor receives
+      expect(drain(s3.sid)).toEqual([]);         // non-governor skipped
     });
 
-    it("no broadcast when only one session exists", () => {
+    it("no broadcast when no governor is set", () => {
       const s1 = setupSession("Solo");
+      setupSession("B");
 
       const outEvent = makeEvent({ from: "bot", sid: s1.sid });
       broadcastOutbound(outEvent, s1.sid);
 
       expect(drain(s1.sid)).toEqual([]);
+    });
+
+    it("no broadcast when sender is the governor", () => {
+      const s1 = setupSession("Governor");
+      const s2 = setupSession("Worker");
+      setGovernorSid(s1.sid);
+
+      const outEvent = makeEvent({ from: "bot", sid: s1.sid });
+      broadcastOutbound(outEvent, s1.sid); // sender === governor → skip
+
+      expect(drain(s1.sid)).toEqual([]);
+      expect(drain(s2.sid)).toEqual([]);
     });
   });
 
@@ -456,12 +470,14 @@ describe("multi-session integration", () => {
       expect(drain(s1.sid)).toEqual([reply]);
       expect(drain(s2.sid)).toEqual([]);
 
-      // Broadcast from s2
+      // Broadcast from s2 goes to governor (s3) only
       const broadcast = makeEvent({ from: "bot", sid: s2.sid });
+      setGovernorSid(s3.sid);
       broadcastOutbound(broadcast, s2.sid);
-      expect(drain(s1.sid)).toEqual([broadcast]);
       expect(drain(s3.sid)).toEqual([broadcast]);
+      expect(drain(s1.sid)).toEqual([]);
       expect(drain(s2.sid)).toEqual([]);
+      setGovernorSid(0); // clear governor for remaining assertions
 
       // DM from s3 to s1
       grantDm(s3.sid, s1.sid);
@@ -544,16 +560,17 @@ describe("multi-session integration", () => {
       expect(drain(s1.sid)).toEqual([reply]); // still routes to s1
     });
 
-    it("broadcast wakes session queue waiters", async () => {
+    it("broadcast wakes governor queue waiter", async () => {
       const s1 = setupSession("A");
-      const s2 = setupSession("B");
+      const s2 = setupSession("Governor");
+      setGovernorSid(s2.sid);
 
       const q2 = getSessionQueue(s2.sid)!;
 
       let woken = false;
       const waiter = q2.waitForEnqueue().then(() => { woken = true; });
 
-      // Broadcast from s1 should wake s2's waiter
+      // Broadcast from s1 should wake governor's waiter
       broadcastOutbound(makeEvent({ from: "bot", sid: s1.sid }), s1.sid);
 
       await waiter;

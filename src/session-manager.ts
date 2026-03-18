@@ -3,10 +3,15 @@ import { dlog } from "./debug-log.js";
 
 // ── Types ──────────────────────────────────────────────────
 
+/** Emoji color squares assigned to sessions in rainbow order. */
+export const COLOR_PALETTE = ["🟦", "🟩", "🟨", "🟧", "🟥", "🟪"] as const;
+export type SessionColor = (typeof COLOR_PALETTE)[number];
+
 export interface Session {
   sid: number;
   pin: number;
   name: string;
+  color: string;
   createdAt: string;
   lastPollAt: number | undefined;
   healthy: boolean;
@@ -16,6 +21,7 @@ export interface Session {
 export interface SessionInfo {
   sid: number;
   name: string;
+  color: string;
   createdAt: string;
 }
 
@@ -24,6 +30,7 @@ export interface SessionCreateResult {
   sid: number;
   pin: number;
   name: string;
+  color: string;
   sessionsActive: number;
 }
 
@@ -41,22 +48,41 @@ function generatePin(): number {
   return randomInt(PIN_MIN, PIN_MAX + 1);
 }
 
+/**
+ * Pick a color from the palette. If `requested` is a valid palette color
+ * not already in use, use it. Otherwise auto-assign the first unused
+ * palette color. If all 6 are taken, wrap around by session count.
+ */
+function assignColor(requested?: string): string {
+  const usedColors = new Set([..._sessions.values()].map((s) => s.color));
+  if (requested && (COLOR_PALETTE as readonly string[]).includes(requested) && !usedColors.has(requested)) {
+    return requested;
+  }
+  for (const c of COLOR_PALETTE) {
+    if (!usedColors.has(c)) return c;
+  }
+  // All 6 taken — wrap around
+  return COLOR_PALETTE[_sessions.size % COLOR_PALETTE.length] ?? COLOR_PALETTE[0];
+}
+
 // ── Public API ─────────────────────────────────────────────
 
-export function createSession(name = ""): SessionCreateResult {
+export function createSession(name = "", colorHint?: string): SessionCreateResult {
   const sid = _nextId++;
   const pin = generatePin();
+  const color = assignColor(colorHint);
   const session: Session = {
     sid,
     pin,
     name,
+    color,
     createdAt: new Date().toISOString(),
     lastPollAt: undefined,
     healthy: true,
   };
   _sessions.set(sid, session);
-  dlog("session", `created sid=${sid} name=${JSON.stringify(name)} total=${_sessions.size}`);
-  return { sid, pin, name, sessionsActive: _sessions.size };
+  dlog("session", `created sid=${sid} name=${JSON.stringify(name)} color=${color} total=${_sessions.size}`);
+  return { sid, pin, name, color, sessionsActive: _sessions.size };
 }
 
 export function getSession(sid: number): Session | undefined {
@@ -75,9 +101,10 @@ export function closeSession(sid: number): boolean {
 }
 
 export function listSessions(): SessionInfo[] {
-  return [..._sessions.values()].map(({ sid, name, createdAt }) => ({
+  return [..._sessions.values()].map(({ sid, name, color, createdAt }) => ({
     sid,
     name,
+    color,
     createdAt,
   }));
 }
@@ -114,7 +141,7 @@ export function getUnhealthySessions(thresholdMs: number): SessionInfo[] {
   const cutoff = Date.now() - thresholdMs;
   return [..._sessions.values()]
     .filter(s => s.lastPollAt !== undefined && s.lastPollAt < cutoff)
-    .map(({ sid, name, createdAt }) => ({ sid, name, createdAt }));
+    .map(({ sid, name, color, createdAt }) => ({ sid, name, color, createdAt }));
 }
 
 // ── Active Session Context ─────────────────────────────────

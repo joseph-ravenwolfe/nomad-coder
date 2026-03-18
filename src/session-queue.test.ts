@@ -255,43 +255,68 @@ describe("session-queue", () => {
   });
 
   // -------------------------------------------------------------------------
-  // Cross-session outbound forwarding
+  // Cross-session outbound forwarding (governor-only)
   // -------------------------------------------------------------------------
 
   describe("broadcastOutbound", () => {
-    it("forwards to all sessions except the sender", () => {
+    it("forwards to governor only, skipping other sessions", () => {
       createSessionQueue(1);
       createSessionQueue(2);
       createSessionQueue(3);
+      setGovernorSid(2);
+      const evt = makeEvent({ id: 500, event: "sent", from: "bot" as const });
+      broadcastOutbound(evt, 1);
+      expect(getSessionQueue(1)?.pendingCount()).toBe(0); // sender excluded
+      expect(getSessionQueue(2)?.pendingCount()).toBe(1); // governor receives
+      expect(getSessionQueue(3)?.pendingCount()).toBe(0); // non-governor excluded
+    });
+
+    it("no-ops when no governor is set", () => {
+      createSessionQueue(1);
+      createSessionQueue(2);
+      // govSid === 0 → skip
       const evt = makeEvent({ id: 500, event: "sent", from: "bot" as const });
       broadcastOutbound(evt, 1);
       expect(getSessionQueue(1)?.pendingCount()).toBe(0);
-      expect(getSessionQueue(2)?.pendingCount()).toBe(1);
-      expect(getSessionQueue(3)?.pendingCount()).toBe(1);
+      expect(getSessionQueue(2)?.pendingCount()).toBe(0);
     });
 
-    it("no-ops when only one session exists", () => {
+    it("no-ops when sender is the governor", () => {
       createSessionQueue(1);
+      createSessionQueue(2);
+      setGovernorSid(1);
       const evt = makeEvent({ id: 501, event: "sent", from: "bot" as const });
-      broadcastOutbound(evt, 1);
+      broadcastOutbound(evt, 1); // sender === governor → skip
       expect(getSessionQueue(1)?.pendingCount()).toBe(0);
+      expect(getSessionQueue(2)?.pendingCount()).toBe(0);
     });
 
     it("no-ops when no sessions exist", () => {
+      setGovernorSid(2);
       const evt = makeEvent({ id: 502, event: "sent", from: "bot" as const });
-      // Should not throw
-      broadcastOutbound(evt, 1);
+      broadcastOutbound(evt, 1); // governor queue doesn't exist → no-op
     });
 
-    it("wakes waiters on receiving sessions", async () => {
+    it("wakes governor queue waiter", async () => {
       createSessionQueue(1);
       createSessionQueue(2);
+      setGovernorSid(2);
       const q2 = getSessionQueue(2);
       const waiter = q2?.waitForEnqueue();
       const evt = makeEvent({ id: 503, event: "sent", from: "bot" as const });
       broadcastOutbound(evt, 1);
       await waiter;
-      // waiter resolved → enqueue woke it
+      // waiter resolved → governor queue woke
+    });
+
+    it("no-ops when governor queue does not exist", () => {
+      setGovernorSid(99); // governor sid has no queue
+      createSessionQueue(1);
+      createSessionQueue(2);
+      const evt = makeEvent({ id: 504, event: "sent", from: "bot" as const });
+      broadcastOutbound(evt, 1);
+      expect(getSessionQueue(1)?.pendingCount()).toBe(0);
+      expect(getSessionQueue(2)?.pendingCount()).toBe(0);
     });
   });
 

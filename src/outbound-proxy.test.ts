@@ -12,7 +12,8 @@ const mocks = vi.hoisted(() => ({
   recordOutgoing: vi.fn(),
   getCallerSid: vi.fn(() => 0),
   activeSessionCount: vi.fn(() => 1),
-  getSession: vi.fn(() => undefined as { name: string } | undefined),
+  getSession: vi.fn(() => undefined as { name: string; color?: string } | undefined),
+  isSessionColorTagsEnabled: vi.fn(() => false),
 }));
 
 vi.mock("./typing-state.js", () => ({
@@ -36,6 +37,10 @@ vi.mock("./session-context.js", () => ({
 vi.mock("./session-manager.js", () => ({
   activeSessionCount: () => mocks.activeSessionCount(),
   getSession: (sid: number) => mocks.getSession(sid),
+}));
+
+vi.mock("./config.js", () => ({
+  isSessionColorTagsEnabled: () => mocks.isSessionColorTagsEnabled(),
 }));
 
 import {
@@ -99,6 +104,7 @@ describe("outbound-proxy", () => {
     mocks.activeSessionCount.mockReturnValue(1);
     mocks.getCallerSid.mockReturnValue(0);
     mocks.getSession.mockReturnValue(undefined);
+    mocks.isSessionColorTagsEnabled.mockReturnValue(false);
   });
 
   // -----------------------------------------------------------------------
@@ -555,6 +561,48 @@ describe("outbound-proxy", () => {
 
       const [, , editedText] = raw.editMessageText.mock.calls[0] as [number, number, string];
       expect(editedText).toBe("edited content");
+    });
+
+    it("prepends color square before 🤖 when color tags enabled and session has a color", async () => {
+      mocks.activeSessionCount.mockReturnValue(2);
+      mocks.getCallerSid.mockReturnValue(1);
+      mocks.getSession.mockReturnValue({ name: "Scout", color: "🟦" });
+      mocks.isSessionColorTagsEnabled.mockReturnValue(true);
+
+      const raw = fakeApi();
+      const p = proxy(raw);
+      await (p as unknown as FakeApi).sendMessage(42, "Hello");
+
+      const [, sentText] = raw.sendMessage.mock.calls[0] as [number, string, unknown];
+      expect(sentText).toBe("🟦 🤖 `Scout`\nHello");
+    });
+
+    it("omits color prefix when color tags disabled even if session has a color", async () => {
+      mocks.activeSessionCount.mockReturnValue(2);
+      mocks.getCallerSid.mockReturnValue(1);
+      mocks.getSession.mockReturnValue({ name: "Scout", color: "🟦" });
+      mocks.isSessionColorTagsEnabled.mockReturnValue(false);
+
+      const raw = fakeApi();
+      const p = proxy(raw);
+      await (p as unknown as FakeApi).sendMessage(42, "Hello");
+
+      const [, sentText] = raw.sendMessage.mock.calls[0] as [number, string, unknown];
+      expect(sentText).toBe("🤖 `Scout`\nHello");
+    });
+
+    it("omits color prefix when color tags enabled but session has no color", async () => {
+      mocks.activeSessionCount.mockReturnValue(2);
+      mocks.getCallerSid.mockReturnValue(1);
+      mocks.getSession.mockReturnValue({ name: "Scout" });
+      mocks.isSessionColorTagsEnabled.mockReturnValue(true);
+
+      const raw = fakeApi();
+      const p = proxy(raw);
+      await (p as unknown as FakeApi).sendMessage(42, "Hello");
+
+      const [, sentText] = raw.sendMessage.mock.calls[0] as [number, string, unknown];
+      expect(sentText).toBe("🤖 `Scout`\nHello");
     });
   });
 });

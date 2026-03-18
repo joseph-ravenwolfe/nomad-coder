@@ -108,10 +108,9 @@ Agents can direct messages to specific sessions using `@session:<sid>` syntax in
 This is where multi-session gets powerful:
 
 - Messages sent by Session A are **never dequeued back to Session A** (same as today — you don't see your own outbound).
-- Messages sent by Session A **are enqueued to all other sessions** — they appear in their dequeue stream tagged with Session A's ID and topic.
-- This means sessions are aware of what other sessions are saying to the user.
+- When a **governor** is set, outbound events from non-governor sessions are automatically forwarded to the governor's dequeue stream. No opt-in required.
+- Sessions without the governor role do not receive other sessions' outbound events — they stay focused on their own work.
 - Any session can query the timeline to see the full cross-session conversation.
-- A session can **mute** another session's outbound (opt out of cross-session updates) to reduce noise.
 
 ### Session Lifecycle
 
@@ -130,36 +129,52 @@ With session IDs and cross-session visibility, you get a team dynamic:
 - **Agent as principal dev** — one session can coordinate others by reading their timeline entries
 - **Parallel work** — multiple sessions work independently, each branded with their topic
 - **Shared context** — any session can look back at what others said
-- **Muting** — *(deferred)* a focused session could mute noisy neighbors; currently handled by the permission model (no DM permission = no communication)
+- **Governor outbound** — outbound events from worker sessions are automatically forwarded to the governor. No tools needed.
+- **Color tags** — each session is assigned a color square emoji (🟦 🟩 🟨 🟧 🟥 🟪) that prefixes messages when the feature is enabled.
 - **Fake personas** — each session appears as a different "person" in the chat (topic prefix), but they're all the same bot. Like creating virtual team members.
 
-## Muting (Deferred)
+## Outbound Forwarding (Governor-Only)
 
-> **Status:** Deferred. The DM permission model handles session isolation — no permission means no communication. Explicit muting may be added later if the cross-session outbound broadcast becomes noisy in practice.
+Outbound messages from worker sessions are **automatically forwarded to the governor** — no subscription or opt-in required. The governor sees everything;
+worker sessions see only their own dequeue stream.
 
-Original design notes preserved for reference:
+### Behavior
 
-### Session Muting
+- The governor receives outbound events from every other session automatically.
+- If no governor is set, outbound events are not forwarded to any session.
+- The sender never receives their own outbound event.
+- If the governor sends an outbound event, it is not self-forwarded.
+- Operator messages and DMs are unaffected — those routing paths are separate from outbound forwarding.
 
-Sessions can mute other sessions to reduce cross-session noise in their dequeue stream:
+## Session Color Tags
 
-- **Blocklist model** — by default, all cross-session outbound is visible. A session can mute specific other sessions.
-- **Allowlist model** — alternatively, a session can declare "only show me messages from session X."
-- Muting is per-session and unilateral — no permission needed from the muted session.
-- Mute config is set via tool call (`mute_session`, `unmute_session`).
+Each session is assigned a **color square emoji** from the rainbow palette (🟦 🟩 🟨 🟧 🟥 🟪). When color tags are enabled, the color prefix appears before the `🤖` robot emoji in every outbound message.
 
-### User Muting
+**Example:** `🟦 🤖 \`Scout\`` (instead of `🤖 \`Scout\``)
 
-A session can block all operator messages (e.g., a background worker that only responds to inter-session DMs):
+### Palette
 
-- Must be explicitly enabled by the operator via `confirm` before taking effect.
-- A muted-user session still receives targeted replies (reply-to routing overrides muting).
+| Index | Emoji | Suggested Role |
+| --- | --- | --- |
+| 0 | 🟦 | Coordinator / overseer |
+| 1 | 🟩 | Builder / worker |
+| 2 | 🟨 | Reviewer / QA |
+| 3 | 🟧 | Research / exploration |
+| 4 | 🟥 | Ops / deployment |
+| 5 | 🟪 | Specialist / one-off |
 
-### Muting Rules
+Role suggestions are conventions only — the server does not enforce meaning.
 
-- Targeted messages (reply-to) **always** override mute settings — if the operator replies to your message, you get it regardless.
-- Muting only affects the dequeue stream. Timeline queries always return the full history.
-- Muting state is per-session, ephemeral, and resets on MCP restart.
+### Assignment
+
+- Auto-assigned in palette order (first session gets 🟦, second 🟩, etc.).
+- Pass a `color` parameter to `session_start` to request a specific emoji.
+- If the requested color is already taken, the next available color is used.
+- If all 6 are exhausted, assignment wraps back to 🟦.
+
+### Feature Flag
+
+Color tags are **off by default**. The feature is controlled by the `sessionColorTags` field in `mcp-config.json`. When off, the header format is unchanged (`🤖 \`Name\``).
 
 ## Resolved Decisions
 
@@ -311,7 +326,7 @@ Three axes of control, all operator-mediated:
 
 ### 1. Inbound Muting
 
-Controls what a session sees in its dequeue stream. See [Muting (Deferred)](#muting-deferred).
+Controls what a session sees in its dequeue stream. See [Outbound Forwarding (Governor-Only)](#outbound-forwarding-governor-only).
 
 ### 2. DM Authorization
 
@@ -412,9 +427,8 @@ Works exactly as today. The server assigns a default session ID internally, but 
 
 | Action | Behavior |
 | --- | --- |
-| Session A sends outbound | Enqueued to all other sessions (unless muted) |
+| Session A sends outbound | Dequeued to governor only (if governor is set); other sessions unaffected |
 | Session A sends a DM to Session B | Delivered to Session B's dequeue stream only (requires DM auth) |
-| Session B mutes Session A | Session B stops receiving Session A's outbound in its queue |
 | Any session queries timeline | Sees full cross-session history with session IDs |
 
 ## Timeline Size

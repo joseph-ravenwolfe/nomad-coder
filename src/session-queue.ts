@@ -51,6 +51,8 @@ const _queues = new Map<number, TemporalQueue<TimelineEvent>>();
 /** message_id → owning sid (tracks which session sent each bot message) */
 const _messageOwnership = new Map<number, number>();
 
+
+
 // ---------------------------------------------------------------------------
 // Queue lifecycle
 // ---------------------------------------------------------------------------
@@ -78,6 +80,7 @@ export function removeSessionQueue(sid: number): boolean {
   }
   return removed;
 }
+
 
 /**
  * Drain all pending items from a session's queue without removing the queue.
@@ -198,17 +201,15 @@ function enqueueToSession(
 // ---------------------------------------------------------------------------
 
 /**
- * Forward an outbound bot event to all sessions *except* the sender.
- * Lets other sessions see what the sending session sent. Enqueued
- * to the response lane (high priority) since it's a status update,
- * not user input that blocks on processing.
+ * Forward an outbound bot event to the governor session.
+ * The governor receives all outbound events automatically — no opt-in needed.
+ * The sender is always excluded (even if sender is the governor).
  */
 export function broadcastOutbound(event: TimelineEvent, senderSid: number): void {
-  if (_queues.size <= 1) return;
-  for (const [sid, q] of _queues) {
-    if (sid === senderSid) continue;
-    q.enqueue(event);
-  }
+  const govSid = getGovernorSid();
+  if (govSid <= 0 || govSid === senderSid) return;
+  const q = _queues.get(govSid);
+  if (q) q.enqueue(event);
 }
 
 // ---------------------------------------------------------------------------

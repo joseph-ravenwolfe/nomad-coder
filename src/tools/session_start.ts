@@ -119,9 +119,16 @@ export function register(server: McpServer) {
             "Set to true when reconnecting after a server restart. " +
             "Sends 'reconnected' messaging instead of 'joined' to the operator and fellow sessions.",
           ),
+        color: z
+          .string()
+          .optional()
+          .describe(
+            "Preferred color square emoji (🟦 🟩 🟨 🟧 🟥 🟪). " +
+            "Auto-assigned in palette order if omitted or if the requested color is already taken.",
+          ),
       },
     },
-    async ({ intro, name, reconnect }) => {
+    async ({ intro, name, reconnect, color }) => {
       const chatId = resolveChat();
       if (typeof chatId !== "number") return toError(chatId);
 
@@ -173,7 +180,7 @@ export function register(server: McpServer) {
         }
       }
 
-      const session = createSession(effectiveName);
+      const session = createSession(effectiveName, color);
       createSessionQueue(session.sid);
       setActiveSession(session.sid);
 

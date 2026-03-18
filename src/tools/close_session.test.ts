@@ -463,4 +463,25 @@ describe("close_session tool", () => {
 
     expect(mocks.deliverServiceMessage).not.toHaveBeenCalled();
   });
+
+  // =========================================================================
+  // Self-close regression (Task 150)
+  // Root cause: "close_session currently disabled" was reported by an AI agent
+  // (client-side reasoning), NOT by the server. The server never disables this
+  // tool — it is always registered with enabled: true and accepts any SID+PIN,
+  // including a session closing itself with its own credentials.
+  // =========================================================================
+
+  it("a session can self-close using its own credentials (no server-side restriction)", async () => {
+    mocks.getSession.mockReturnValue({ sid: 2, pin: 222222, name: "Scout", createdAt: "2026-03-17" });
+
+    const result = parseResult(await call({ sid: 2, pin: 222222 }));
+
+    expect(result.closed).toBe(true);
+    expect(result.sid).toBe(2);
+    expect(mocks.closeSession).toHaveBeenCalledWith(2);
+    expect(mocks.sendServiceMessage).toHaveBeenCalledWith(
+      expect.stringContaining("🤖 Scout has disconnected."),
+    );
+  });
 });

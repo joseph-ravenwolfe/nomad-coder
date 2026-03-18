@@ -95,6 +95,14 @@ Humans strongly prefer tapping a button over typing a reply. When a decision is 
 - **All-or-nothing rule:** if any button in a set has a symbol or emoji, all buttons in that set must have one.
 - Emojis (e.g. 🟢 🔴) only belong in *unstyled* buttons — they clash visually with colored buttons. Use plain text + icon characters (e.g. `✓ Yes`, `✗ No`) when a style is applied.
 
+### Keep confirm prompts short
+
+The operator is usually on a phone with limited screen space. If a `confirm` or `choose` needs context, send the explanation as a **separate message first**, then send the decision prompt as a short follow-up. This keeps the buttons visible without scrolling.
+
+**Bad:** One long message with explanation + `confirm` — buttons scroll off-screen on mobile.
+
+**Good:** `send_text` with the context → `confirm` with a one-line question.
+
 ### Single-button CTA
 
 Pass an empty string to `no_text` on `confirm` to render a single centered button — ideal for "done / continue" moments.

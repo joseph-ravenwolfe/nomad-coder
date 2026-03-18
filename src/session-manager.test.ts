@@ -13,6 +13,7 @@ import {
   markUnhealthy,
   isHealthy,
   getUnhealthySessions,
+  COLOR_PALETTE,
 } from "./session-manager.js";
 
 beforeEach(() => {
@@ -59,6 +60,48 @@ describe("createSession", () => {
     expect(a.sessionsActive).toBe(1);
     const b = createSession();
     expect(b.sessionsActive).toBe(2);
+  });
+});
+
+describe("color assignment", () => {
+  it("auto-assigns palette colors in order", () => {
+    const s1 = createSession("A");
+    const s2 = createSession("B");
+    const s3 = createSession("C");
+    expect(s1.color).toBe(COLOR_PALETTE[0]); // 🟦
+    expect(s2.color).toBe(COLOR_PALETTE[1]); // 🟩
+    expect(s3.color).toBe(COLOR_PALETTE[2]); // 🟨
+  });
+
+  it("accepts a valid unoccupied color hint", () => {
+    const s = createSession("A", "🟥");
+    expect(s.color).toBe("🟥");
+  });
+
+  it("falls back to auto-assign when requested color is already taken", () => {
+    createSession("A", "🟦"); // takes 🟦
+    const s2 = createSession("B", "🟦"); // 🟦 taken → auto-assign next = 🟩
+    expect(s2.color).toBe("🟩");
+  });
+
+  it("wraps around when all 6 palette colors are in use", () => {
+    for (let i = 0; i < 6; i++) createSession(`S${i}`);
+    const s7 = createSession("S7");
+    // 6 sessions in map → size % 6 === 0 → COLOR_PALETTE[0]
+    expect(s7.color).toBe(COLOR_PALETTE[0]);
+  });
+
+  it("listSessions includes color", () => {
+    createSession("A");
+    createSession("B");
+    const list = listSessions();
+    expect(list[0].color).toBe(COLOR_PALETTE[0]);
+    expect(list[1].color).toBe(COLOR_PALETTE[1]);
+  });
+
+  it("getSession includes color", () => {
+    const s = createSession("A");
+    expect(getSession(s.sid)?.color).toBe(COLOR_PALETTE[0]);
   });
 });
 
