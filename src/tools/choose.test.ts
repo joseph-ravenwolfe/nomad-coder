@@ -5,7 +5,7 @@ import type { ButtonResult, TextResult, VoiceResult } from "./button-helpers.js"
 const mocks = vi.hoisted(() => ({
   activeSessionCount: vi.fn(() => 0),
   getActiveSession: vi.fn(() => 0),
-  validateSession: vi.fn(() => false),
+  validateSession: vi.fn((_sid: number, _pin: number) => false),
   sendMessage: vi.fn(),
   answerCallbackQuery: vi.fn(),
   editMessageText: vi.fn(),
@@ -20,7 +20,7 @@ const mocks = vi.hoisted(() => ({
   sessionQueue: {
     pendingCount: vi.fn(() => 0),
   },
-  peekSessionCategories: vi.fn(() => undefined as Record<string, number> | undefined),
+  peekSessionCategories: vi.fn((_sid: number) => undefined as Record<string, number> | undefined),
 }));
 
 vi.mock("../telegram.js", async (importActual) => {
@@ -58,7 +58,7 @@ vi.mock("./button-helpers.js", async (importActual) => {
 vi.mock("../session-manager.js", () => ({
   activeSessionCount: () => mocks.activeSessionCount(),
   getActiveSession: () => mocks.getActiveSession(),
-  validateSession: (...args: unknown[]) => mocks.validateSession(...args),
+  validateSession: (sid: number, pin: number) => mocks.validateSession(sid, pin),
 }));
 
 vi.mock("../session-queue.js", () => ({
