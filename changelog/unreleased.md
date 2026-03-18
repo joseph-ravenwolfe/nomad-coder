@@ -2,6 +2,7 @@
 
 ## Added
 
+- `session_start` now validates session names — rejects names containing special characters, emoji, or non-Latin unicode; only letters (a–z, A–Z), digits, and spaces are allowed; returns `INVALID_NAME` error code; leading/trailing whitespace is trimmed before validation
 - Governor health-check timer (`src/health-check.ts`) — runs every 60 s; if the governor session has not polled `dequeue_update` within 360 s (max-timeout + buffer), sends the operator a three-option inline keyboard prompt to reroute messages to the next available session, make it the permanent primary, or wait; non-governor unresponsive sessions produce a notification only; recovery (next poll) clears the flagged state and notifies the operator
 - `touchSession(sid)` in `session-manager.ts` — records `lastPollAt` and resets `healthy = true`; called by `dequeue_update` on every poll to serve as a heartbeat
 - `markUnhealthy(sid)`, `isHealthy(sid)`, `getUnhealthySessions(thresholdMs)` in `session-manager.ts` — health state accessors used by the health-check timer

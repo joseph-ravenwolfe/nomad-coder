@@ -209,9 +209,9 @@ describe("session_start tool", () => {
   it("calls createSession with provided name", async () => {
     mocks.pendingCount.mockReturnValue(0);
 
-    await call({ name: "worker-bee" });
+    await call({ name: "Worker Bee" });
 
-    expect(mocks.createSession).toHaveBeenCalledWith("worker-bee");
+    expect(mocks.createSession).toHaveBeenCalledWith("Worker Bee");
   });
 
   it("passes 'Primary' when name is omitted for first session", async () => {
@@ -252,7 +252,7 @@ describe("session_start tool", () => {
     mocks.createSession.mockReturnValue({
       sid: 5,
       pin: 999999,
-      name: "active-test",
+      name: "Active Test",
       sessionsActive: 2,
     });
     mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
@@ -262,7 +262,7 @@ describe("session_start tool", () => {
       .mockResolvedValueOnce({ message_id: 50 })
       .mockResolvedValue(INTRO_MSG);
 
-    await call({ name: "active-test" });
+    await call({ name: "Active Test" });
 
     expect(mocks.setActiveSession).toHaveBeenCalledWith(5);
   });
