@@ -59,29 +59,55 @@ Step-by-step test plan requiring 2–3 MCP agent sessions and one operator on Te
 ## Phase 2 — Targeted Routing
 
 > The most critical behavior: replies and callbacks must reach the correct session only.
+> Every step must be verified via BOTH tool response AND debug log — not just one.
 
-### 2.1 Reply-To — Session 1
+### 2.1 Reply-To Intro — Session 2
+
+> The intro message sent by `session_start` is owned by the new session. Replying to
+> it must route to that session, not the governor.
+
+1. **[Op]** Reply to S2's intro message (the "ℹ️ Session Start" message from Phase 1.2): "Welcome, Scout."
+2. **[S2]** `dequeue_update` → receives the reply
+3. **[Verify]** S1 does NOT receive it (call `dequeue_update(timeout: 0)` to confirm empty)
+4. **[Debug]** `get_debug_log` → find `targeted event=X → sid=2` (the reply was routed by reply-to ownership, not governor)
+5. **[Verify]** This proves that intro messages are correctly registered in the message owner map
+
+### 2.2 Reply-To — Session 1
 
 1. **[S1]** `send_text("I'm session 1")`
 2. **[Op]** Reply to S1's message: "Got it, S1."
-3. **[Verify]** Only S1 receives the reply via `dequeue_update`
-4. **[Verify]** S2 does NOT receive it
-5. **[Debug]** `targeted event=X → sid=1`
+3. **[S1]** `dequeue_update` → receives the reply
+4. **[Verify]** S2 does NOT receive it (`dequeue_update(timeout: 0)` returns empty)
+5. **[Debug]** `get_debug_log` → find `targeted event=X → sid=1`
 
-### 2.2 Reply-To — Session 2
+### 2.3 Reply-To — Session 2
 
 1. **[S2]** `send_text("I'm session 2")`
 2. **[Op]** Reply to S2's message: "Got it, S2."
-3. **[Verify]** Only S2 receives the reply
+3. **[S2]** `dequeue_update` → receives the reply
 4. **[Verify]** S1 does NOT receive it
-5. **[Debug]** `targeted event=X → sid=2`
+5. **[Debug]** `get_debug_log` → find `targeted event=X → sid=2`
 
-### 2.3 Callback Routing
+### 2.4 Callback Routing
 
 1. **[S1]** `confirm("Ready to continue?")`
 2. **[Op]** Press the button
-3. **[Verify]** Only S1 receives the callback
+3. **[S1]** receives the callback via `dequeue_update`
 4. **[Verify]** S2 does NOT receive it
+5. **[Debug]** `get_debug_log` → find `targeted event=X → sid=1` for the callback
+
+### 2.5 Cross-Verification — Prove Isolation
+
+> This step exists to provide undeniable proof that routing works. Both sessions
+> poll simultaneously and we confirm negative results.
+
+1. **[S1]** `send_text("S1 says hello")`
+2. **[S2]** `send_text("S2 says hello")`
+3. **[Op]** Reply to S1's message: "For S1 only"
+4. **[Op]** Reply to S2's message: "For S2 only"
+5. **[S1]** `dequeue_update` → receives "For S1 only" but NOT "For S2 only"
+6. **[S2]** `dequeue_update` → receives "For S2 only" but NOT "For S1 only"
+7. **[Debug]** `get_debug_log` → two targeted entries, one for each session
 
 ---
 
@@ -92,15 +118,15 @@ Step-by-step test plan requiring 2–3 MCP agent sessions and one operator on Te
 
 ### 3.1 Verify Governor
 
-1. **[Debug]** `governor set to sid=1` (from Phase 1.2)
+1. **[Debug]** `get_debug_log` → confirm `governor set to sid=1` (from Phase 1.2)
 2. **[S1]** is the governor
 
 ### 3.2 Ambiguous Message
 
 1. **[Op]** Send a plain text message (not a reply): "Hello, who gets this?"
-2. **[Verify]** Only S1 (governor) receives it
-3. **[Verify]** S2 does NOT receive it
-4. **[Debug]** `governor event=X → sid=1`
+2. **[S1]** `dequeue_update` → receives it
+3. **[Verify]** S2 `dequeue_update(timeout: 0)` returns empty — S2 did NOT receive it
+4. **[Debug]** `get_debug_log` → find `governor event=X → sid=1`
 
 ### 3.3 Governor Delegation
 
@@ -228,7 +254,9 @@ Step-by-step test plan requiring 2–3 MCP agent sessions and one operator on Te
 - [ ] Session lifecycle: create, approve, list, close, rejoin
 - [ ] Auto-DM-grant on approval
 - [ ] Name collision rejection
+- [ ] Targeted routing: reply-to intro message routes to owning session
 - [ ] Targeted routing: reply-to (both sessions), callback
+- [ ] Cross-verification: both sessions poll simultaneously, each gets only its own replies
 - [ ] Governor auto-designation on 2nd session join
 - [ ] Ambiguous messages → governor only
 - [ ] Governor delegation via `route_message`
@@ -240,3 +268,4 @@ Step-by-step test plan requiring 2–3 MCP agent sessions and one operator on Te
 - [ ] Rapid messages — no drops, no duplicates
 - [ ] Voice transcription + 🫡 reaction
 - [ ] Debug log covers all categories
+- [ ] Every routing decision verified via `get_debug_log` (not just tool response)
