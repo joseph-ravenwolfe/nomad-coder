@@ -138,28 +138,28 @@ export function getMessageOwner(messageId: number): number {
  * The global queue in message-store is NOT touched here — it's
  * populated by recordInbound as before. This is additive.
  */
-export function routeToSession(event: TimelineEvent, lane: "response" | "message"): void {
+export function routeToSession(event: TimelineEvent, _lane?: "response" | "message"): void {
   if (_queues.size === 0) return;
 
   const targetSid = resolveTargetSession(event);
 
   if (targetSid > 0) {
     // Targeted: deliver only to the owning session
-    dlog("route", `targeted event=${event.id} → sid=${targetSid}`, { lane, type: event.content.type });
-    enqueueToSession(targetSid, event, lane);
+    dlog("route", `targeted event=${event.id} → sid=${targetSid}`, { type: event.content.type });
+    enqueueToSession(targetSid, event);
     return;
   }
 
   // Ambiguous: deliver to governor if set
   const gSid = getGovernorSid();
   if (gSid > 0 && _queues.has(gSid)) {
-    dlog("route", `governor event=${event.id} → sid=${gSid}`, { lane, type: event.content.type });
-    enqueueToSession(gSid, event, lane);
+    dlog("route", `governor event=${event.id} → sid=${gSid}`, { type: event.content.type });
+    enqueueToSession(gSid, event);
     return;
   }
 
   // Fallback: broadcast to all sessions
-  dlog("route", `broadcast event=${event.id} → ${_queues.size} sessions`, { lane });
+  dlog("route", `broadcast event=${event.id} → ${_queues.size} sessions`);
   for (const q of _queues.values()) {
     q.enqueue(event);
   }
@@ -187,7 +187,6 @@ function resolveTargetSession(event: TimelineEvent): number {
 function enqueueToSession(
   sid: number,
   event: TimelineEvent,
-  _lane: "response" | "message",
 ): void {
   const q = _queues.get(sid);
   if (!q) return;

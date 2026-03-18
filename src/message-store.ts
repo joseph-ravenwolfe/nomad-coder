@@ -554,7 +554,7 @@ export function getBotReaction(messageId: number): string | null {
 // ---------------------------------------------------------------------------
 
 /**
- * Returns the next available queue item, response lane first.
+ * Returns the next ready item in temporal order.
  * Skips voice messages that are still waiting for transcription.
  */
 export function dequeue(): TimelineEvent | undefined {
@@ -562,8 +562,9 @@ export function dequeue(): TimelineEvent | undefined {
 }
 
 /**
- * Batch dequeue: drain all ready response-lane items, then up to one
- * ready message-lane item. Returns empty array if nothing available.
+ * Temporal batch dequeue: collects events in arrival order up to and
+ * including the first heavyweight event (text/voice). Returns empty
+ * array if nothing available or if a voice delimiter is still pending.
  */
 export function dequeueBatch(): TimelineEvent[] {
   return _queue.dequeueBatch().map((item) => item.event);
@@ -571,7 +572,6 @@ export function dequeueBatch(): TimelineEvent[] {
 
 /**
  * Finds and removes the first queued item matching the predicate.
- * Checks response lane first, then message lane.
  */
 export function dequeueMatch<T>(
   predicate: (event: TimelineEvent) => T | undefined,
