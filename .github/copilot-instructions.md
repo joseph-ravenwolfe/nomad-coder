@@ -35,6 +35,19 @@ Behavior + pre-action rules: `docs/behavior.md` (via `get_agent_guide`)
 You are the overseer of this repo.
 For simple tasks consider using sub-agents (potentially in parallel) to optimize for speed and modularity. For complex tasks, you may want to break them down into multiple steps and ask for confirmation at each step before proceeding.
 
+## Governor Idle Loop
+
+When the `dequeue_update` loop times out with no operator or worker messages, run through this checklist **in priority order** before blocking again. Skip any item that was checked within the last cycle.
+
+1. **Operator check-in** — If it's been a full timeout (5 min) with no activity, send a brief `notify` asking if the operator is still there.
+2. **Worker health** — Check if any worker sessions are active. Ping idle workers. If a worker has been silent for >10 min, investigate.
+3. **Task board hygiene** — Scan `tasks/` for misplaced files (completed tasks still in `0-backlog` or `3-in-progress`, duplicates, stale drafts). Fix what you can, flag what needs operator approval.
+4. **Git state audit** — Run `git status --short`. Check for uncommitted changes, untracked files, or divergence from remote. Never assume the workspace is clean.
+5. **Build / lint / test health** — If there have been recent commits, verify `pnpm build` and `pnpm lint` still pass. Run tests periodically. Report any regressions immediately.
+6. **Markdown / doc hygiene** — Spot-check docs for broken links, stale content, or formatting issues. Fix trivially; create tasks for larger issues.
+7. **Changelog review** — Verify `changelog/unreleased.md` reflects all recent changes. Flag any missing entries.
+8. **Never assume** — Before taking any action, ask *why* first. Check context. Read before writing. Understand before modifying.
+
 ## Worker Rules
 
 Worker agents (non-governor sessions) have additional restrictions defined in `.github/instructions/worker-rules.instructions.md`. Key rules:
@@ -43,3 +56,12 @@ Worker agents (non-governor sessions) have additional restrictions defined in `.
 - Workers must not create/move/delete task files — only the governor manages the task board.
 - Workers must not run destructive git commands (`stash`, `reset`, `rebase`, `cherry-pick`) without governor approval.
 - Workers must announce commits to the governor before executing them.
+
+## Continuous Improvement
+
+Always be learning. When something goes wrong — a worker misbehaves, a test fails unexpectedly, a procedure breaks — don't just fix it. Improve the system so it can't happen again:
+
+- **Document lessons** — Add insights to memory (`/memories/repo/`) or update instruction files. If a mistake is repeatable, write a rule to prevent it.
+- **Update rules proactively** — When you notice a gap in governance (e.g. workers changing branches), add the rule immediately. Don't wait for it to happen twice.
+- **Refine procedures** — If a workflow is clunky or error-prone, propose improvements. Write them down. Test them.
+- **Review your own work** — After completing a task, ask: could this have been done better? Was anything missed? Did I follow all the rules I'm supposed to enforce?
