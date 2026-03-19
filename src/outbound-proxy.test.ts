@@ -444,7 +444,7 @@ describe("outbound-proxy", () => {
       await (p as unknown as FakeApi).sendMessage(42, "Hello world");
 
       const [, sentText] = raw.sendMessage.mock.calls[0] as [number, string, unknown];
-      expect(sentText).toBe("🤖 `Scout`\nHello world");
+      expect(sentText).toBe("🤖 Scout\nHello world");
     });
 
     it("omits header in single-session mode (sendMessage)", async () => {
@@ -500,7 +500,7 @@ describe("outbound-proxy", () => {
       );
 
       const [, , recordedText] = mocks.recordOutgoing.mock.calls[0] as [number, string, string];
-      expect(recordedText).toBe("🤖 `Scout`\noriginal text");
+      expect(recordedText).toBe("🤖 Scout\noriginal text");
     });
 
     it("uses 'Session N' as fallback when session has no name", async () => {
@@ -513,7 +513,7 @@ describe("outbound-proxy", () => {
       await (p as unknown as FakeApi).sendMessage(42, "text");
 
       const [, sentText] = raw.sendMessage.mock.calls[0] as [number, string, unknown];
-      expect(sentText).toBe("🤖 `Session 3`\ntext");
+      expect(sentText).toBe("🤖 Session 3\ntext");
     });
 
     it("prepends header to file caption in multi-session mode (sendPhoto)", async () => {
@@ -529,7 +529,7 @@ describe("outbound-proxy", () => {
       );
 
       const [, , opts] = raw.sendPhoto.mock.calls[0] as [number, string, { caption: string }];
-      expect(opts.caption).toBe("🤖 `Scout`\nA photo caption");
+      expect(opts.caption).toBe("🤖 Scout\nA photo caption");
     });
 
     it("omits caption header when no caption provided (sendPhoto)", async () => {
@@ -558,7 +558,7 @@ describe("outbound-proxy", () => {
       await (p as unknown as FakeApi).editMessageText(42, 10, "edited content");
 
       const [, , editedText] = raw.editMessageText.mock.calls[0] as [number, number, string];
-      expect(editedText).toBe("🤖 `Scout`\nedited content");
+      expect(editedText).toBe("🤖 Scout\nedited content");
     });
 
     it("uses HTML code tags in editMessageText when parse_mode is HTML", async () => {
@@ -597,7 +597,7 @@ describe("outbound-proxy", () => {
       await (p as unknown as FakeApi).sendMessage(42, "Hello");
 
       const [, sentText] = raw.sendMessage.mock.calls[0] as [number, string, unknown];
-      expect(sentText).toBe("🟦 🤖 `Scout`\nHello");
+      expect(sentText).toBe("🟦 🤖 Scout\nHello");
     });
 
     it("omits color prefix when session has no color", async () => {
@@ -610,7 +610,7 @@ describe("outbound-proxy", () => {
       await (p as unknown as FakeApi).sendMessage(42, "Hello");
 
       const [, sentText] = raw.sendMessage.mock.calls[0] as [number, string, unknown];
-      expect(sentText).toBe("🤖 `Scout`\nHello");
+      expect(sentText).toBe("🤖 Scout\nHello");
     });
   });
 });

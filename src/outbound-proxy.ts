@@ -35,17 +35,20 @@ function buildHeader(parseMode?: string): { plain: string; formatted: string } {
   const name = session?.name || (sid > 0 ? `Session ${sid}` : "");
   if (!name) return { plain: "", formatted: "" };
   const colorPrefix = session?.color ? `${session.color} ` : "";
+  const plain = `${colorPrefix}🤖 ${name}\n`;
 
   let formatted: string;
   if (parseMode === "MarkdownV2") {
     formatted = `${colorPrefix}🤖 \`${escapeV2(name)}\`\n`;
   } else if (parseMode === "HTML") {
     formatted = `${colorPrefix}🤖 <code>${escapeHtml(name)}</code>\n`;
-  } else {
+  } else if (parseMode === "Markdown") {
     formatted = `${colorPrefix}🤖 \`${name}\`\n`;
+  } else {
+    formatted = plain;
   }
 
-  return { plain: `${colorPrefix}🤖 \`${name}\`\n`, formatted };
+  return { plain, formatted };
 }
 
 // ---------------------------------------------------------------------------
