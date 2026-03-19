@@ -1,7 +1,7 @@
-# Animation Priority Stack
+# 310 — Animation Priority Stack
 
 **Type:** Feature
-**Priority:** 451 (Normal — future)
+**Priority:** 310 (Medium)
 **Status:** Draft
 **Created:** 2026-03-18
 

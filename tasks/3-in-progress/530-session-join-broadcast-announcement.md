@@ -10,12 +10,11 @@ When a session is approved, the approval prompt is private to the operator and g
 ## Requirements
 
 1. After approval, **delete** the approval prompt message (it's private UI, not public)
-2. **Send a visible broadcast message** styled with the session's name tag (via the outbound proxy), e.g.:
+2. **Send a visible broadcast message** through the existing outbound proxy `sendMessage` wrapper (which adds name tags automatically when multi-session is active — do NOT build the header independently). Ensure the ALS session context is set to the approved session's SID before sending so the outbound proxy renders the correct name tag. The body text is "Session N — 🟢 Online". The outbound proxy will prepend the name tag header, producing:
    ```
-   🟢 Worker 1
-   Online
+   🟨 🤖 Worker 1
+   Session 2 — 🟢 Online
    ```
-   It should look identical to a normal session outbound message — name tag header, same formatting
 3. **Track the announcement as owned by the approved session** so that replying to it routes to that session (`trackMessageOwner(msgId, sid)`)
 4. **Deliver a service event to all session queues** so every session knows someone joined (existing `deliverServiceMessage` behavior, but now with the broadcast message_id attached)
 5. Any session or the operator can **reply to the announcement** to address the new session directly — existing `resolveTargetSession` handles this via `getMessageOwner`

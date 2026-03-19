@@ -1,6 +1,6 @@
-# 092 — Animation Timeout Service Message
+# 900 — Animation Timeout Service Message
 
-**Priority:** 500 (Low — back burner)
+**Priority:** 900 (Low — bottom of backlog)
 **Status:** Draft
 **Created:** 2026-03-18
 **Note:** Operator says "cool but not that cool" — only useful when no explicit timeout was set. 10 min default is long enough that this is low-value. Revisit after animation priority stack (451) is implemented.
