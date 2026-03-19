@@ -42,6 +42,8 @@
 
 ## Added
 
+- Session join broadcast announcement — on approval, the approval prompt is deleted and a visible `Session N — 🟢 Online` message is sent through the outbound proxy (which auto-prepends the session's name tag); the message is tracked with `trackMessageOwner` so operator/session replies route to the new session; `announcement_message_id` is included in the `session_joined` and `session_orientation` service event details so listeners can identify the message
+
 - Added `get_chat_history` tool with backward paging support (`before_id`) and configurable window size (`count`, default 20, max 50); returns chronological timeline events plus `has_more` so sessions can read recent history and page older events safely using timeline position (not numeric ID order)
 - Added button symbol parity validation to `choose`, `confirm`, and `send_choice` — returns `BUTTON_SYMBOL_PARITY` error when some labels have emoji and others do not; pass `ignore_parity: true` to bypass; added `button-validation.ts` shared helper with `hasEmoji()` and `validateButtonSymbolParity()`
 - Added `voice_transcription_failed` service message — when voice transcription fails (timeout or API error) the server now injects a `service_message` with `event_type: "voice_transcription_failed"` into the target session queue; `details` carries `message_id`, `reason` (`service_timeout` or `service_error`), and human-readable error text; backwards compatible (patched voice event still contains `[transcription failed: ...]` text); added `deliverVoiceTranscriptionFailed()` to `session-queue.ts`

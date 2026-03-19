@@ -5,7 +5,7 @@ import { markdownToV2 } from "../markdown.js";
 import type { TimelineEvent } from "../message-store.js";
 import { dequeue, registerCallbackHook, clearCallbackHook } from "../message-store.js";
 import { createSession, closeSession, setActiveSession, listSessions, activeSessionCount, getAvailableColors, COLOR_PALETTE } from "../session-manager.js";
-import { createSessionQueue, removeSessionQueue, deliverServiceMessage } from "../session-queue.js";
+import { createSessionQueue, removeSessionQueue, deliverServiceMessage, trackMessageOwner } from "../session-queue.js";
 import { setGovernorSid, getGovernorSid } from "../routing-mode.js";
 import { runInSessionContext } from "../session-context.js";
 
@@ -69,16 +69,18 @@ async function requestApproval(
     });
   });
 
-  // Edit the prompt to reflect the outcome (clears the inline keyboard)
-  const outcomeText = decision.approved
-    ? `🤖 *Session approved:* ${decision.color} ${markdownToV2(name)} ✓`
-    : `🤖 *Session denied:* ${markdownToV2(name)} ✗`;
-  await getApi().editMessageText(
-    chatId,
-    msgId,
-    outcomeText,
-    { parse_mode: "MarkdownV2" },
-  ).catch(() => {});
+  // Delete the prompt on approval (it's private UI — a public broadcast is
+  // sent separately). On denial, edit in-place to show the outcome.
+  if (decision.approved) {
+    await getApi().deleteMessage(chatId, msgId).catch(() => {});
+  } else {
+    await getApi().editMessageText(
+      chatId,
+      msgId,
+      `🤖 *Session denied:* ${markdownToV2(name)} ✗`,
+      { parse_mode: "MarkdownV2" },
+    ).catch(() => {});
+  }
 
   return decision;
 }
@@ -205,6 +207,20 @@ export function register(server: McpServer) {
             setGovernorSid(lowestSid);
           }
 
+          // Broadcast a visible announcement via the outbound proxy so the
+          // operator (and other sessions) can reply-to-address this session.
+          // runInSessionContext sets the ALS SID so the proxy prepends the
+          // correct name tag ("🟨 🤖 Worker 1\nSession 2 — 🟢 Online").
+          const _announcement = await Promise.resolve(
+            runInSessionContext(session.sid, () =>
+              getApi().sendMessage(chatId, `Session ${session.sid} — 🟢 Online`),
+            ),
+          ).catch(() => undefined);
+          const announcementMsgId = _announcement?.message_id;
+          if (announcementMsgId !== undefined) {
+            trackMessageOwner(announcementMsgId, session.sid);
+          }
+
           // Notify existing sessions and the new session of the join event
           const governorSid = getGovernorSid();
           const governorSession = allSessions.find(s => s.sid === governorSid);
@@ -220,7 +236,7 @@ export function register(server: McpServer) {
               fellow.sid,
               `Session '${effectiveName}' (SID ${session.sid}) ${joinVerb}. ${governorNote}`,
               "session_joined",
-              { sid: session.sid, name: effectiveName, governor_sid: governorSid, reconnect },
+              { sid: session.sid, name: effectiveName, governor_sid: governorSid, reconnect, ...(announcementMsgId !== undefined && { announcement_message_id: announcementMsgId }) },
             );
           }
 
@@ -233,7 +249,7 @@ export function register(server: McpServer) {
             session.sid,
             roleNote,
             "session_orientation",
-            { sid: session.sid, name: effectiveName, governor_sid: governorSid },
+            { sid: session.sid, name: effectiveName, governor_sid: governorSid, ...(announcementMsgId !== undefined && { announcement_message_id: announcementMsgId }) },
           );
         }
         return toResult(res);

@@ -5,7 +5,6 @@ import { markdownToV2 } from "../markdown.js";
 import { applyTopicToText } from "../topic-state.js";
 import { registerCallbackHook, clearCallbackHook, registerMessageHook, clearMessageHook, pendingCount } from "../message-store.js";
 import { getSessionQueue, peekSessionCategories } from "../session-queue.js";
-import { getCallerSid } from "../session-context.js";
 import { requireAuth } from "../session-gate.js";
 import {
   pollButtonOrTextOrVoice, ackAndEditSelection, editWithSkipped,
@@ -89,7 +88,7 @@ export function register(server: McpServer) {
       if (textErr) return toError(textErr);
 
       if (!ignore_pending && !reply_to_message_id) {
-        const sid = getCallerSid();
+        const sid = _sid;
         const sq = sid > 0 ? getSessionQueue(sid) : undefined;
         const pending = sq ? sq.pendingCount() : pendingCount();
         if (pending > 0) {
@@ -168,7 +167,7 @@ export function register(server: McpServer) {
 
         const result = await pollButtonOrTextOrVoice(
           chatId, sent.message_id, timeout_seconds,
-          onVoiceDetected, signal, getCallerSid(),
+          onVoiceDetected, signal, _sid,
         );
 
         if (!result) {

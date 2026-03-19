@@ -4,6 +4,7 @@ import { createMockServer, parseResult, isError, type ToolHandler } from "./test
 const mocks = vi.hoisted(() => ({
   sendMessage: vi.fn(),
   editMessageText: vi.fn().mockResolvedValue(undefined),
+  deleteMessage: vi.fn().mockResolvedValue(undefined),
   answerCallbackQuery: vi.fn().mockResolvedValue(true),
   pendingCount: vi.fn(),
   dequeue: vi.fn(),
@@ -16,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   setGovernorSid: vi.fn(),
   getGovernorSid: vi.fn().mockReturnValue(0),
   deliverServiceMessage: vi.fn(),
+  trackMessageOwner: vi.fn(),
   resolveChat: vi.fn(() => 42 as number),
   registerCallbackHook: vi.fn(),
   clearCallbackHook: vi.fn(),
@@ -28,6 +30,7 @@ vi.mock("../telegram.js", async (importActual) => {
     getApi: () => ({
       sendMessage: mocks.sendMessage,
       editMessageText: mocks.editMessageText,
+      deleteMessage: mocks.deleteMessage,
       answerCallbackQuery: mocks.answerCallbackQuery,
     }),
     resolveChat: () => mocks.resolveChat(),
@@ -61,6 +64,7 @@ vi.mock("../session-queue.js", () => ({
   createSessionQueue: vi.fn(),
   removeSessionQueue: vi.fn(),
   deliverServiceMessage: mocks.deliverServiceMessage,
+  trackMessageOwner: mocks.trackMessageOwner,
 }));
 
 import { register } from "./session_start.js";
@@ -831,7 +835,7 @@ describe("session_start tool", () => {
     expect(mocks.createSession).toHaveBeenCalledWith("Worker", "🟩");
   });
 
-  it("post-decision edit shows color + name after approval", async () => {
+  it("approval prompt deleted (not edited) after operator approves", async () => {
     mocks.pendingCount.mockReturnValue(0);
     mocks.activeSessionCount.mockReturnValue(1);
     mocks.listSessions.mockReturnValueOnce([{ sid: 1, name: "Primary", createdAt: "2026-03-17" }]).mockReturnValue([]);
@@ -845,19 +849,76 @@ describe("session_start tool", () => {
 
     await call({ name: "Worker" });
 
-    // editMessageText should be called with the approval outcome showing color
-    expect(mocks.editMessageText).toHaveBeenCalledWith(
+    // Approval prompt is DELETED, not edited to show "approved"
+    expect(mocks.deleteMessage).toHaveBeenCalledWith(42, 50);
+    expect(mocks.editMessageText).not.toHaveBeenCalledWith(
       42,
       50,
-      expect.stringContaining("🟩"),
-      expect.objectContaining({ parse_mode: "MarkdownV2" }),
-    );
-    expect(mocks.editMessageText).toHaveBeenCalledWith(
-      42,
-      50,
-      expect.stringContaining("Worker"),
+      expect.stringContaining("approved"),
       expect.any(Object),
     );
+  });
+
+  it("broadcasts online announcement after approval and tracks message ownership", async () => {
+    mocks.pendingCount.mockReturnValue(0);
+    mocks.activeSessionCount.mockReturnValue(1);
+    mocks.listSessions
+      .mockReturnValueOnce([{ sid: 1, name: "Primary", createdAt: "2026-03-17" }])
+      .mockReturnValue([
+        { sid: 1, name: "Primary", createdAt: "2026-03-17" },
+        { sid: 2, name: "Worker", createdAt: "2026-03-17" },
+      ]);
+    mocks.getAvailableColors.mockReturnValue(["🟦", "🟩"]);
+    mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
+      void Promise.resolve().then(() => { fn({ content: { data: "approve_1", qid: "q1" } }); });
+    });
+    mocks.sendMessage
+      .mockResolvedValueOnce({ message_id: 50 })   // approval prompt
+      .mockResolvedValueOnce({ message_id: 51 });  // broadcast announcement
+    mocks.createSession.mockReturnValue({ sid: 2, pin: 200002, name: "Worker", color: "🟩", sessionsActive: 2 });
+
+    await call({ name: "Worker" });
+
+    // A second sendMessage with the online announcement was sent
+    const announceCalls = mocks.sendMessage.mock.calls.filter(
+      (c: unknown[]) => String(c[1]).includes("🟢 Online"),
+    );
+    expect(announceCalls.length).toBeGreaterThanOrEqual(1);
+    const announceText = String(announceCalls[0][1]);
+    expect(announceText).toContain("Session 2");
+
+    // Announcement tracked to SID 2 so replies route to it
+    expect(mocks.trackMessageOwner).toHaveBeenCalledWith(51, 2);
+  });
+
+  it("includes announcement_message_id in session_joined service message details", async () => {
+    mocks.pendingCount.mockReturnValue(0);
+    mocks.activeSessionCount.mockReturnValue(1);
+    mocks.getGovernorSid.mockReturnValue(1);
+    mocks.createSession.mockReturnValue({ sid: 2, pin: 200002, name: "Worker", sessionsActive: 2 });
+    mocks.listSessions
+      .mockReturnValueOnce([{ sid: 1, name: "Primary", createdAt: "2026-03-17" }])
+      .mockReturnValue([
+        { sid: 1, name: "Primary", createdAt: "2026-03-17" },
+        { sid: 2, name: "Worker", createdAt: "2026-03-17" },
+      ]);
+    mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
+      void Promise.resolve().then(() => { fn({ content: { data: "approve_0", qid: "q1" } }); });
+    });
+    mocks.sendMessage
+      .mockResolvedValueOnce({ message_id: 50 })   // approval prompt
+      .mockResolvedValueOnce({ message_id: 99 });  // broadcast
+
+    await call({ name: "Worker" });
+
+    const calls = mocks.deliverServiceMessage.mock.calls;
+    const toExisting = calls.find((c: unknown[]) => c[0] === 1 && c[2] === "session_joined");
+    expect(toExisting).toBeDefined();
+    expect((toExisting![3] as Record<string, unknown>).announcement_message_id).toBe(99);
+
+    const toNew = calls.find((c: unknown[]) => c[0] === 2 && c[2] === "session_orientation");
+    expect(toNew).toBeDefined();
+    expect((toNew![3] as Record<string, unknown>).announcement_message_id).toBe(99);
   });
 
   it("post-decision edit shows name (no color) after denial", async () => {

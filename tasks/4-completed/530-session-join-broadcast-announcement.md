@@ -19,11 +19,22 @@ When a session is approved, the approval prompt is private to the operator and g
 4. **Deliver a service event to all session queues** so every session knows someone joined (existing `deliverServiceMessage` behavior, but now with the broadcast message_id attached)
 5. Any session or the operator can **reply to the announcement** to address the new session directly — existing `resolveTargetSession` handles this via `getMessageOwner`
 
-## Acceptance
+## Completion
 
-- Approval prompt is deleted after the operator selects a color
-- A name-tagged "Online" message appears in the chat, looking like it came from the session
-- Replying to that message routes the reply to the correct session's queue
-- All sessions receive a service event about the join
-- Denial still works as before (no broadcast on deny)
-- Existing tests pass, new test covers the broadcast + reply-to-routing path
+**Status:** Done — 1485/1485 tests pass, build clean.
+
+**Implementation:**
+- `requestApproval()` in `session_start.ts`: on approval, calls `deleteMessage(chatId, msgId)` instead of editing to "approved" text; on denial keeps `editMessageText` for the denial outcome
+- After `createSession` + `createSessionQueue` + `setActiveSession`, when `sessionsActive > 1`: sends `"Session N — 🟢 Online"` via `Promise.resolve(runInSessionContext(session.sid, () => getApi().sendMessage(...)))` so the outbound proxy prepends the correct name tag
+- Calls `trackMessageOwner(announcementMsgId, session.sid)` so reply-to routing reaches this session
+- Includes `announcement_message_id` in `session_joined` and `session_orientation` `deliverServiceMessage` details
+- Key bug fixed during implementation: `runInSessionContext` is synchronous; calling `.catch()` directly on its result throws when `sendMessage` returns a non-Promise (e.g. in tests). Wrapped with `Promise.resolve()` first.
+
+**Test changes in `session_start.test.ts`:**
+- Added `deleteMessage` and `trackMessageOwner` to hoisted mocks + mock factories
+- Replaced "post-decision edit shows color + name after approval" with 3 new tests:
+  1. "approval prompt deleted (not edited) after operator approves"
+  2. "broadcasts online announcement after approval and tracks message ownership"
+  3. "includes announcement_message_id in session_joined service message details"
+
+**Changelog:** Added to `changelog/unreleased.md` under Added.
