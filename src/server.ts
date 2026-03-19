@@ -36,6 +36,9 @@ import { register as registerTranscribeVoice } from "./tools/transcribe_voice.js
 import { register as registerSetCommands } from "./tools/set_commands.js";
 import { register as registerSetTopic } from "./tools/set_topic.js";
 import { register as registerSetVoice } from "./tools/set_voice.js";
+import { register as registerSetReminder } from "./tools/set_reminder.js";
+import { register as registerCancelReminder } from "./tools/cancel_reminder.js";
+import { register as registerListReminders } from "./tools/list_reminders.js";
 import { register as registerGetMe } from "./tools/get_me.js";
 import { register as registerGetChat } from "./tools/get_chat.js";
 import { register as registerGetAgentGuide } from "./tools/get_agent_guide.js";
@@ -110,6 +113,9 @@ export function createServer(): McpServer {
   registerGetAgentGuide(server);
   registerSetTopic(server);
   registerSetVoice(server);
+  registerSetReminder(server);
+  registerCancelReminder(server);
+  registerListReminders(server);
   registerNotify(server);
   registerAsk(server);
   registerChoose(server);  registerSendChoice(server);  registerSendNewChecklist(server);  registerSendNewProgress(server);
