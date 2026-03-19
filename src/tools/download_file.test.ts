@@ -50,7 +50,6 @@ describe("download_file tool", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.validateSession.mockReturnValue(true);
-    mocks.validateSession.mockReturnValue(true);
     process.env.BOT_TOKEN = "testtoken123";
     process.env.ALLOWED_USER_ID = "12345";
     resetSecurityConfig();

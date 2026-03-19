@@ -45,7 +45,7 @@ Make `telegram.ts` delegate to `rate-limiter.ts` for all rate-limit state:
 - [ ] `telegram.ts` no longer has its own rate-limit state
 - [ ] All callers (`outbound-proxy.ts`, `animation-state.ts`, `get_debug_log.ts`, tests) use the same rate-limit source
 - [ ] `recordRateLimit` handles `undefined` retryAfter (default to 5 seconds)
-- [ ] Existing tests pass — `npx vitest run` (expect 1479 tests)
-- [ ] Build clean — `npx tsc --noEmit`
-- [ ] Lint clean — `npx eslint src/`
+- [ ] Typecheck clean — `pnpm typecheck`
+- [ ] Lint clean — `pnpm lint`
+- [ ] Existing tests pass — `pnpm test`
 - [ ] `changelog/unreleased.md` updated under `## Changed`

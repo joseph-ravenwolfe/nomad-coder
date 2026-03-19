@@ -30,7 +30,6 @@ describe("set_topic tool", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.validateSession.mockReturnValue(true);
-    mocks.validateSession.mockReturnValue(true);
     mocks.getTopic.mockReturnValue(null);
     const server = createMockServer();
     register(server);

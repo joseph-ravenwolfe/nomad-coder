@@ -2,6 +2,9 @@
 
 ## Changed
 
+- Consolidated rate-limit tracking into `rate-limiter.ts` as the single source of truth — removed duplicate `_rateLimitUntil` state from `telegram.ts`; `recordRateLimitHit`, `getRateLimitRemaining`, and `clearRateLimitForTest` in `telegram.ts` now delegate to `recordRateLimit`, `rateLimitRemainingSecs`, and `resetRateLimiterForTest` in `rate-limiter.ts`; `recordRateLimit` now accepts `number | undefined` (defaults to 5 s, matching previous behaviour)
+- Removed 30 consecutive duplicate `mocks.validateSession.mockReturnValue(true)` lines from tool test files — copy/paste artifacts from the task-300 refactor
+
 - Narrowed "all communication goes through Telegram" to be scoped to loop mode — wording updated in `telegram-communication.instructions.md` and `docs/communication.md` to clarify this applies when the operator has initiated the loop
 - Added channel-precedence rule, canonical loop recipe, anti-recovery warning, and instruction-precedence hierarchy to `LOOP-PROMPT.md`
 - Added "Visible Presence" and "Common Failure Modes" sections to `LOOP-PROMPT.md` and `telegram-communication.instructions.md`
@@ -21,6 +24,7 @@
 
 ## Fixed
 
+- Fixed ALS session context spoofing in `server.ts` middleware — `args.identity[0]` now takes priority over `args.sid` when both are present; a caller with a valid identity tuple can no longer be overridden by a bare `sid` argument
 - Replaced `z.tuple([z.number().int(), z.number().int()])` identity schema with `z.array(z.number().int())` (no `.length(2)`) across all 37 tool files — Zod's tuple serialisation and `.length(N)` both produce `items` as an array that OpenAI's JSON-Schema validator rejects ("is not of type 'object', 'boolean'"); the unconstrained array form produces valid `{ items: { type: "integer" } }`; shared `IDENTITY_SCHEMA` constant in `src/tools/identity-schema.ts`; length enforced at runtime by `requireAuth()` — short arrays fail `validateSession` with `AUTH_FAILED`
 - Converted `topic-state`, `typing-state`, `temp-message`, and `temp-reaction` from module-level singletons to per-SID `Map` instances — eliminates cross-session state corruption when multiple sessions are active simultaneously
 - Health check no longer flags sessions with an active animation as unresponsive — an active animation is proof of life; added `hasActiveAnimation(sid)` export to `animation-state.ts`

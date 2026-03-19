@@ -44,9 +44,10 @@ export const MIN_SEND_INTERVAL_MS = 1000;
 /**
  * Record a rate-limit window from a 429 response.
  * Extends the window if a longer retry_after arrives.
+ * Defaults to 5 seconds when retryAfterSeconds is undefined.
  */
-export function recordRateLimit(retryAfterSeconds: number): void {
-  const until = Date.now() + retryAfterSeconds * 1000;
+export function recordRateLimit(retryAfterSeconds: number | undefined): void {
+  const until = Date.now() + (retryAfterSeconds ?? 5) * 1000;
   if (until > _rateLimitUntil) _rateLimitUntil = until;
 }
 

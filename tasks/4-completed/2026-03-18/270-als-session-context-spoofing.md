@@ -43,7 +43,7 @@ This preserves the `args.sid` path for tools that don't use identity (unauthenti
 - [ ] When both `args.identity` and `args.sid` are present, the ALS context uses `args.identity[0]`
 - [ ] When only `args.sid` is present (no identity), the ALS context uses `args.sid` (backward compat)
 - [ ] When neither is present, falls back to `getActiveSession()`
-- [ ] Existing tests pass — `npx vitest run` (expect 1479 tests)
-- [ ] Build clean — `npx tsc --noEmit`
-- [ ] Lint clean — `npx eslint src/`
+- [ ] Typecheck clean — `pnpm typecheck`
+- [ ] Lint clean — `pnpm lint`
+- [ ] Existing tests pass — `pnpm test`
 - [ ] `changelog/unreleased.md` updated under `## Fixed`

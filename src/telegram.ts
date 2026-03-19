@@ -4,6 +4,11 @@ import { readFileSync, existsSync, realpathSync } from "fs";
 import path, { resolve } from "path";
 import { tmpdir } from "os";
 import { getBotReaction, recordBotReaction } from "./message-store.js";
+import {
+  recordRateLimit,
+  rateLimitRemainingSecs,
+  resetRateLimiterForTest,
+} from "./rate-limiter.js";
 
 /** Directory where downloaded files are stored — only local paths under this dir are allowed for file uploads. */
 export const SAFE_FILE_DIR = resolve(tmpdir(), "telegram-bridge-mcp");
@@ -199,34 +204,17 @@ function classifyGrammyError(err: GrammyError): TelegramError {
 }
 
 // ---------------------------------------------------------------------------
-// Rate limit tracking
+// Rate limit tracking — delegated to rate-limiter.ts (single source of truth)
 // ---------------------------------------------------------------------------
 
-/** Epoch milliseconds when the current Telegram rate limit window expires (0 = not limited). */
-let _rateLimitUntil = 0;
+/** @see recordRateLimit in rate-limiter.ts */
+export const recordRateLimitHit = recordRateLimit;
 
-/**
- * Record a 429 rate limit hit. Extends the window if an incoming
- * `retry_after` would expire later than the currently tracked window.
- */
-export function recordRateLimitHit(retryAfterSeconds: number | undefined): void {
-  const until = Date.now() + (retryAfterSeconds ?? 5) * 1000;
-  if (until > _rateLimitUntil) _rateLimitUntil = until;
-}
-
-/**
- * Returns the number of seconds remaining in the current rate limit window,
- * or 0 if not currently rate limited.
- */
-export function getRateLimitRemaining(): number {
-  const remaining = _rateLimitUntil - Date.now();
-  return remaining > 0 ? Math.ceil(remaining / 1000) : 0;
-}
+/** @see rateLimitRemainingSecs in rate-limiter.ts */
+export const getRateLimitRemaining = rateLimitRemainingSecs;
 
 /** Clears the rate limit window. For use in tests only. */
-export function clearRateLimitForTest(): void {
-  _rateLimitUntil = 0;
-}
+export const clearRateLimitForTest = resetRateLimiterForTest;
 
 // ---------------------------------------------------------------------------
 // Singleton API client
@@ -649,7 +637,7 @@ export function ackVoiceMessage(messageId: number): void {
  */
 export async function callApi<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
   // Fast-fail if we are inside a known rate limit window
-  const remaining = getRateLimitRemaining();
+  const remaining = rateLimitRemainingSecs();
   if (remaining > 0) {
     const desc = `Too Many Requests: retry after ${remaining}`;
     throw new GrammyError(
@@ -667,7 +655,7 @@ export async function callApi<T>(fn: () => Promise<T>, maxRetries = 3): Promise<
       if (err instanceof GrammyError && attempt < maxRetries) {
         const classified = classifyGrammyError(err);
         if (classified.code === "RATE_LIMITED") {
-          recordRateLimitHit(classified.retry_after);
+          recordRateLimit(classified.retry_after);
           const delay = Math.min((classified.retry_after ?? 5) * 1000, 60_000);
           await new Promise((r) => setTimeout(r, delay));
           continue;

@@ -40,7 +40,6 @@ describe("send_text tool", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.validateSession.mockReturnValue(true);
-    mocks.validateSession.mockReturnValue(true);
     mocks.sendMessage.mockResolvedValue(BASE_MSG);
     mocks.splitMessage.mockImplementation((text: string) => [text]);
     const server = createMockServer();

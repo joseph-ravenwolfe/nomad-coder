@@ -33,7 +33,6 @@ describe("edit_message tool", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.validateSession.mockReturnValue(true);
-    mocks.validateSession.mockReturnValue(true);
     mocks.editMessageText.mockResolvedValue({ message_id: 1 });
     mocks.editMessageReplyMarkup.mockResolvedValue({ message_id: 1 });
     const server = createMockServer();

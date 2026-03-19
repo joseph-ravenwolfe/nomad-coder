@@ -70,7 +70,6 @@ describe("send_text_as_voice", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.validateSession.mockReturnValue(true);
-    mocks.validateSession.mockReturnValue(true);
     mocks.resolveChat.mockReturnValue(123);
     mocks.isTtsEnabled.mockReturnValue(true);
     mocks.validateText.mockReturnValue(null);

@@ -52,7 +52,6 @@ describe("get_chat tool", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.validateSession.mockReturnValue(true);
-    mocks.validateSession.mockReturnValue(true);
     mocks.sendMessage.mockResolvedValue({ message_id: 1 });
     mocks.ackAndEditSelection.mockResolvedValue(undefined);
     mocks.editWithTimedOut.mockResolvedValue(undefined);

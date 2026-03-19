@@ -51,7 +51,6 @@ describe("dump_session_record tool (V3)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.validateSession.mockReturnValue(true);
-    mocks.validateSession.mockReturnValue(true);
     mocks.dumpTimeline.mockReturnValue([]);
     mocks.timelineSize.mockReturnValue(0);
     mocks.storeSize.mockReturnValue(0);

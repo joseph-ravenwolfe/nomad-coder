@@ -45,7 +45,6 @@ describe("set_default_animation tool", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.validateSession.mockReturnValue(true);
-    mocks.validateSession.mockReturnValue(true);
     mocks.getDefaultFrames.mockReturnValue(["`...`", "`·..`"]);
     mocks.listPresets.mockReturnValue([]);
     mocks.listBuiltinPresets.mockReturnValue(["bounce", "dots", "working", "thinking", "loading"]);
