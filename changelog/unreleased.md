@@ -29,6 +29,9 @@
 ## Fixed
 
 - Fixed `debounceSend()` race condition — concurrent callers could both read `_lastSendAt` before either updated it, allowing messages to fire within the same rate-limit window; replaced with a promise-chain mutex that serialises all callers; `resetRateLimiterForTest()` now resets the lock to a resolved promise
+- Fixed `openai-schema-compat.test.ts` shared `captured` array polluting across tests — added `beforeAll` reset hook; removed manual `captured.length = 0` inside the first test
+- Fixed `requireAuth` accepting a too-short `identity` array — added `identity.length < 2` guard that returns `SID_REQUIRED` before destructuring
+- Fixed `dlogOrphans` in `close_session.ts` using `process.stderr.write` directly — replaced with `dlog("session", ...)` to match logging conventions
 - Fixed voice 😴 reaction suppressed for worker-session messages in multi-session — `hasAnySessionWaiter()` (checks all sessions) replaced with `hasSessionWaiterForMessage(messageId)` in `poller.ts`; new helper returns true only when the session queue that *holds this specific message* has an active waiter; governor's perpetual `dequeue_update` loop no longer causes 😴 to be skipped for every worker voice message; `TemporalQueue` gained `_pendingIds` tracking and `hasItem(id)` for O(1) ownership lookup
 - Fixed `confirm.ts` pending-updates guard using `getCallerSid()` instead of the already-validated `_sid`; likewise fixed the `pollButtonOrTextOrVoice` call site in the same tool; removed dead `getCallerSid` import
 - Fixed `setTempReaction` timeout losing session context — the `setTimeout` callback now passes the captured SID directly to `fireTempReactionRestore(sid?)`, preventing it from calling `getCallerSid()` inside the timer (which returns 0 with no ALS context); reaction restore now correctly targets the originating session

@@ -7,7 +7,7 @@
  * input schema after Zod→JSON Schema conversion and asserts
  * no property anywhere violates these rules.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeAll } from "vitest";
 import { z, type ZodType } from "zod";
 
 // ---------------------------------------------------------------------------
@@ -119,7 +119,7 @@ function walkSchema(
 // ---------------------------------------------------------------------------
 
 describe("OpenAI JSON Schema compatibility — all tools", () => {
-  beforeEach(() => {
+  beforeAll(() => {
     captured.length = 0;
   });
 

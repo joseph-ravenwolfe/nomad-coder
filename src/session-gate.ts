@@ -29,7 +29,7 @@ export function setAuthHook(fn: (sid: number) => void): void {
 export function requireAuth(
   identity: readonly number[] | undefined,
 ): number | TelegramError {
-  if (!identity) {
+  if (!identity || identity.length < 2) {
     return {
       code: "SID_REQUIRED",
       message: "identity [sid, pin] is required. Pass the tuple returned by session_start.",

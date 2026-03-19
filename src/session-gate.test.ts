@@ -24,6 +24,11 @@ describe("requireAuth", () => {
       });
     });
 
+    it("returns SID_REQUIRED when identity array is too short", () => {
+      const result = requireAuth([1]);
+      expect(result).toMatchObject({ code: "SID_REQUIRED" });
+    });
+
     it("always returns SID_REQUIRED regardless of session count", () => {
       // No session count check — identity is always required
       const result = requireAuth(undefined);

@@ -142,5 +142,5 @@ export function register(server: McpServer) {
 }
 
 function dlogOrphans(sid: number, count: number): void {
-  process.stderr.write(`[session-teardown] rerouted ${count} orphaned event(s) from sid=${sid}\n`);
+  dlog("session", `[session-teardown] rerouted ${count} orphaned event(s) from sid=${sid}`);
 }
