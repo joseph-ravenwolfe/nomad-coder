@@ -1,5 +1,6 @@
 import { vi, describe, it, expect, beforeEach } from "vitest";
 import { isError, errorCode } from "./test-utils.js";
+import { markdownToV2 } from "../markdown.js";
 
 const mocks = vi.hoisted(() => ({
   activeSessionCount: vi.fn(() => 0),
@@ -177,15 +178,15 @@ describe("send_text_as_voice", () => {
   });
 
   describe("topic formatting", () => {
-    it("boldens topic in caption with parse_mode Markdown when topic is set (no body)", async () => {
+    it("boldens topic in caption with parse_mode MarkdownV2 when topic is set (no body)", async () => {
       mocks.getTopic.mockReturnValue("my-topic");
       await handler({ text: "Hello", identity: [1, 123456] });
       expect(mocks.sendVoiceDirect).toHaveBeenCalledWith(
         123,
         expect.any(Buffer),
         expect.objectContaining({
-          caption: "**[my-topic]**",
-          parse_mode: "Markdown",
+          caption: markdownToV2("**[my-topic]**"),
+          parse_mode: "MarkdownV2",
         }),
       );
     });
@@ -197,8 +198,8 @@ describe("send_text_as_voice", () => {
         123,
         expect.any(Buffer),
         expect.objectContaining({
-          caption: "**[audit]**\nSome details here.",
-          parse_mode: "Markdown",
+          caption: markdownToV2("**[audit]**\nSome details here."),
+          parse_mode: "MarkdownV2",
         }),
       );
     });

@@ -28,6 +28,16 @@ If you discover something that should be a task, report it to the governor via D
 
 ---
 
+## Idle / Sleep Notification
+
+Workers must **notify the governor** before entering an idle or sleep state. The governor needs to know when workers are active vs. dormant.
+
+- If you have no assigned work, send a DM to the governor: "No tasks — going idle."
+- If you are waiting on a blocking event (CI, review, etc.), notify the governor with context.
+- Do **not** silently go dormant. The governor monitors worker health and silent workers look like hung processes.
+
+---
+
 ## Workspace Safety
 
 - Do **not** run `git stash`, `git reset`, `git rebase`, or `git cherry-pick` without governor approval.
