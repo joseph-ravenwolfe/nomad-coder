@@ -35,10 +35,10 @@ async function requestApproval(
   const sent = await getApi().sendMessage(chatId, text, {
     parse_mode: "MarkdownV2",
     reply_markup: {
-      inline_keyboard: [[
-        ...colorButtons,
-        { text: "✗ Deny", callback_data: APPROVAL_NO, style: "danger" },
-      ]],
+      inline_keyboard: [
+        colorButtons,
+        [{ text: "⛔ Deny", callback_data: APPROVAL_NO, style: "danger" }],
+      ],
     },
   } as Record<string, unknown>);
   const msgId: number = sent.message_id;

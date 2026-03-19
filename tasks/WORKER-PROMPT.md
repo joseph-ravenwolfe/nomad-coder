@@ -35,7 +35,7 @@ dequeue_update → messages? → handle and reply
 
 ## Rules
 
-- **Move before read.** No copies.
+- **Move before read. Move to complete.** Every transition is a move — never duplicate a file. One location only.
 - **Spec unclear** → `## ⚠️ Needs Clarification` + `## Progress So Far`, back to `1-draft/`, stop.
 - **No governor** → operator is governor.
 - **Stay in the loop** → Always go back to `dequeue_update()` to look for updates. Only exit the loop when told.

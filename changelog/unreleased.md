@@ -2,6 +2,7 @@
 
 ## Changed
 
+- Session approval keyboard now uses two rows — color buttons on row 1, `⛔ Deny` alone on row 2 — so the deny button is no longer cramped alongside 6 color emoji; deny button label updated from `✗ Deny` to `⛔ Deny`
 - Removed dead `_lane` parameter from `routeToSession` — vestige of `TwoLaneQueue` era; 55 call sites across production and test files cleaned up
 - `session_start` no longer sends an intro message on session creation — removed `buildIntro()`, `DEFAULT_INTRO`, `DEFAULT_RECONNECT_INTRO`, the `intro` input parameter, and `intro_message_id` from the result
 

@@ -39,9 +39,29 @@ inline_keyboard: [
 
 ## Acceptance Criteria
 
-- [ ] Deny button is on its own row, separate from colors
-- [ ] Colors remain on a single row
-- [ ] Color hint still appears first (existing behavior)
-- [ ] Approval/deny flow still works (test existing tests)
-- [ ] Build passes, all tests pass
-- [ ] Changelog entry added
+- [x] Deny button is on its own row, separate from colors
+- [x] Colors remain on a single row
+- [x] Color hint still appears first (existing behavior unchanged)
+- [x] Approval/deny flow still works — 49/49 session_start tests pass
+- [x] Build passes, all 1482 tests pass
+- [x] Changelog entry added
+
+## Completion
+
+**Date:** 2026-03-19
+**Worker:** Worker 1 (SID 2)
+
+### What was done
+
+- Split `inline_keyboard` in `requestApproval()` (`src/tools/session_start.ts`) from a single row to two rows:
+  - Row 1: `colorButtons` (unchanged)
+  - Row 2: `[{ text: "⛔ Deny", callback_data: APPROVAL_NO, style: "danger" }]`
+- Updated deny button label from `✗ Deny` to `⛔ Deny` for clarity
+- Updated test at `session_start.test.ts` L810 to look at `keyboard[1]` (deny row) instead of `keyboard[0]`
+- Changelog entry added to `changelog/unreleased.md` under `Changed`
+
+### Verification
+
+- 49/49 session_start tests pass
+- 1482/1482 total tests pass
+- Build clean

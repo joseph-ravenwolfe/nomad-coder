@@ -807,8 +807,8 @@ describe("session_start tool", () => {
 
     const promptOpts = (mocks.sendMessage.mock.calls[0] as unknown[])[2] as Record<string, unknown>;
     const keyboard = (promptOpts.reply_markup as Record<string, unknown>).inline_keyboard as unknown[][];
-    const buttons = keyboard[0] as Array<Record<string, unknown>>;
-    const denyButton = buttons.find(b => b.callback_data === "approve_no");
+    const denyRow = keyboard[1] as Array<Record<string, unknown>>;
+    const denyButton = denyRow.find(b => b.callback_data === "approve_no");
     expect(denyButton).toBeDefined();
     expect(denyButton!.style).toBe("danger");
   });
