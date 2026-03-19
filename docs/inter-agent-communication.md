@@ -190,6 +190,7 @@ The server injects service messages for lifecycle events. These have
 | `session_orientation` | New session | Your role, governor SID, fellow sessions |
 | `session_closed` | Remaining sessions | A session disconnected |
 | `governor_promoted` | New governor | You are now the governor |
+| `voice_transcription_failed` | Governor (or all sessions if no governor) | A voice message could not be transcribed; `details` contains `message_id`, `reason` (`service_timeout` or `service_error`), and human-readable `details` |
 
 React to these events to keep your internal state synchronized:
 

@@ -23,6 +23,9 @@
 
 ## Added
 
+- Added button symbol parity validation to `choose`, `confirm`, and `send_choice` — returns `BUTTON_SYMBOL_PARITY` error when some labels have emoji and others do not; pass `ignore_parity: true` to bypass; added `button-validation.ts` shared helper with `hasEmoji()` and `validateButtonSymbolParity()`
+- Added `voice_transcription_failed` service message — when voice transcription fails (timeout or API error) the server now injects a `service_message` with `event_type: "voice_transcription_failed"` into the target session queue; `details` carries `message_id`, `reason` (`service_timeout` or `service_error`), and human-readable error text; backwards compatible (patched voice event still contains `[transcription failed: ...]` text); added `deliverVoiceTranscriptionFailed()` to `session-queue.ts`
+- Added server-side Telegram rate limit tracking — `callApi()` now pre-checks a rate limit window before attempting each API call; on 429 `callApi` records `_rateLimitUntil` and retries as before; subsequent calls during the window fail immediately with a `RATE_LIMITED` `GrammyError` without hitting Telegram; exported `recordRateLimitHit()`, `getRateLimitRemaining()`, and `clearRateLimitForTest()` from `telegram.ts`
 - `PENDING_UPDATES` guard errors from `confirm`, `ask`, and `choose` now include a `breakdown` object (`{ text: N, voice: N, reaction: N, ... }`) with counts by content type, and the error message summarises the categories with actionable guidance to drain or pass `ignore_pending: true`; global fallback path (no session queue) still returns count-only
 - `peekCategories(getType)` method added to `TemporalQueue` — non-destructive peek that counts queue items by type without consuming them
 - `peekSessionCategories(sid)` exported from `session-queue.ts` — convenience wrapper that applies the `content.type` extractor for `TimelineEvent` queues
