@@ -12,6 +12,7 @@ import {
   type ButtonStyle,
 } from "./button-helpers.js";
 import { IDENTITY_SCHEMA } from "./identity-schema.js";
+import { validateButtonSymbolParity } from "../button-validation.js";
 
 const DESCRIPTION =
   "Sends a Yes/No confirmation message and waits until the user presses a " +
@@ -72,10 +73,14 @@ export function register(server: McpServer) {
         .boolean()
         .optional()
         .describe("Set true to skip the pending-updates check and block immediately"),
+      ignore_parity: z
+        .boolean()
+        .optional()
+        .describe("Set true to bypass button label emoji-consistency check"),
               identity: IDENTITY_SCHEMA,
 },
     },
-    async ({ text, yes_text, no_text, yes_data, no_data, yes_style, no_style, timeout_seconds, reply_to_message_id, ignore_pending, identity}, { signal }) => {
+    async ({ text, yes_text, no_text, yes_data, no_data, yes_style, no_style, timeout_seconds, reply_to_message_id, ignore_pending, ignore_parity, identity}, { signal }) => {
       const _sid = requireAuth(identity);
       if (typeof _sid !== "number") return toError(_sid);
       const chatId = resolveChat();
@@ -102,6 +107,19 @@ export function register(server: McpServer) {
               `calling confirm, or pass ignore_pending: true to proceed anyway.`,
             pending,
             ...(breakdown ? { breakdown } : {}),
+          });
+        }
+      }
+
+      // Validate button symbol parity (only when both buttons are shown)
+      if (!ignore_parity && no_text) {
+        const parity = validateButtonSymbolParity([yes_text, no_text]);
+        if (!parity.ok) {
+          return toError({
+            code: "BUTTON_SYMBOL_PARITY" as const,
+            message: `Button labels are inconsistent: ${parity.withEmoji.length} of 2 have emoji. Either add emoji to all labels or remove them. Pass ignore_parity: true to send anyway.`,
+            labels_with_emoji: parity.withEmoji,
+            labels_without_emoji: parity.withoutEmoji,
           });
         }
       }

@@ -9,6 +9,7 @@ import {
   sendChoiceMessage, type KeyboardOption,
 } from "./button-helpers.js";
 import { IDENTITY_SCHEMA } from "./identity-schema.js";
+import { validateButtonSymbolParity } from "../button-validation.js";
 
 const DESCRIPTION =
   "Non-blocking one-shot keyboard — sends a message with choice buttons and " +
@@ -70,10 +71,14 @@ export function register(server: McpServer) {
           .min(1)
           .optional()
           .describe("Reply to this message ID"),
+        ignore_parity: z
+          .boolean()
+          .optional()
+          .describe("Set true to bypass button label emoji-consistency check"),
               identity: IDENTITY_SCHEMA,
 },
     },
-    async ({ text, options, columns, parse_mode, disable_notification, reply_to_message_id, identity}) => {
+    async ({ text, options, columns, parse_mode, disable_notification, reply_to_message_id, ignore_parity, identity}) => {
       const _sid = requireAuth(identity);
       if (typeof _sid !== "number") return toError(_sid);
       const chatId = resolveChat();
@@ -81,6 +86,19 @@ export function register(server: McpServer) {
 
       const textErr = validateText(text);
       if (textErr) return toError(textErr);
+
+      // Validate button symbol parity
+      if (!ignore_parity) {
+        const parity = validateButtonSymbolParity(options.map((o) => o.label));
+        if (!parity.ok) {
+          return toError({
+            code: "BUTTON_SYMBOL_PARITY" as const,
+            message: `Button labels are inconsistent: ${parity.withEmoji.length} of ${options.length} have emoji. Either add emoji to all labels or remove them. Pass ignore_parity: true to send anyway.`,
+            labels_with_emoji: parity.withEmoji,
+            labels_without_emoji: parity.withoutEmoji,
+          });
+        }
+      }
 
       // Validate options — same rules as choose
       const displayMax = columns >= 2

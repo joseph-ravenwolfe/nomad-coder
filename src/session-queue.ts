@@ -345,6 +345,36 @@ export function routeMessage(messageId: number, targetSid: number, routerSid: nu
   return true;
 }
 
+/**
+ * Deliver a `voice_transcription_failed` service message to the session that
+ * received the voice message. Mirrors routeToSession's ambiguous routing:
+ * governor first, then broadcast to all sessions. No-op in single-session
+ * mode (no session queues exist).
+ */
+export function deliverVoiceTranscriptionFailed(
+  messageId: number,
+  reason: string,
+  details: string,
+): void {
+  if (_queues.size === 0) return;
+
+  const text =
+    `Voice message ${messageId} could not be transcribed (${reason}). ` +
+    `Ask the operator to resend if needed.`;
+  const svcDetails = { message_id: messageId, reason, details };
+
+  const gSid = getGovernorSid();
+  if (gSid > 0 && _queues.has(gSid)) {
+    deliverServiceMessage(gSid, text, "voice_transcription_failed", svcDetails);
+    return;
+  }
+
+  // No governor — broadcast to all active sessions
+  for (const sid of _queues.keys()) {
+    deliverServiceMessage(sid, text, "voice_transcription_failed", svcDetails);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Reset (testing only)
 // ---------------------------------------------------------------------------
@@ -353,4 +383,5 @@ export function resetSessionQueuesForTest(): void {
   _queues.clear();
   _messageOwnership.clear();
   _nextDmId = -1;
+  _nextServiceId = -100_000;
 }
