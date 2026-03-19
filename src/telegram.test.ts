@@ -350,11 +350,21 @@ describe("callApi", () => {
     );
     const fn = vi.fn().mockRejectedValueOnce(rateLimitErr).mockResolvedValue("ok");
     const promise = callApi(fn);
+
+    // Flush microtasks: let fn() run, 429 be caught, recordRateLimit(10) be invoked.
+    // The callApi loop is now awaiting a 10 s timer — timers are still frozen.
+    await vi.advanceTimersByTimeAsync(0);
+
+    // Rate-limit window must be recorded immediately after the 429 is caught
+    expect(getRateLimitRemaining()).toBeGreaterThan(0);
+    expect(getRateLimitRemaining()).toBeLessThanOrEqual(10);
+
+    // Advance past the retry window so the retry fires and callApi resolves
     await vi.runAllTimersAsync();
     await promise;
-    // After retry_after advances past the window, nothing is set
-    // But *during* the retry, getRateLimitRemaining should reflect the window
-    // (Timer has run, so window may have expired at this point)
+
+    // The retry_after window has elapsed — no longer rate limited
+    expect(getRateLimitRemaining()).toBe(0);
   });
 
   it("pre-check: resumes after window expires", async () => {

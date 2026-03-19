@@ -27,7 +27,27 @@ The tricky part is that `vi.runAllTimersAsync()` advances past the window, so yo
 
 ## Acceptance Criteria
 
-- [ ] Test has at least 2 meaningful `expect()` calls
-- [ ] Test validates that a rate-limit window is recorded when 429 is encountered
-- [ ] Test validates that the window expires after the retry_after period
-- [ ] All existing tests pass
+- [x] Test has at least 2 meaningful `expect()` calls
+- [x] Test validates that a rate-limit window is recorded when 429 is encountered
+- [x] Test validates that the window expires after the retry_after period
+- [x] All existing tests pass
+
+## Completion
+
+**Date:** 2026-03-19
+**Worker:** Worker 1 (SID 2)
+
+### What was done
+
+- Added 3 `expect()` assertions to `"pre-check: records rate limit window when 429 is encountered"` in `src/telegram.test.ts`:
+  1. Flush microtasks with `vi.advanceTimersByTimeAsync(0)` after starting `callApi(fn)` — lets the 429 be caught and `recordRateLimit(10)` invoked while the 10s retry timer is still frozen
+  2. `expect(getRateLimitRemaining()).toBeGreaterThan(0)` — window is recorded
+  3. `expect(getRateLimitRemaining()).toBeLessThanOrEqual(10)` — within expected range
+  4. Advance all timers and await the promise, then `expect(getRateLimitRemaining()).toBe(0)` — window expired
+- Changelog entry added to `changelog/unreleased.md` under `Fixed`
+
+### Verification
+
+- 79/79 telegram tests pass
+- 1482/1482 total tests pass
+- Build clean
