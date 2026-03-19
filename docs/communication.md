@@ -1,6 +1,6 @@
 # Telegram Communication Guide
 
-All agent communication goes through Telegram. The operator is on their phone — not watching the agent panel.
+When the operator has initiated loop mode, all substantive agent communication goes through Telegram. The operator is on their phone — not watching the agent panel.
 
 MCP resource: `telegram-bridge-mcp://communication-guide`
 
@@ -261,3 +261,13 @@ The governor session (lowest SID) owns ambiguous traffic by default. If you are 
 - You may become governor unexpectedly if the previous governor closes.
 
 Non-governor sessions: handle your targeted messages, forward genuinely mis-addressed ones.
+
+---
+
+## Memory Safety
+
+Session memory is advisory, not authoritative. Before acting on stored state:
+
+- Re-check live session, queue, and board state with tools
+- Never trust stored SID/PIN or active-task state without verification
+- If memory conflicts with live tool state or current operator instruction, memory loses

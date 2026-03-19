@@ -2,6 +2,11 @@
 
 ## Changed
 
+- Narrowed "all communication goes through Telegram" to be scoped to loop mode — wording updated in `telegram-communication.instructions.md` and `docs/communication.md` to clarify this applies when the operator has initiated the loop
+- Added channel-precedence rule, canonical loop recipe, anti-recovery warning, and instruction-precedence hierarchy to `LOOP-PROMPT.md`
+- Added "Visible Presence" and "Common Failure Modes" sections to `LOOP-PROMPT.md` and `telegram-communication.instructions.md`
+- Added "Memory Safety" section to `docs/communication.md`
+
 - `identity: [sid, pin]` is now required on **every** tool call — `requireAuth()` always validates via `validateSession()` with no single-session bypass; omitting `identity` returns `SID_REQUIRED` regardless of how many sessions are active
 - `dequeue_update` migrated to `identity: [sid, pin]` format — removed legacy `session-auth.js` / `checkAuth` dependency; always uses `getSessionQueue(sid)` with no global message-store fallback
 - Pattern A tools (`close_session`, `route_message`, `rename_session`, `send_direct_message`) migrated from `{ sid, pin }` to `{ identity: [sid, pin] }` parameter shape
