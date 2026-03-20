@@ -2,101 +2,94 @@
 
 How the governor assigns work and how workers execute it.
 
-## Three Assignment Modes
+## Assignment Modes
 
 The governor picks one per task and specifies it in the task spec:
 
 | Mode | When to use | Task spec includes |
 | --- | --- | --- |
-| **Direct edit** | Simple changes (single-file docs, configs) | No `## Worktree` section |
+| **Direct edit** | Single-file docs, configs, task board changes | No `## Worktree` section |
 | **Worktree** | Code changes, multi-file features, anything that could break the build | `## Worktree` section with branch + directory |
 
-The merge strategy (direct merge vs PR) is the **governor's decision after the worker reports completion**. Workers don't need to know or care how the merge happens.
+The merge strategy (direct merge vs PR) is the **governor's call**. Workers push; the governor merges.
 
 ---
 
-## Worker Responsibilities
+## Worker: Direct Edit Tasks
 
-Workers do the work. They don't merge branches or decide the merge strategy. They DO move their own task file through the pipeline.
+No `## Worktree` section in the task spec:
 
-### Direct Edit Tasks
+1. Move task file: `2-queued/` → `3-in-progress/`
+2. Edit files in the main workspace
+3. DM governor with commit message, wait for approval
+4. Commit and push
+5. Move task file: `3-in-progress/` → `4-completed/`
+6. DM governor: done
 
-If the task spec has no `## Worktree` section:
-1. **Pick up**: move task file from `2-queued/` → `3-in-progress/` (claims ownership)
-2. Edit files directly in the main workspace
-3. Commit and push
-4. **Complete**: move task file from `3-in-progress/` → `4-completed/`
-5. DM the governor: done
+## Worker: Worktree Tasks
 
-### Worktree Tasks
+Task spec has a `## Worktree` section:
 
-If the task spec has a `## Worktree` section:
+### 1. Claim
 
-#### 1. Pick up the task
+Move task file: `2-queued/` → `3-in-progress/`. Do this **before** reading the spec.
 
-**Immediately** move the task file from `2-queued/` to `3-in-progress/`. This claims ownership — do it before reading the details or starting any work.
-
-#### 2. Create branch and worktree
-
-Use the slug from the task spec:
+### 2. Create branch + worktree
 
 ```bash
-git branch task/013-worktree-test-run
-git worktree add .git/.wt/10-013-worktree-test-run task/013-worktree-test-run
+git branch task/018-feature-name
+git worktree add .git/.wt/20-018-feature-name task/018-feature-name
 ```
 
-All worktrees live under `.git/.wt/` — hidden inside the git directory, keeping the workspace root clean.
+Worktrees live under `.git/.wt/` — keeps the workspace root clean.
 
-#### 3. Work inside the worktree
+### 3. Work inside the worktree
 
-All code edits happen inside the worktree. The only main workspace change is task file movement.
+All code edits happen in the worktree. The only main workspace change is task file movement.
 
 ```bash
-cd .git/.wt/10-013-worktree-test-run
-# edit files, run tests, etc.
+cd .git/.wt/20-018-feature-name
+# edit, test, iterate
 ```
 
-#### 4. Commit and push
+Use sub-agents for scoped subtasks (searching, writing tests, boilerplate).
+
+### 4. Commit and push
+
+DM governor with commit message. After approval:
 
 ```bash
 git add -A
-git commit -m "feat: description of change"
-git push -u origin task/013-worktree-test-run
+git commit -m "feat: description (#018)"
+git push -u origin task/018-feature-name
 ```
 
-#### 5. Report completion
+### 5. Complete
 
-Move the task file from `3-in-progress/` to `4-completed/` (in the main workspace).
-DM the governor: "Task 013 complete. Branch `task/013-worktree-test-run`. Tests passing."
+1. Move task file: `3-in-progress/` → `4-completed/` (in main workspace)
+2. DM governor: *"Task #018 complete. Branch `task/018-feature-name`. Tests passing."*
 
-**Stop here.** Do not merge, delete branches, or remove worktrees. The governor handles everything after this point.
+**Stop here.** Do not merge, delete branches, or remove worktrees.
 
 ---
 
-## Overseer Responsibilities
-
-The **overseer** (the role) manages task assignment, review, merge strategy, and archival. The **governor** (the routing designation) determines which session receives ambiguous messages — these are related but distinct concepts.
-
-Workers never need to know how their branch gets merged.
-
-### Task Assignment
-
-Decide per-task whether it needs a worktree:
+## Governor: Task Assignment
 
 | Task type | Worktree? |
 | --- | --- |
 | Source code (features, fixes, refactors) | **Yes** |
 | Multi-file doc overhauls | Governor's discretion |
-| Single-file edits (README, changelog, config) | **No** — direct edit |
+| Single-file edits (README, changelog, config) | **No** |
 | Task board changes | **No** |
 
-For worktree tasks, include in the task spec:
+Include in the task spec for worktree tasks:
 
 ```markdown
 ## Worktree
 
-Create worktree `10-013-worktree-test-run` from the current dev branch.
-Branch: `task/013-worktree-test-run`
+Branch: `task/018-feature-name`
+Directory: `.git/.wt/20-018-feature-name`
+Base: `master` at current HEAD
 ```
 
 ### Merge Strategy
