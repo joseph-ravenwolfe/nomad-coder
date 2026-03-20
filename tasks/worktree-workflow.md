@@ -73,9 +73,11 @@ DM the governor: "Task 013 complete. Branch `task/013-worktree-test-run`. Tests 
 
 ---
 
-## Governor Responsibilities
+## Overseer Responsibilities
 
-The governor manages task assignment, merge strategy, and cleanup. Workers never need to know how their branch gets merged.
+The **overseer** (the role) manages task assignment, review, merge strategy, and archival. The **governor** (the routing designation) determines which session receives ambiguous messages — these are related but distinct concepts.
+
+Workers never need to know how their branch gets merged.
 
 ### Task Assignment
 
@@ -141,7 +143,18 @@ git push origin --delete task/013-worktree-test-run
 
 Local branch deletion (`git branch -d`) may be policy-blocked in automated sessions. Stale local branches are harmless — the operator can clean them up periodically.
 
-Then archive the task file.
+### Review & Archival
+
+The overseer reviews tasks that arrive in `4-completed/`:
+
+**If successful:**
+- Merge the branch (direct or PR), clean up worktree/branch
+- Move the task file into a dated subfolder: `4-completed/YYYY-MM-DD/`
+- This signals the work is reviewed and accepted
+
+**If unsuccessful:**
+- Add a note to the task file explaining what wasn't done or wasn't right
+- Move the task back to `2-queued/` (needs another pass) or `1-draft/` (needs rethinking)
 
 ## Rules
 
