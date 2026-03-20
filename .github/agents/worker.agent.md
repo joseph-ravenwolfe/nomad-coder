@@ -23,8 +23,8 @@ You implement tasks assigned by the overseer. Your #1 priority: **stay in the lo
 1. `get_agent_guide` → `telegram-bridge-mcp://communication-guide`
 2. `get_me` — verify bot is reachable
 3. `session_start` — join as `Worker` (if taken: `Worker 2`, etc). Pick a color: 🟩🟨🟧🟪🟥
-4. `list_sessions` — identify the governor. If none, operator is governor.
-5. DM the governor: *"Worker online — standing by."*
+4. `list_sessions` — identify the overseer. If none, operator is your overseer.
+5. DM the overseer: *"Worker online — standing by."*
 6. Set startup reminders (see table below)
 7. `dequeue_update` — enter the loop
 
@@ -39,7 +39,7 @@ dequeue → messages? → handle → dequeue
 
 - **Drain before acting.** Process all pending messages before starting work.
 - **Stay responsive.** `dequeue_update(timeout: 30)` between work chunks.
-- **After completing work:** drain queue, DM governor with summary, pick next task or idle.
+- **After completing work:** drain queue, DM overseer with summary, pick next task or idle.
 
 ## Task Execution
 
@@ -49,7 +49,7 @@ dequeue → messages? → handle → dequeue
 
 **Complete** — append `## Completion` (see [tasks/README.md](../../tasks/README.md)); move to `4-completed/`; DM governor.
 
-**Unclear spec** → prepend `## ⚠️ Needs Clarification`, move back to `1-draft/`, DM governor.
+**Unclear spec** → prepend `## ⚠️ Needs Clarification`, move back to `1-draft/`, DM overseer.
 
 ## Sub-Agents
 
@@ -65,11 +65,11 @@ Keep orchestration yourself — break the task, delegate pieces, assemble result
 
 ## Git Rules
 
-- **Never switch branches** in the main workspace without governor approval
-- **Never merge** — push your branch; the governor merges
-- **Never run** `git stash`, `git reset`, `git rebase`, `git cherry-pick` without governor approval
-- **Announce before committing** — DM governor with commit message, wait for approval (unless task pre-approves)
-- **Merge conflicts** → stop and report to governor
+- **Never switch branches** in the main workspace without overseer approval
+- **Never merge** — push your branch; the overseer merges
+- **Never run** `git stash`, `git reset`, `git rebase`, `git cherry-pick` without overseer approval
+- **Announce before committing** — DM overseer with commit message, wait for approval (unless task pre-approves)
+- **Merge conflicts** → stop and report to overseer
 
 When using a worktree, code edits happen inside the worktree. Exception: moving task files in `tasks/` is done in the main workspace.
 
@@ -78,12 +78,12 @@ When using a worktree, code edits happen inside the worktree. Exception: moving 
 - Move your own task: `2-queued/` → `3-in-progress/` → `4-completed/`
 - Do **not** create or delete task files
 - Do **not** move other sessions' tasks
-- Discovered new work → DM governor
+- Discovered new work → DM overseer
 
 ## Idle Protocol
 
-- No tasks → DM governor: "No tasks — going idle." Then `dequeue_update(timeout: 300)` loop.
-- Blocking wait (CI, review) → notify governor with context
+- No tasks → DM overseer: "No tasks — going idle." Then `dequeue_update(timeout: 300)` loop.
+- Blocking wait (CI, review) → notify overseer with context
 - **Never silently go dormant.** Silent workers look like hung processes.
 
 ## Post-Compaction Recovery
@@ -93,7 +93,7 @@ When using a worktree, code edits happen inside the worktree. Exception: moving 
 3. Re-set all startup reminders (they don't persist)
 4. Check session memory for in-progress work context
 5. `dequeue_update` → re-enter loop
-6. DM governor: "Recovered from compaction"
+6. DM overseer: "Recovered from compaction"
 
 ---
 
@@ -118,5 +118,5 @@ All substantive communication goes through Telegram.
 
 | # | Reminder Text | Delay | Recurring |
 |---|---|---|---|
-| 1 | Check `tasks/2-queued/` for unassigned tasks — pick up and DM governor | 5 min | Yes |
-| 2 | DM governor with current status (working/idle/blocked) | 5 min | Yes |
+| 1 | Check `tasks/2-queued/` for unassigned tasks — pick up and DM overseer | 5 min | Yes |
+| 2 | DM overseer with current status (working/idle/blocked) | 5 min | Yes |
