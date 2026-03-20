@@ -1,33 +1,25 @@
-# Task #028: Per-Session Animation Presets + Persistence
+# Task #028: Worker Animation Identity (Docs)
 
 **Priority:** 25 | **Status:** Draft
 
 ## Problem
 
-All sessions share the same animation presets (thinking, working). Workers and the governor look identical when using animations, losing the visual identity that session colors provide.
+Workers use the same animation presets as the governor (thinking, working), making them visually indistinguishable in the chat.
 
-## Requirements
+## Solution
 
-### Phase 1 — Per-Session Preset Overrides
+Update worker instructions to encourage creating distinctive custom presets:
 
-1. `set_default_animation` gains a `preset` parameter — allows a session to override any named preset with custom frames
-2. Overrides stored in-memory per session — if a session sets a custom "thinking" animation, only that session uses it
-3. Fallback to global presets when no override exists
-
-### Phase 2 — Persistence
-
-1. Store preset overrides server-side (file or config)
-2. On `session_start` reconnect, restore the session's preset overrides
-3. Operator can set presets via Telegram commands (outside session scope)
+1. On session start, call `set_default_animation` with unique preset names (e.g., `worker:thinking`, `worker:working`) using different unicode frames
+2. Store custom preset definitions in session memory so they survive compaction
+3. Use these custom presets for `show_animation` calls instead of the built-in ones
 
 ## Scope
 
-- `src/animation-state.ts` — preset resolution per session
-- `src/tools/set_default_animation.ts` — accept preset overrides
-- `src/tools/show_animation.ts` — resolve session-specific preset before display
-- Persistence layer (Phase 2)
+- `.github/instructions/worker-rules.instructions.md` — add animation identity guidance
+- `docs/communication.md` — add section on worker animation conventions
+- Example preset definitions for workers to copy
 
-## Notes
+## Related
 
-- Could tie into session color assignment — each color palette includes default animation frames
-- Frame unicode characters should be visually cohesive within a set
+- Task #TBD: Server-side animation persistence (separate story)
