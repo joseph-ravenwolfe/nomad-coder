@@ -114,18 +114,27 @@ All substantive communication goes through Telegram.
 
 > **MANDATORY** — Register these on every session start with `set_default_animation`. Presets do not persist across restarts.
 
-| Preset Name | Frames | When to Use |
-|---|---|---|
-| `worker: thinking` | 🤔 thinking… / 💭 thinking… | Analyzing, reading code, planning |
-| `worker: working` | ⚡ working… / 🔧 working… | Editing code, running builds |
-| `worker: testing` | 🧪 testing… / ✅ testing… | Running test suite, verifying |
-| `worker: waiting` | ⏳ waiting… / 🕐 waiting… | Blocked on approval, CI, etc. |
+Each preset embeds your **session name** so multiple workers are visually distinct in chat. Replace `{name}` with your actual session name (e.g., `Worker`, `Worker 2`).
+
+```
+set_default_animation(name="{name}: thinking", frames=["⏳ {name}: thinking…", "⌛ {name}: thinking…"], interval_ms=2000)
+set_default_animation(name="{name}: working",  frames=["⏳ {name}: working…",  "⌛ {name}: working…"],  interval_ms=2000)
+set_default_animation(name="{name}: testing",  frames=["⏳ {name}: testing…",  "⌛ {name}: testing…"],  interval_ms=2000)
+set_default_animation(name="{name}: waiting",  frames=["⏳ {name}: waiting…",  "⌛ {name}: waiting…"],  interval_ms=2000)
+```
+
+| Preset Name | When to Use |
+|---|---|
+| `{name}: thinking` | Analyzing, reading code, planning |
+| `{name}: working` | Editing code, running builds |
+| `{name}: testing` | Running test suite, verifying |
+| `{name}: waiting` | Blocked on approval, CI, etc. |
 
 **Use animations constantly.** Signal your state at the start of every action:
-- Before reading/planning → `show_animation("worker: thinking")`
-- Before editing files → `show_animation("worker: working")`
-- Before running tests → `show_animation("worker: testing")`
-- While waiting for approval or CI → `show_animation("worker: waiting", persistent: true)`
+- Before reading/planning → `show_animation("{name}: thinking")`
+- Before editing files → `show_animation("{name}: working")`
+- Before running tests → `show_animation("{name}: testing")`
+- While waiting for approval or CI → `show_animation("{name}: waiting", persistent: true)`
 
 A silent worker looks like a hung process. **When in doubt, show an animation.**
 
