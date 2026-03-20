@@ -2,6 +2,8 @@
 
 Structured task tracking for bugs, features, and big-picture items. Works like a Kanban board with two roles: **overseer** (plans, reviews, manages git) and **workers** (implement, test, report).
 
+For code-change tasks, workers use **git worktrees** to isolate their work. See [worktree-workflow.md](worktree-workflow.md) for the full lifecycle.
+
 ## Workflow Stages
 
 | Folder | Purpose | Who touches it |

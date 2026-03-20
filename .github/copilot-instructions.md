@@ -57,14 +57,15 @@ When the `dequeue_update` loop times out with no operator or worker messages, ru
 5. **Build / lint / test health** — If there have been recent commits, verify `pnpm build` and `pnpm lint` still pass. Run tests periodically. Report any regressions immediately.
 6. **Markdown / doc hygiene** — Spot-check docs for broken links, stale content, or formatting issues. Fix trivially; create tasks for larger issues.
 7. **Changelog review** — Verify `changelog/unreleased.md` reflects all recent changes. Flag any missing entries.
-8. **Never assume** — Before taking any action, ask *why* first. Check context. Read before writing. Understand before modifying.
+8. **GitHub issues & PRs** — Check for new/updated issues and PRs on the repo. Notify the operator about items needing attention (unreviewed PRs, new issues, stale discussions). Create draft task specs for actionable issues.
+9. **Never assume** — Before taking any action, ask *why* first. Check context. Read before writing. Understand before modifying.
 
 ## Worker Rules
 
 Worker agents (non-governor sessions) have additional restrictions defined in `.github/instructions/worker-rules.instructions.md`. Key rules:
 
 - **Workers must NEVER change git branches** without explicit governor approval.
-- Workers must not create/move/delete task files — only the governor manages the task board.
+- Workers move their own task file through the pipeline (`2-queued/` → `3-in-progress/` → `4-completed/`), but do not create or delete task files.
 - Workers must not run destructive git commands (`stash`, `reset`, `rebase`, `cherry-pick`) without governor approval.
 - Workers must announce commits to the governor before executing them.
 
@@ -76,3 +77,12 @@ Always be learning. When something goes wrong — a worker misbehaves, a test fa
 - **Update rules proactively** — When you notice a gap in governance (e.g. workers changing branches), add the rule immediately. Don't wait for it to happen twice.
 - **Refine procedures** — If a workflow is clunky or error-prone, propose improvements. Write them down. Test them.
 - **Review your own work** — After completing a task, ask: could this have been done better? Was anything missed? Did I follow all the rules I'm supposed to enforce?
+
+## Post-Compaction Recovery
+
+If you see this and you are **not** currently in a `dequeue_update` loop, you have likely been compacted. Recovery steps:
+
+1. Call `list_sessions` to find your active session
+2. Call `session_start` with `reconnect: true` if needed
+3. Call `dequeue_update` to re-enter the message loop
+4. Send a `notify` to the operator: "Recovered from compaction — re-entering loop"

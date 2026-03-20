@@ -21,6 +21,7 @@ Works with VS Code Copilot, Claude Desktop, Claude Code, Cursor, Windsurf, and a
 - **Interactive controls** — buttons, confirmations, checklists, progress bars
 - **Voice in, voice out** — automatic transcription (Whisper) and TTS (local or OpenAI)
 - **Multi-session** — multiple agents share one bot with per-session queues, identity auth, and message routing
+- **Reminders** — scheduled events that fire as synthetic messages after a delay
 - **Live animations** — cycling status messages while the agent works
 - **Slash commands** — dynamic bot menu; commands arrive as structured events
 - **No webhooks** — long-polling, no public URL needed
@@ -121,14 +122,22 @@ Paste `LOOP-PROMPT.md` into your AI assistant's chat. It connects, announces its
 | `session_start` | Authenticate, get identity `[sid, pin]` |
 | `close_session` | Disconnect gracefully |
 | `list_sessions` | See all active sessions |
-| `rename_session` | Change display name |
+| `rename_session` | Change display name (requires operator approval) |
 | `send_direct_message` | DM another session |
 | `route_message` | Forward an event to another session |
 | `dump_session_record` | Export timeline as JSON |
 
+### Reminders
+
+| Tool | Description |
+| --- | --- |
+| `set_reminder` | Schedule a reminder event after a delay |
+| `cancel_reminder` | Cancel a pending reminder by ID |
+| `list_reminders` | List all reminders for the current session |
+
 ### Utilities
 
-`get_me` · `get_chat` · `get_agent_guide` · `get_debug_log` · `set_reaction` · `set_commands` · `set_topic` · `set_default_animation` · `download_file` · `transcribe_voice` · `shutdown`
+`get_me` · `get_chat` · `get_agent_guide` · `get_debug_log` · `set_reaction` · `set_commands` · `set_topic` · `set_default_animation` · `set_voice` · `download_file` · `transcribe_voice` · `shutdown`
 
 ---
 
@@ -171,6 +180,8 @@ WHISPER_CACHE_DIR=/path/to/cache            # optional
 
 **Kokoro** (recommended local TTS) — `docker run -d --name kokoro -p 8880:8880 ghcr.io/hexgrad/kokoro-onnx-server:latest`, then set `TTS_HOST=http://localhost:8880 TTS_FORMAT=ogg TTS_VOICE=af_heart`. 25+ voices — send `/voice` in Telegram to browse and sample.
 
+Per-session voice override: use the `set_voice` tool or `/voice` in Telegram.
+
 ---
 
 ## Security
@@ -178,7 +189,9 @@ WHISPER_CACHE_DIR=/path/to/cache            # optional
 - **`ALLOWED_USER_ID`** — only this user's messages are processed; everything else is silently dropped
 - `chat_id` is never a tool parameter — resolved from `ALLOWED_USER_ID` internally
 - Multi-session auth via `[sid, pin]` identity on every tool call
-- See `docs/security-model.md` for details
+- `rename_session` requires explicit operator approval via inline keyboard
+
+See `docs/security-model.md` for details.
 
 ---
 
@@ -200,7 +213,7 @@ Five MCP resources available to any client:
 
 ```text
 ghcr.io/electricessence/telegram-bridge-mcp:latest
-ghcr.io/electricessence/telegram-bridge-mcp:4.0.0
+ghcr.io/electricessence/telegram-bridge-mcp:4.1.0
 ```
 
 Replace the `node` command in any host config above with:
@@ -234,10 +247,6 @@ pnpm pair           # Re-run pairing wizard
 ```
 
 ---
-
-## Roadmap
-
-See [`tasks/0-backlog/`](tasks/0-backlog/) and [`tasks/1-draft/`](tasks/1-draft/).
 
 ## License
 

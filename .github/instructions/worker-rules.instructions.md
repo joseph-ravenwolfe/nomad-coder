@@ -7,24 +7,32 @@ Rules that apply to **non-governor** (worker) agents in the multi-session enviro
 
 ---
 
-## Branch Management — NEVER Change Branches
+## Branch Management — Worktree Isolation
 
-**Workers must NEVER switch, create, or delete git branches without explicit governor approval.**
+Workers use **git worktrees** for code changes. See `tasks/worktree-workflow.md` for the full lifecycle.
 
-- Do **not** run `git checkout`, `git switch`, `git branch -d`, or any branch-altering command.
-- Do **not** create feature branches, hotfix branches, or any other branch.
-- Always work on whatever branch is currently checked out when you start.
-- If you believe a branch change is needed, **ask the governor via DM** and wait for approval.
+**Allowed:**
+- Create a feature branch and worktree **when the task spec directs it**
+- Commit and push freely within your worktree branch
+- Run tests and builds inside your worktree
 
-The governor (overseer) is the sole authority on branch management. Workers that change branches risk corrupting the shared workspace state for all sessions.
+**Forbidden:**
+- Switching branches in the **main workspace** (`git checkout`, `git switch`)
+- Merging your branch — only the governor merges
+- Deleting branches or worktrees — the governor cleans up
+- Modifying files in the main workspace when you have an active worktree
+
+If your task spec does not include a worktree directive, work in the main workspace on the current branch (as before).
 
 ---
 
-## Task Files — Do NOT Create Task Files
+## Task Board — Move Your Own Task
 
-Workers do **not** create, move, or delete task files in `tasks/`. Only the governor manages the task board.
+Workers **move their assigned task file** through the pipeline:
+- Pick up: move from `2-queued/` → `3-in-progress/`
+- Complete: move from `3-in-progress/` → `4-completed/`
 
-If you discover something that should be a task, report it to the governor via DM. Do not create the file yourself.
+Workers do **not** create or delete task files, and do not move other sessions' tasks. If you discover something that should be a new task, report it to the governor via DM.
 
 ---
 
@@ -53,5 +61,6 @@ Workers must **notify the governor** before entering an idle or sleep state. The
 
 - Do **not** run `git stash`, `git reset`, `git rebase`, or `git cherry-pick` without governor approval.
 - Do **not** modify files outside the scope of your assigned task.
-- Before committing, announce your intent to the governor and wait for acknowledgment.
+- When using a worktree, code edits happen inside the worktree. **Exception:** moving your task file in `tasks/` is always done in the main workspace.
+- Before committing, announce your intent to the governor and wait for acknowledgment (unless the task spec explicitly pre-approves commits).
 - If you encounter merge conflicts, **stop and report** to the governor. Do not resolve them yourself.
