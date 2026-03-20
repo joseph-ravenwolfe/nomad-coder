@@ -38,9 +38,11 @@ dequeue → messages? → handle → dequeue
 
 ## Task Execution
 
-**Claim** — pick the lowest-priority-numbered (first from ascending order) file from `2-queued/`, move to `3-in-progress/`. The move is the atomic claim. **One task at a time.**
+**Claim** — run `scripts/claim-task.ps1 <filename>` on the lowest-priority-numbered file in `2-queued/`. This stages a baseline snapshot at `4-completed/YYYY-MM-DD/` via `git mv`, then moves the working copy to `3-in-progress/`. **One task at a time.**
 
-**Delegate to Task Runner** — for focused implementation work, use `runSubagent` with `agentName: "Task Runner"`. The task file is already in `3-in-progress/`. Include the task file path and spec in the prompt. The Task Runner does the work and moves the file to `4-completed/`. Review its output, then commit.
+**Delegate to Task Runner** — for focused implementation work, use `runSubagent` with `agentName: "Task Runner"`. The task file is already in `3-in-progress/`. Include the task file path and spec in the prompt. The Task Runner does the work, appends results, and moves the file to `4-completed/YYYY-MM-DD/`.
+
+**Review before reporting** — after the Task Runner finishes, review its work: read the diff (`git diff`), run tests, check the task file. If good, DM the overseer: "Task #N done, I've reviewed it, looks good." If not, rework or flag issues.
 
 **Direct execution** — for simple or quick tasks, do the work yourself. Use the same lifecycle: implement, verify (tests · lint · build), append `## Completion`, move to `4-completed/`, DM overseer.
 
