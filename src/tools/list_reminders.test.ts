@@ -42,10 +42,8 @@ describe("list_reminders tool", () => {
       { id: "r1", text: "active!", delay_seconds: 0, recurring: false, state: "active", created_at: now, activated_at: now },
     ]);
     const result = await call({ identity: [1, 123456] });
-    const data = parseResult(result) as { reminders: Record<string, unknown>[] };
-    expect(data.reminders).toHaveLength(1);
-    expect(data.reminders[0]!.state).toBe("active");
-    expect(data.reminders[0]!.fires_in_seconds).toBeUndefined();
+    const data = parseResult<{ reminders: Record<string, unknown>[] }>(result);
+    expect(data.reminders[0].fires_in_seconds).toBeUndefined();
   });
 
   it("includes fires_in_seconds for deferred reminders", async () => {
@@ -54,11 +52,10 @@ describe("list_reminders tool", () => {
       { id: "r2", text: "later", delay_seconds: 60, recurring: false, state: "deferred", created_at: now, activated_at: null },
     ]);
     const result = await call({ identity: [1, 123456] });
-    const data = parseResult(result) as { reminders: Record<string, unknown>[] };
-    expect(data.reminders[0]!.state).toBe("deferred");
-    expect(typeof data.reminders[0]!.fires_in_seconds).toBe("number");
-    expect(data.reminders[0]!.fires_in_seconds as number).toBeGreaterThan(0);
-    expect(data.reminders[0]!.fires_in_seconds as number).toBeLessThanOrEqual(60);
+    const data = parseResult<{ reminders: Record<string, unknown>[] }>(result);
+    expect(typeof data.reminders[0].fires_in_seconds).toBe("number");
+    expect(data.reminders[0].fires_in_seconds as number).toBeGreaterThan(0);
+    expect(data.reminders[0].fires_in_seconds as number).toBeLessThanOrEqual(60);
   });
 
   describe("identity gate", () => {

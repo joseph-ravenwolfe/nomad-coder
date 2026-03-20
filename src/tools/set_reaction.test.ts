@@ -219,8 +219,8 @@ describe("set_reaction tool", () => {
     expect(data.emoji).toBe("👍");
     expect(data.fallback_used).toBe(true);
     // Only one attempt (skipped ✅)
-    const [, , reaction] = mocks.setMessageReaction.mock.calls[0]!;
-    expect((reaction as { emoji: string }[])[0]!.emoji).toBe("👍");
+    const [, , reaction] = mocks.setMessageReaction.mock.calls[0];
+    expect((reaction as { emoji: string }[])[0].emoji).toBe("👍");
   });
 
   it("premium cache: sets premium=true after premium emoji succeeds", async () => {
@@ -237,8 +237,8 @@ describe("set_reaction tool", () => {
     const data = parseResult(result);
     expect(data.emoji).toBe("✅");
     expect(data.fallback_used).toBeUndefined();
-    const [, , reaction2] = mocks.setMessageReaction.mock.calls[0]!;
-    expect((reaction2 as { emoji: string }[])[0]!.emoji).toBe("✅");
+    const [, , reaction2] = mocks.setMessageReaction.mock.calls[0];
+    expect((reaction2 as { emoji: string }[])[0].emoji).toBe("✅");
   });
 });
 

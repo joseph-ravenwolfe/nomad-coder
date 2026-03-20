@@ -1,4 +1,4 @@
-import { vi, describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import {
   getSessionVoice,
   setSessionVoice,
@@ -16,30 +16,30 @@ describe("voice-state", () => {
       expect(getSessionVoice()).toBeNull();
     });
 
-    it("sets and gets a voice", async () => {
-      await runInSessionContext(1, () => {
+    it("sets and gets a voice", () => {
+      runInSessionContext(1, () => {
         setSessionVoice("alloy");
         expect(getSessionVoice()).toBe("alloy");
       });
     });
 
-    it("trims whitespace when setting", async () => {
-      await runInSessionContext(1, () => {
+    it("trims whitespace when setting", () => {
+      runInSessionContext(1, () => {
         setSessionVoice("  nova  ");
         expect(getSessionVoice()).toBe("nova");
       });
     });
 
-    it("treats empty string as null", async () => {
-      await runInSessionContext(1, () => {
+    it("treats empty string as null", () => {
+      runInSessionContext(1, () => {
         setSessionVoice("alloy");
         setSessionVoice("");
         expect(getSessionVoice()).toBeNull();
       });
     });
 
-    it("clears the voice", async () => {
-      await runInSessionContext(1, () => {
+    it("clears the voice", () => {
+      runInSessionContext(1, () => {
         setSessionVoice("echo");
         clearSessionVoice();
         expect(getSessionVoice()).toBeNull();
@@ -48,25 +48,25 @@ describe("voice-state", () => {
   });
 
   describe("per-session isolation", () => {
-    it("sessions do not share voice state", async () => {
-      await runInSessionContext(1, () => { setSessionVoice("alloy"); });
-      await runInSessionContext(2, () => { setSessionVoice("nova"); });
-      await runInSessionContext(1, () => { expect(getSessionVoice()).toBe("alloy"); });
-      await runInSessionContext(2, () => { expect(getSessionVoice()).toBe("nova"); });
+    it("sessions do not share voice state", () => {
+      runInSessionContext(1, () => { setSessionVoice("alloy"); });
+      runInSessionContext(2, () => { setSessionVoice("nova"); });
+      runInSessionContext(1, () => { expect(getSessionVoice()).toBe("alloy"); });
+      runInSessionContext(2, () => { expect(getSessionVoice()).toBe("nova"); });
     });
 
-    it("clearing one session does not affect another", async () => {
-      await runInSessionContext(1, () => { setSessionVoice("alloy"); });
-      await runInSessionContext(2, () => { setSessionVoice("echo"); });
-      await runInSessionContext(1, () => { clearSessionVoice(); });
-      await runInSessionContext(1, () => { expect(getSessionVoice()).toBeNull(); });
-      await runInSessionContext(2, () => { expect(getSessionVoice()).toBe("echo"); });
+    it("clearing one session does not affect another", () => {
+      runInSessionContext(1, () => { setSessionVoice("alloy"); });
+      runInSessionContext(2, () => { setSessionVoice("echo"); });
+      runInSessionContext(1, () => { clearSessionVoice(); });
+      runInSessionContext(1, () => { expect(getSessionVoice()).toBeNull(); });
+      runInSessionContext(2, () => { expect(getSessionVoice()).toBe("echo"); });
     });
   });
 
   describe("getSessionVoiceFor", () => {
-    it("returns voice for the given SID", async () => {
-      await runInSessionContext(5, () => { setSessionVoice("fable"); });
+    it("returns voice for the given SID", () => {
+      runInSessionContext(5, () => { setSessionVoice("fable"); });
       expect(getSessionVoiceFor(5)).toBe("fable");
     });
 

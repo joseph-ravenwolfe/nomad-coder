@@ -97,8 +97,9 @@ function isReactionInvalid(err: unknown): boolean {
  * Direct emoji input → single-element array (no fallback).
  */
 function resolveEmoji(input: string): string[] | null {
-  const alias = REACTION_ALIASES[input.toLowerCase()];
-  if (alias) return alias;
+  const key = input.toLowerCase();
+  const alias = (REACTION_ALIASES as Record<string, string[] | undefined>)[key];
+  if (alias !== undefined) return alias;
   if ((ALLOWED_EMOJI as readonly string[]).includes(input)) return [input];
   return null;
 }
@@ -192,7 +193,7 @@ export function register(server: McpServer) {
           if (candidates.length === 0) {
             return toError({ code: "REACTION_EMOJI_INVALID" as const, message: "emoji is required for temporary reactions." });
           }
-          const primary = candidates[0]!;
+          const primary = candidates[0];
           let restoreResolved: ReactionEmoji | undefined;
           if (restore_emoji) {
             const r = resolveEmoji(restore_emoji);
@@ -215,7 +216,7 @@ export function register(server: McpServer) {
 
         // Permanent reaction — try candidates in order, fall back on REACTION_INVALID
         for (let i = 0; i < candidates.length; i++) {
-          const candidate = candidates[i]!;
+          const candidate = candidates[i];
           try {
             await getApi().setMessageReaction(chatId, message_id, [{ type: "emoji" as const, emoji: candidate as ReactionEmoji }], { is_big });
             recordBotReaction(message_id, candidate);

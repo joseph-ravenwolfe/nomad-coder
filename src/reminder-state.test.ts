@@ -1,4 +1,4 @@
-import { vi, describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import {
   addReminder,
   cancelReminder,
@@ -18,8 +18,8 @@ describe("reminder-state", () => {
   beforeEach(() => { resetReminderStateForTest(); });
 
   describe("addReminder", () => {
-    it("adds an immediate reminder as active", async () => {
-      await runInSessionContext(1, () => {
+    it("adds an immediate reminder as active", () => {
+      runInSessionContext(1, () => {
         const r = addReminder({ id: "r1", text: "hello", delay_seconds: 0, recurring: false });
         expect(r.state).toBe("active");
         expect(r.activated_at).not.toBeNull();
@@ -27,16 +27,16 @@ describe("reminder-state", () => {
       });
     });
 
-    it("adds a deferred reminder when delay_seconds > 0", async () => {
-      await runInSessionContext(1, () => {
+    it("adds a deferred reminder when delay_seconds > 0", () => {
+      runInSessionContext(1, () => {
         const r = addReminder({ id: "r2", text: "later", delay_seconds: 60, recurring: false });
         expect(r.state).toBe("deferred");
         expect(r.activated_at).toBeNull();
       });
     });
 
-    it("throws when MAX_REMINDERS_PER_SESSION is reached", async () => {
-      await runInSessionContext(1, () => {
+    it("throws when MAX_REMINDERS_PER_SESSION is reached", () => {
+      runInSessionContext(1, () => {
         for (let i = 0; i < MAX_REMINDERS_PER_SESSION; i++) {
           addReminder({ id: `r${i}`, text: "x", delay_seconds: 0, recurring: false });
         }
@@ -48,24 +48,24 @@ describe("reminder-state", () => {
   });
 
   describe("cancelReminder", () => {
-    it("removes a reminder by ID", async () => {
-      await runInSessionContext(1, () => {
+    it("removes a reminder by ID", () => {
+      runInSessionContext(1, () => {
         addReminder({ id: "r1", text: "x", delay_seconds: 0, recurring: false });
         expect(cancelReminder("r1")).toBe(true);
         expect(listReminders()).toHaveLength(0);
       });
     });
 
-    it("returns false if ID not found", async () => {
-      await runInSessionContext(1, () => {
+    it("returns false if ID not found", () => {
+      runInSessionContext(1, () => {
         expect(cancelReminder("missing")).toBe(false);
       });
     });
   });
 
   describe("promoteDeferred", () => {
-    it("promotes a deferred reminder when delay has elapsed", async () => {
-      await runInSessionContext(1, () => {
+    it("promotes a deferred reminder when delay has elapsed", () => {
+      runInSessionContext(1, () => {
         const r = addReminder({ id: "r1", text: "x", delay_seconds: 0, recurring: false });
         // Artificially make it deferred by mutation for this test
         r.state = "deferred";
@@ -74,69 +74,69 @@ describe("reminder-state", () => {
         r.activated_at = null;
         promoteDeferred(1);
         const list = listReminders();
-        expect(list[0]!.state).toBe("active");
-        expect(list[0]!.activated_at).not.toBeNull();
+        expect(list[0].state).toBe("active");
+        expect(list[0].activated_at).not.toBeNull();
       });
     });
 
-    it("does not promote a deferred reminder whose delay has not elapsed", async () => {
-      await runInSessionContext(1, () => {
+    it("does not promote a deferred reminder whose delay has not elapsed", () => {
+      runInSessionContext(1, () => {
         addReminder({ id: "r1", text: "x", delay_seconds: 3600, recurring: false });
         promoteDeferred(1);
-        expect(listReminders()[0]!.state).toBe("deferred");
+        expect(listReminders()[0].state).toBe("deferred");
       });
     });
   });
 
   describe("getActiveReminders", () => {
-    it("returns only active reminders for the given sid", async () => {
-      await runInSessionContext(1, () => {
+    it("returns only active reminders for the given sid", () => {
+      runInSessionContext(1, () => {
         addReminder({ id: "a", text: "active", delay_seconds: 0, recurring: false });
         addReminder({ id: "d", text: "deferred", delay_seconds: 3600, recurring: false });
       });
       const active = getActiveReminders(1);
       expect(active).toHaveLength(1);
-      expect(active[0]!.id).toBe("a");
+      expect(active[0].id).toBe("a");
     });
   });
 
   describe("popActiveReminders", () => {
-    it("removes and returns active one-shot reminders", async () => {
-      await runInSessionContext(1, () => {
+    it("removes and returns active one-shot reminders", () => {
+      runInSessionContext(1, () => {
         addReminder({ id: "r1", text: "once", delay_seconds: 0, recurring: false });
       });
       const popped = popActiveReminders(1);
       expect(popped).toHaveLength(1);
-      expect(popped[0]!.id).toBe("r1");
+      expect(popped[0].id).toBe("r1");
       expect(getActiveReminders(1)).toHaveLength(0);
     });
 
-    it("re-arms a recurring reminder with delay into deferred state", async () => {
-      await runInSessionContext(1, () => {
+    it("re-arms a recurring reminder with delay into deferred state", () => {
+      runInSessionContext(1, () => {
         addReminder({ id: "r1", text: "repeat", delay_seconds: 60, recurring: true });
         // Manually promote
-        const r = listReminders()[0]!;
+        const r = listReminders()[0];
         r.state = "active";
         r.activated_at = Date.now();
       });
       popActiveReminders(1);
-      await runInSessionContext(1, () => {
+      runInSessionContext(1, () => {
         const list = listReminders();
         expect(list).toHaveLength(1);
-        expect(list[0]!.state).toBe("deferred");
+        expect(list[0].state).toBe("deferred");
       });
     });
 
-    it("re-arms a recurring reminder without delay as still active", async () => {
-      await runInSessionContext(1, () => {
+    it("re-arms a recurring reminder without delay as still active", () => {
+      runInSessionContext(1, () => {
         addReminder({ id: "r1", text: "repeat immediately", delay_seconds: 0, recurring: true });
       });
       const before = popActiveReminders(1);
       expect(before).toHaveLength(1);
-      await runInSessionContext(1, () => {
+      runInSessionContext(1, () => {
         const after = listReminders();
         expect(after).toHaveLength(1);
-        expect(after[0]!.state).toBe("active");
+        expect(after[0].state).toBe("active");
       });
     });
 
@@ -150,21 +150,21 @@ describe("reminder-state", () => {
       expect(getSoonestDeferredMs(1)).toBeNull();
     });
 
-    it("returns approximate ms to soonest deferred reminder", async () => {
-      await runInSessionContext(1, () => {
+    it("returns approximate ms to soonest deferred reminder", () => {
+      runInSessionContext(1, () => {
         const r = addReminder({ id: "r1", text: "x", delay_seconds: 30, recurring: false });
         // created_at is ~now, delay_seconds=30 → fires in ~30s
-        const ms = getSoonestDeferredMs(1)!;
+        const ms = getSoonestDeferredMs(1);
         expect(ms).toBeGreaterThan(0);
         expect(ms).toBeLessThanOrEqual(30_000);
         void r;
       });
     });
 
-    it("returns 0 when delay has already elapsed", async () => {
-      await runInSessionContext(1, () => {
+    it("returns 0 when delay has already elapsed", () => {
+      runInSessionContext(1, () => {
         addReminder({ id: "r1", text: "x", delay_seconds: 1, recurring: false });
-        const r = listReminders()[0]!;
+        const r = listReminders()[0];
         r.created_at = Date.now() - 5000; // 5s ago, delay=1s → overdue
         const ms = getSoonestDeferredMs(1);
         expect(ms).toBe(0);
@@ -173,11 +173,11 @@ describe("reminder-state", () => {
   });
 
   describe("per-session isolation", () => {
-    it("sessions do not share reminders", async () => {
-      await runInSessionContext(1, () => {
+    it("sessions do not share reminders", () => {
+      runInSessionContext(1, () => {
         addReminder({ id: "r1", text: "s1", delay_seconds: 0, recurring: false });
       });
-      await runInSessionContext(2, () => {
+      runInSessionContext(2, () => {
         addReminder({ id: "r2", text: "s2", delay_seconds: 0, recurring: false });
       });
       expect(getActiveReminders(1).map(r => r.id)).toEqual(["r1"]);
@@ -186,8 +186,8 @@ describe("reminder-state", () => {
   });
 
   describe("clearSessionReminders", () => {
-    it("removes all reminders for a session", async () => {
-      await runInSessionContext(1, () => {
+    it("removes all reminders for a session", () => {
+      runInSessionContext(1, () => {
         addReminder({ id: "r1", text: "x", delay_seconds: 0, recurring: false });
       });
       clearSessionReminders(1);
@@ -196,8 +196,8 @@ describe("reminder-state", () => {
   });
 
   describe("buildReminderEvent", () => {
-    it("builds a well-formed synthetic reminder event", async () => {
-      await runInSessionContext(1, () => {
+    it("builds a well-formed synthetic reminder event", () => {
+      runInSessionContext(1, () => {
         const r = addReminder({ id: "ci-1", text: "Check CI", delay_seconds: 0, recurring: false });
         const evt = buildReminderEvent(r);
         expect(evt.event).toBe("reminder");
@@ -213,8 +213,8 @@ describe("reminder-state", () => {
       });
     });
 
-    it("assigns unique IDs to consecutive events", async () => {
-      await runInSessionContext(1, () => {
+    it("assigns unique IDs to consecutive events", () => {
+      runInSessionContext(1, () => {
         const r = addReminder({ id: "x", text: "x", delay_seconds: 0, recurring: false });
         const e1 = buildReminderEvent(r);
         const e2 = buildReminderEvent(r);
