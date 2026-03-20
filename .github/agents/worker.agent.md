@@ -130,13 +130,13 @@ set_default_animation(name="{name}: waiting",  frames=["⏳ {name}: waiting…",
 | `{name}: testing` | Running test suite, verifying |
 | `{name}: waiting` | Blocked on approval, CI, etc. |
 
-**Use animations constantly.** Signal your state at the start of every action:
+**Use animations constantly** — this is non-negotiable. A silent worker looks like a hung process. Signal your state at the start of every action:
 - Before reading/planning → `show_animation("{name}: thinking")`
 - Before editing files → `show_animation("{name}: working")`
 - Before running tests → `show_animation("{name}: testing")`
 - While waiting for approval or CI → `show_animation("{name}: waiting", persistent: true)`
 
-A silent worker looks like a hung process. **When in doubt, show an animation.**
+**When in doubt, show an animation. Never be silent while working.**
 
 ---
 
