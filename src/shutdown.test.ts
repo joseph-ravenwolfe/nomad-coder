@@ -88,6 +88,7 @@ describe("elegantShutdown", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.setMyCommands.mockResolvedValue(true);
+    mocks.resolveChat.mockReturnValue(123);
     // Prevent process.exit from actually killing the test runner
     exitSpy = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
   });

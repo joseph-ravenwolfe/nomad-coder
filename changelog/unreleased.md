@@ -21,6 +21,7 @@
 - `send_text_as_voice` `voice` parameter description now clarifies it is per-call only and recommends `set_voice` for persistent session-scoped voice changes
 - `/governor` slash command renamed to `/primary` for operator-friendly terminology; all user-facing panel text updated; internal routing, callback data, and agent service messages preserve `governor` terminology
 - `elegantShutdown` now unpins all active session announcement messages before exit, ensuring no stale pins remain after server restart
+- When primary session changes via `/primary`, a visible broadcast message is sent to the Telegram chat announcing the new primary (e.g. "🔀 🟨 Worker is now the primary session."); not pinned
 
 ## Fixed
 

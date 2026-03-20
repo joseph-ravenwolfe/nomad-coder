@@ -14,7 +14,7 @@
 
 import { createRequire } from "module";
 import type { Update } from "grammy/types";
-import { getApi, resolveChat } from "./telegram.js";
+import { getApi, resolveChat, sendServiceMessage } from "./telegram.js";
 import { elegantShutdown, setShutdownDumpHook } from "./shutdown.js";
 
 import { getSessionLogMode, setSessionLogMode, sessionLogLabel } from "./config.js";
@@ -492,6 +492,9 @@ async function handleGovernorCallback(
     setGovernorSid(newSid);
 
     const newLabel = `${newGovernor.color} ${newGovernor.name}`;
+
+    // Broadcast to Telegram chat: visible operator-facing announcement
+    sendServiceMessage(`🔀 ${newLabel} is now the primary session.`).catch(() => {});
 
     // Notify new governor
     deliverServiceMessage(

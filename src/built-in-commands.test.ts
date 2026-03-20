@@ -769,6 +769,18 @@ describe("built-in-commands", () => {
         "governor_changed",
         expect.objectContaining({ old_governor_sid: 1, new_governor_sid: 2 }),
       );
+
+      // Operator-visible broadcast in Telegram chat
+      expect(mocks.sendServiceMessage).toHaveBeenCalledWith(
+        expect.stringContaining("is now the primary session"),
+      );
+    });
+
+    it("governor:set does not send broadcast on no-op (same governor)", async () => {
+      const panelId = await createGovernorPanel();
+      mocks.editMessageText.mockResolvedValue(true);
+      await handleIfBuiltIn(callbackUpdate(panelId, "governor:set:1")); // 1 is already governor
+      expect(mocks.sendServiceMessage).not.toHaveBeenCalled();
     });
 
     it("governor:set edits panel to confirm selection", async () => {
