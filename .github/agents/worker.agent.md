@@ -40,13 +40,22 @@ dequeue → messages? → handle → dequeue
 
 **Claim** — run `scripts/claim-task.ps1 <filename>` on the lowest-priority-numbered file in `2-queued/`. This stages a baseline snapshot at `4-completed/YYYY-MM-DD/` via `git mv`, then moves the working copy to `3-in-progress/`. **One task at a time.**
 
-**Delegate to Task Runner** — for focused implementation work, use `runSubagent` with `agentName: "Task Runner"`. The task file is already in `3-in-progress/`. Include the task file path and spec in the prompt. The Task Runner does the work, appends results, and moves the file to `4-completed/YYYY-MM-DD/`.
+**Delegate to Task Runner** — use `runSubagent` with `agentName: "Task Runner"`. The task file is already in `3-in-progress/`. Include the task file path and full spec in the prompt.
 
-**Review before reporting** — after the Task Runner finishes, review its work: read the diff (`git diff`), run tests, check the task file. If good, DM the overseer: "Task #N done, I've reviewed it, looks good." If not, rework or flag issues.
+**Review after delegation** — when the Task Runner returns:
 
-**Direct execution** — for simple or quick tasks, do the work yourself. Use the same lifecycle: implement, verify (tests · lint · build), append `## Completion`, move to `4-completed/`, DM overseer.
+| Task Type | Review Action |
+|---|---|
+| Investigation | Read findings in the task file. No code to verify. |
+| Direct (docs, config, small fixes) | `git diff` to see changes. Run tests/lint if code was touched. If good, `git add` the changed files. |
+| Worktree (branch) | Review commits in the worktree branch. Run tests inside worktree. |
 
-**Worktrees** — use the `## Worktree` section if present (see [worktree-workflow.md](../../tasks/worktree-workflow.md)). If absent, edit in the main workspace.
+After review, DM the overseer with status:
+- **Direct changes**: "Task #N done, reviewed, staged — ready to commit."
+- **Worktree changes**: "Task #N done, reviewed. Changes in branch `X`, ready for PR or merge."
+- **Issues found**: "Task #N has problems — [details]. Reworking." (then rework or flag)
+
+**Direct execution** — for simple or quick tasks, do the work yourself. Same lifecycle: implement, verify, append `## Completion`, move to `4-completed/`, DM overseer.
 
 **Unclear spec** → prepend `## ⚠️ Needs Clarification`, move back to `1-draft/`, DM overseer.
 
