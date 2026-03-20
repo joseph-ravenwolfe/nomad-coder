@@ -1,6 +1,12 @@
 # [Unreleased]
 
+## Added
+
+- Added `reminders/` folder with procedure docs for each governor startup reminder — agents read the doc on reminder fire instead of keeping procedures in memory/context
+
 ## Changed
+
+- Bumped version to 4.1.0 — reflects features added beyond the v4 multi-session base (reminders, session identity auth, reaction aliases, voice override)
 
 - Session approval keyboard now uses two rows — color buttons on row 1, `⛔ Deny` alone on row 2 — so the deny button is no longer cramped alongside 6 color emoji; deny button label updated from `✗ Deny` to `⛔ Deny`
 - Removed dead `_lane` parameter from `routeToSession` — vestige of `TwoLaneQueue` era; 55 call sites across production and test files cleaned up
