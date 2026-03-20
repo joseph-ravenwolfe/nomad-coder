@@ -22,10 +22,10 @@ Workers do the work. They don't merge branches or decide the merge strategy. The
 ### Direct Edit Tasks
 
 If the task spec has no `## Worktree` section:
-1. Move task file from `2-queued/` to `3-in-progress/`
+1. **Pick up**: move task file from `2-queued/` → `3-in-progress/` (claims ownership)
 2. Edit files directly in the main workspace
 3. Commit and push
-4. Move task file from `3-in-progress/` to `4-completed/`
+4. **Complete**: move task file from `3-in-progress/` → `4-completed/`
 5. DM the governor: done
 
 ### Worktree Tasks
@@ -34,7 +34,7 @@ If the task spec has a `## Worktree` section:
 
 #### 1. Pick up the task
 
-Move the task file from `2-queued/` to `3-in-progress/` (in the main workspace).
+**Immediately** move the task file from `2-queued/` to `3-in-progress/`. This claims ownership — do it before reading the details or starting any work.
 
 #### 2. Create branch and worktree
 
