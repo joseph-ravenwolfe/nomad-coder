@@ -1,6 +1,6 @@
 # Task Board Hygiene
 
-**Frequency:** Every 15 min | **Scope:** Governor only
+**Frequency:** Every 15 min | **Scope:** Overseer only
 
 ## Procedure
 

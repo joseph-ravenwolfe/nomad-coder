@@ -4,7 +4,7 @@
 
 ## Problem
 
-Workers use the same animation presets as the governor (thinking, working), making them visually indistinguishable in the chat.
+Workers use the same animation presets as the overseer (thinking, working), making them visually indistinguishable in the chat.
 
 ## Solution
 

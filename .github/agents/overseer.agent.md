@@ -2,8 +2,7 @@
 name: Overseer
 description: Task board manager and operator liaison for the Telegram Bridge MCP repo
 model:
-  - claude-opus-4-20250918
-  - claude-opus-4-0
+  - claude-opus-4-6
 tools:
   - telegram-bridge-mcp/*
   - io.github.git/*
