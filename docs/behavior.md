@@ -480,11 +480,41 @@ The `/session` built-in command provides a Telegram-side panel for manual dumps 
 
 ## Restart flow
 
-After calling `shutdown` (or the server restarts for any reason):
+> **If the server was shut down via `shutdown`**, follow the [Shutdown service event](#shutdown-service-event) instructions — stop `dequeue_update`, wait for the restart, then return here.
 
-1. Drain stale messages: call `dequeue_update(timeout: 0)` in a loop until `pending == 0`
-2. Send a "back online" message via `notify` describing what changed
-3. Return to `dequeue_update` loop
+After the server has restarted (whether from `shutdown`, a crash, or an external restart), previous sessions are invalidated:
+
+1. **Call `session_start`** to create a new session — old SIDs and PINs no longer work
+2. Drain stale messages: call `dequeue_update(timeout: 0)` in a loop until `pending == 0`
+3. Send a "back online" message via `notify` describing what changed
+4. Return to `dequeue_update` loop
+
+---
+
+## Shutdown service event
+
+When the server shuts down, every active session receives a `service_message` event with `event_type: "shutdown"` in their dequeue stream. Its text explains how to reconnect.
+
+**When you receive a shutdown event, you must:**
+
+1. **Stop the dequeue loop immediately.** Do not call `dequeue_update` again on the same session — the server is shutting down.
+2. **Do not retry.** The shutdown message is delivered once. Retrying `dequeue_update` after it is received will fail or hang.
+3. **Wait for the restart.** The server process exits cleanly. The MCP host relaunches it automatically (~10–60s depending on host config).
+4. **Re-engage via `session_start`.** After the wait, call `session_start` to create a new session. Previous session IDs and PINs are invalidated on restart.
+
+**Governor pre-warning flow** (before a planned restart):
+
+1. Governor calls `notify_shutdown_warning` — sends an advisory DM to all other sessions so workers can wrap up
+2. Workers receive the DM, finish in-progress work, enter idle state
+3. Governor calls `shutdown` when ready
+4. Workers receive the `shutdown` service event (step above) and stop
+
+**Tool reference:**
+
+| Tool | Purpose |
+| --- | --- |
+| `notify_shutdown_warning` | Advisory pre-shutdown DM to all other sessions. Does not shut down. |
+| `shutdown` | Clean exit: flushes queues, notifies agents, exits process. |
 
 ---
 
