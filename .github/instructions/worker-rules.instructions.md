@@ -7,16 +7,22 @@ Rules that apply to **non-governor** (worker) agents in the multi-session enviro
 
 ---
 
-## Branch Management — NEVER Change Branches
+## Branch Management — Worktree Isolation
 
-**Workers must NEVER switch, create, or delete git branches without explicit governor approval.**
+Workers use **git worktrees** for code changes. See `tasks/worktree-workflow.md` for the full lifecycle.
 
-- Do **not** run `git checkout`, `git switch`, `git branch -d`, or any branch-altering command.
-- Do **not** create feature branches, hotfix branches, or any other branch.
-- Always work on whatever branch is currently checked out when you start.
-- If you believe a branch change is needed, **ask the governor via DM** and wait for approval.
+**Allowed:**
+- Create a feature branch and worktree **when the task spec directs it**
+- Commit and push freely within your worktree branch
+- Run tests and builds inside your worktree
 
-The governor (overseer) is the sole authority on branch management. Workers that change branches risk corrupting the shared workspace state for all sessions.
+**Forbidden:**
+- Switching branches in the **main workspace** (`git checkout`, `git switch`)
+- Merging your branch — only the governor merges
+- Deleting branches or worktrees — the governor cleans up
+- Modifying files in the main workspace when you have an active worktree
+
+If your task spec does not include a worktree directive, work in the main workspace on the current branch (as before).
 
 ---
 
@@ -53,5 +59,6 @@ Workers must **notify the governor** before entering an idle or sleep state. The
 
 - Do **not** run `git stash`, `git reset`, `git rebase`, or `git cherry-pick` without governor approval.
 - Do **not** modify files outside the scope of your assigned task.
-- Before committing, announce your intent to the governor and wait for acknowledgment.
+- When using a worktree, all file edits happen inside `.git/.wt/task-NNN/` — never in the main workspace.
+- Before committing, announce your intent to the governor and wait for acknowledgment (unless the task spec explicitly pre-approves commits).
 - If you encounter merge conflicts, **stop and report** to the governor. Do not resolve them yourself.
