@@ -42,3 +42,12 @@ Where `newSessionLabel` is the nametag of the newly-selected session (color + na
 - The message accurately names the new primary session
 - No new pins are created
 - Existing service event broadcasts (`governor_changed`, `governor_promoted`) unchanged
+
+## Completion
+
+- Imported `sendServiceMessage` in `src/built-in-commands.ts`
+- Added `sendServiceMessage("🔀 ${newLabel} is now the primary session.").catch(() => {})` after `setGovernorSid(newSid)` in `handleGovernorCallback()`
+- One assertion added to "governor:set promotes" test; one new test "does not send broadcast on no-op"
+- Also fixed `shutdown.test.ts` beforeEach to reset `resolveChat` after `clearAllMocks` (found during #038 test work)
+- All 16 shutdown tests pass; all 55 built-in-commands tests pass
+- Commit: `2902fe1` on dev
