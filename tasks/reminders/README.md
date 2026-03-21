@@ -30,14 +30,16 @@ When a reminder fires, the overseer:
 
 ### Dispatch (fire subagent via `runSubagent`)
 
-| # | File | Agent Name | Delay | Recurring |
-|---|------|-----------|-------|-----------|
-| 3 | [03-build-lint-health.md](03-build-lint-health.md) | Task Build Lint | 20 min | Yes |
-| 4 | [04-test-suite-health.md](04-test-suite-health.md) | Task Test Suite | 30 min | Yes |
-| 5 | [05-changelog-review.md](05-changelog-review.md) | Task Changelog Audit | 60 min | Yes |
-| 6 | [06-doc-hygiene.md](06-doc-hygiene.md) | Task Doc Hygiene | 60 min | Yes |
-| 8 | [08-pr-review-exhaustion.md](08-pr-review-exhaustion.md) | Task PR Review | 15 min | Yes |
-| 9 | [09-pr-health-check.md](09-pr-health-check.md) | Task PR Health | 30 min | Yes |
+These reminders dispatch a specialist agent — no procedure file needed. The agent file in `.github/agents/` contains the full procedure.
+
+| # | Agent Name | Delay | Recurring |
+|---|-----------|-------|-----------|
+| 3 | Task Build Lint | 20 min | Yes |
+| 4 | Task Test Suite | 30 min | Yes |
+| 5 | Task Changelog Audit | 60 min | Yes |
+| 6 | Task Doc Hygiene | 60 min | Yes |
+| 8 | Task PR Review | 15 min | Yes |
+| 9 | Task PR Health | 30 min | Yes |
 
 ## Worker Startup Reminders
 
