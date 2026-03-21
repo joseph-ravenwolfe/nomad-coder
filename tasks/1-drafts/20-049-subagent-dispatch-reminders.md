@@ -4,35 +4,41 @@
 
 ## Goal
 
-Convert overseer reminders from "do-it-yourself procedures" to "dispatch a specialist subagent." The overseer's reminder handler becomes: read the agent prompt, fire `runSubagent`, read the report, act on findings.
+Convert overseer reminders from "do-it-yourself procedures" to "dispatch a specialist subagent." The overseer's reminder handler becomes: fire the named agent via `runSubagent(agentName)`, read the report, act on findings.
 
 ## Background
 
 Currently, when a reminder fires (e.g., "check PRs"), the overseer loads the full context itself — reads PR diffs, runs builds, checks markdown lint. This wastes overseer context on mechanical work.
 
-The new model: each reminder that can be automated becomes a `.agent.md` file in `tasks/agents/`. The overseer fire-and-forgets a subagent with the prompt, gets back a structured report, and acts on it (queue tasks, notify operator, etc).
+The new model: each automatable reminder becomes a VS Code agent file in `.github/agents/` with a `task-` filename prefix. The overseer dispatches them via `runSubagent(agentName: "Task PR Review")`, gets a structured report, and acts on it.
+
+## Confirm-Before-Dispatch Protocol
+
+When the overseer is the only session (no workers), it must **confirm with the operator** before launching a subagent, since it will block:
+
+1. `confirm(text: "Ready for me to run Task PR Review?", confirm_text: "▶ Go", deny_text: "⏸ Not now")`
+2. If confirmed: `notify("Starting Task PR Review")` → `show_animation(preset: working)` → `runSubagent`
+3. If denied or timed out: skip, loop back to `dequeue_update`
+
+When workers are active, the overseer can dispatch without confirmation (workers handle operator messages).
 
 ## Deliverables
 
-### 1. Create `tasks/agents/` directory
+### 1. Create agent files in `.github/agents/`
 
-Agent prompt templates for subagent dispatch. These are NOT VS Code agents (not in `.github/agents/`). They're prompt templates the overseer reads and passes to `runSubagent`.
+Each file uses the `task-` prefix convention. The `name` field in frontmatter is what `runSubagent(agentName)` targets.
 
-### 2. Create agent prompt files
+| Filename | Agent Name | Replaces Reminder | Model | Rationale |
+|---|---|---|---|---|
+| `task-pr-review.agent.md` | Task PR Review | 08 (PR review exhaustion) | Claude Sonnet 4.6 | Code understanding + writing |
+| `task-pr-health.agent.md` | Task PR Health | 09 (PR health check) | GPT 5.3 Codex | Mechanical, tool-heavy |
+| `task-build-lint.agent.md` | Task Build Lint | 03 (build/lint health) | GPT 5.3 Codex | Pure execution + reporting |
+| `task-test-suite.agent.md` | Task Test Suite | 04 (test suite health) | Claude Sonnet 4.6 | Failure analysis needs reasoning |
+| `task-changelog-audit.agent.md` | Task Changelog Audit | 05 (changelog review) | GPT 5.4 | Language comprehension |
+| `task-doc-hygiene.agent.md` | Task Doc Hygiene | 06 (doc hygiene) | GPT 5.4 | Language + pattern matching |
+| `task-markdown-lint.agent.md` | Task Markdown Lint | (new) | GPT 5.3 Codex | Mechanical refactoring |
 
-Each file follows a standard structure: identity, tools needed, procedure, report format.
-
-| File | Replaces Reminder | What it Does |
-|---|---|---|
-| `pr-review.agent.md` | 08 (PR review exhaustion) | Check open PRs for Copilot/human comments, CI status. Fix trivial comments inline, reply. Report unresolvable issues for task creation |
-| `pr-health.agent.md` | 09 (PR health check) | List open PRs. Check new comments, CI status, Dependabot. Report items needing attention |
-| `build-lint.agent.md` | 03 (build/lint health) | Run `pnpm build && pnpm lint`. Report pass/fail with error details |
-| `test-suite.agent.md` | 04 (test suite health) | Run `pnpm test`. Report pass/fail, test count, failures |
-| `changelog-audit.agent.md` | 05 (changelog review) | Diff unreleased.md vs recent commits. Flag behavior changes without entries |
-| `doc-hygiene.agent.md` | 06 (doc hygiene) | Scan docs for broken links, stale content, formatting issues. Fix trivial issues |
-| `markdown-lint.agent.md` | (new) | Run markdownlint on all .md files. Report violations and auto-fix where possible |
-
-### 3. Reminders that stay with the overseer
+### 2. Reminders that stay with the overseer
 
 These require session state and should NOT be subagent-dispatched:
 
@@ -44,39 +50,39 @@ These require session state and should NOT be subagent-dispatched:
 | 10 (worker health) | Requires `list_sessions` and DM capability |
 | 11 (server build drift) | Quick `get_me()` comparison — not worth subagent overhead |
 
-### 4. Update overseer agent file
+### 3. Update overseer agent file
 
-Update `.github/agents/overseer.agent.md` reminder table to distinguish:
-- **Direct reminders** — overseer handles inline (quick checks)
-- **Dispatch reminders** — overseer fires subagent, reads report, acts on findings
+- Add **confirm-before-dispatch** protocol section
+- Update reminder table to distinguish direct vs. dispatch reminders
+- Reminders that dispatch should reference the agent name explicitly
 
-### 5. Update reminder procedures
+### 4. Update reminder procedures
 
-Either update or replace the existing `tasks/reminders/` files to reference the new agent dispatch pattern.
+Update `tasks/reminders/README.md` and individual reminder files to reference the agent dispatch pattern. Dispatch reminders should say: "Fire `Task <Name>` agent via `runSubagent`."
 
-## Agent Prompt Template Structure
+## Agent File Structure
+
+```yaml
+---
+name: Task PR Review
+description: Checks open PRs for review comments and CI status
+model: Claude Sonnet 4.6
+tools: [read, search, execute, edit, 'github/*']
+---
+```
 
 ```markdown
-# [Agent Name]
+# Task PR Review
 
 ## Identity
-One-line role description.
-
-## Tools
-List of tools this agent should use.
+GitHub PR review specialist. Check open PRs, address Copilot/human comments, monitor CI.
 
 ## Procedure
-Step-by-step instructions.
+1. List open PRs
+2. For each PR with unresolved comments...
+3. ...
 
 ## Report Format
-What the agent should return to the caller.
-```
-
-## Report Contract
-
-Every subagent returns a structured report the overseer can parse:
-
-```
 STATUS: pass | findings | failure
 SUMMARY: one-line description
 DETAILS: (optional) specifics
@@ -85,8 +91,10 @@ ACTION_NEEDED: (optional) what overseer should do
 
 ## Acceptance Criteria
 
-- [ ] `tasks/agents/` directory exists with 7+ agent prompt files
+- [ ] 7 agent files created in `.github/agents/` with `task-` prefix
+- [ ] Each agent file has proper frontmatter (name, description, model, tools)
 - [ ] Each agent file has identity, procedure, and report format sections
+- [ ] Overseer agent file updated with confirm-before-dispatch protocol
 - [ ] Overseer agent file updated with dispatch vs. direct reminder classification
 - [ ] `tasks/reminders/README.md` updated to reference new pattern
-- [ ] At least one agent (pr-review or build-lint) successfully tested via `runSubagent`
+- [ ] At least one agent (Task Build Lint or Task PR Health) successfully tested via `runSubagent`
