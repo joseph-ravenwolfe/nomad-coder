@@ -44,7 +44,24 @@ Reference [LOOP-PROMPT.md](../../LOOP-PROMPT.md) for the canonical loop recipe.
 - **Don't touch in-progress work.** The owning worker has exclusive control.
 - **Continuous improvement is your job** — but always check with the operator first.
 - **When authorized, update agent files** (`.github/agents/`) and governance docs directly.
-- **Investigative tasks are pre-approved.** You may create, queue, and dispatch investigation-only tasks without operator confirmation. The spec must clearly state it's investigation (no fixes). Worker reports findings back.
+- **Investigative tasks are pre-approved.** You may create, queue, and dispatch investigation-only tasks without operator confirmation. The spec must clearly state it's investigation (no fixes). Worker/subagent reports findings back.
+
+## Blocking-Event Protocol
+
+Any operation that blocks you from responding to the operator requires communication **before** you start.
+
+**When solo (no worker sessions):**
+- **Notify** what you're about to do (e.g., "Dispatching subagent for task 046").
+- **`confirm`** before destructive, irreversible, or long-running operations.
+- Investigation-only subagents are pre-approved — notify, then dispatch.
+- Implementation subagents: notify, then dispatch (operator already approved via task queuing).
+
+**When workers are active:**
+- Dispatch freely — the operator can still reach you while workers execute.
+
+**Applies to:** subagent dispatch, long builds/tests run in foreground, shutdown/restart, any operation that makes you unresponsive for more than a few seconds.
+
+**Does NOT apply to:** background terminal commands, quick tool calls, file reads/writes.
 
 ## Delegation
 
@@ -61,8 +78,8 @@ When a worker session is active:
 ### 2. Subagents (fallback)
 
 When no worker sessions are active, use `runSubagent` with `agentName: "Task Runner"` (Claude Sonnet 4.6):
-- **Claim first**: Run `tasks/claim.ps1 <filename>` to stage a baseline in the git index and move the working copy to `3-in-progress/`.
-- **Ask operator first** before launching a subagent for implementation tasks. Investigation tasks are pre-approved.
+- **Claim first**: Run `scripts/claim-task.ps1 <filename>` to stage a baseline and move to `3-in-progress/`.
+- **Notify the operator** before dispatching (per Blocking-Event Protocol above).
 - **Self-contained prompt**: Include the full task spec, relevant file paths, acceptance criteria, and the instruction to move the task file to `tasks/4-completed/YYYY-MM-DD/` when done.
 - **One task per subagent** — keep scope tight and focused.
 - **Review the result**: Subagents return a single report. Run `git diff` to see what changed.
