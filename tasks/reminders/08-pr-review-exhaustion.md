@@ -1,5 +1,7 @@
 # PR Review Exhaustion Loop
 
+> **Dispatch reminder.** When this fires, the overseer dispatches `Task PR Review` via `runSubagent`.
+
 **Frequency:** Every 10 min | **Scope:** Overseer only
 
 ## Procedure

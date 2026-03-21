@@ -1,5 +1,7 @@
 # Test Suite Health
 
+> **Dispatch reminder.** When this fires, the overseer dispatches `Task Test Suite` via `runSubagent`.
+
 **Frequency:** Every 30 min | **Scope:** Overseer only
 
 ## Procedure

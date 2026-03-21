@@ -135,15 +135,25 @@ All substantive communication goes through Telegram. The communication guide loa
 
 Add these reminders on session start using `set_reminder`. They **do not persist** across restarts.
 
+### Direct Reminders (overseer handles)
+
 | # | Reminder Text | Delay | Recurring |
 |---|---|---|---|
 | 1 | Scan `tasks/` for duplicates, misplaced files, stale drafts. Verify workers are active. → [procedure](../../tasks/reminders/01-task-board-hygiene.md) | 15 min | Yes |
 | 2 | `git status --short`. Check branch, uncommitted changes, remote divergence. → [procedure](../../tasks/reminders/02-git-state-audit.md) | 15 min | Yes |
-| 3 | `pnpm build && pnpm lint`. Notify operator on failure. → [procedure](../../tasks/reminders/03-build-lint-health.md) | 20 min | Yes |
-| 4 | `pnpm test`. Track test count for regressions. → [procedure](../../tasks/reminders/04-test-suite-health.md) | 30 min | Yes |
-| 5 | Check `changelog/unreleased.md`. Flag behavior changes without entries. → [procedure](../../tasks/reminders/05-changelog-review.md) | 60 min | Yes |
-| 6 | Spot-check 1–2 docs for broken links, stale content. → [procedure](../../tasks/reminders/06-doc-hygiene.md) | 60 min | Yes |
 | 7 | If no operator contact in 10 min, `notify` current status. → [procedure](../../tasks/reminders/07-operator-check-in.md) | 10 min | Yes |
-| 8 | List open PRs. Check CI, comments, Dependabot, unresolved reviews. → [procedure](../../tasks/reminders/08-pr-review-exhaustion.md) | 15 min | Yes |
 | 10 | Check worker sessions. Ping any silent >10 min. Ask workers their reminders to verify behavior. → [procedure](../../tasks/reminders/10-worker-health.md) | 10 min | Yes |
 | 11 | Compare `get_me().mcp_commit` with `dist/tools/build-info.json`. Prompt restart on drift. → [procedure](../../tasks/reminders/11-server-build-drift.md) | 20 min | Yes |
+
+### Dispatch Reminders (fire subagent)
+
+When these fire, dispatch the named agent via `runSubagent(agentName)`. Follow the Blocking-Event Protocol (confirm with operator if solo).
+
+| # | Agent Name | Delay | Recurring |
+|---|---|---|---|
+| 3 | Task Build Lint | 20 min | Yes |
+| 4 | Task Test Suite | 30 min | Yes |
+| 5 | Task Changelog Audit | 60 min | Yes |
+| 6 | Task Doc Hygiene | 60 min | Yes |
+| 8 | Task PR Review | 15 min | Yes |
+| 9 | Task PR Health | 30 min | Yes |

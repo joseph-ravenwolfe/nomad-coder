@@ -1,5 +1,7 @@
 # Doc Hygiene
 
+> **Dispatch reminder.** When this fires, the overseer dispatches `Task Doc Hygiene` via `runSubagent`.
+
 **Frequency:** Every 60 min | **Scope:** Overseer only
 
 ## Procedure

@@ -98,3 +98,39 @@ ACTION_NEEDED: (optional) what overseer should do
 - [ ] Overseer agent file updated with dispatch vs. direct reminder classification
 - [ ] `tasks/reminders/README.md` updated to reference new pattern
 - [ ] At least one agent (Task Build Lint or Task PR Health) successfully tested via `runSubagent`
+
+## Completion
+
+**Date:** 2026-03-20
+
+### What Changed
+
+- Created 7 agent files in `.github/agents/` with `task-` prefix
+- Updated overseer agent file: split Startup Reminders into Direct vs. Dispatch subsections
+- Updated 6 dispatch reminder docs with blockquote dispatch note at the top
+- Updated `tasks/reminders/README.md` to document both patterns with split tables
+
+### Files Created
+
+- `.github/agents/task-pr-review.agent.md`
+- `.github/agents/task-pr-health.agent.md`
+- `.github/agents/task-build-lint.agent.md`
+- `.github/agents/task-test-suite.agent.md`
+- `.github/agents/task-changelog-audit.agent.md`
+- `.github/agents/task-doc-hygiene.agent.md`
+- `.github/agents/task-markdown-lint.agent.md`
+
+### Files Modified
+
+- `.github/agents/overseer.agent.md` — Startup Reminders section split into Direct / Dispatch
+- `tasks/reminders/README.md` — documented dispatch pattern, split tables
+- `tasks/reminders/03-build-lint-health.md` — added dispatch blockquote
+- `tasks/reminders/04-test-suite-health.md` — added dispatch blockquote
+- `tasks/reminders/05-changelog-review.md` — added dispatch blockquote
+- `tasks/reminders/06-doc-hygiene.md` — added dispatch blockquote
+- `tasks/reminders/08-pr-review-exhaustion.md` — added dispatch blockquote
+- `tasks/reminders/09-pr-health-check.md` — added dispatch blockquote
+
+### Notes
+
+No TypeScript source files were changed. No builds or tests were run (docs-only task).

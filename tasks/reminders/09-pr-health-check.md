@@ -1,5 +1,7 @@
 # PR Health Check
 
+> **Dispatch reminder.** When this fires, the overseer dispatches `Task PR Health` via `runSubagent`.
+
 **Frequency:** Every 30 min | **Scope:** Overseer only
 
 ## Procedure

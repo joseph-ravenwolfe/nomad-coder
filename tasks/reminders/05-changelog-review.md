@@ -1,5 +1,7 @@
 # Changelog Review
 
+> **Dispatch reminder.** When this fires, the overseer dispatches `Task Changelog Audit` via `runSubagent`.
+
 **Frequency:** Every 60 min | **Scope:** Overseer only
 
 ## Procedure

@@ -1,5 +1,7 @@
 # Build & Lint Health
 
+> **Dispatch reminder.** When this fires, the overseer dispatches `Task Build Lint` via `runSubagent`.
+
 **Frequency:** Every 20 min | **Scope:** Overseer only
 
 ## Procedure
