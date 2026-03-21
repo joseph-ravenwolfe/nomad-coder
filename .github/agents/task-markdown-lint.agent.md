@@ -1,7 +1,7 @@
 ---
 name: Task Markdown Lint
 description: Lints markdown files for formatting consistency and fixes trivial issues
-model: GPT 5.3 Codex
+model: GPT-5.3-Codex
 tools: [execute, read, edit, search]
 ---
 

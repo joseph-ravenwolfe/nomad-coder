@@ -1,7 +1,7 @@
 ---
 name: Task PR Health
 description: Checks open PRs for CI status, new comments, and Dependabot updates
-model: GPT 5.3 Codex
+model: GPT-5.3-Codex
 tools: [read, search, execute, 'github/*']
 ---
 

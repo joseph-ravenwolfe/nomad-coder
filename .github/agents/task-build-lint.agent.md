@@ -1,7 +1,7 @@
 ---
 name: Task Build Lint
 description: Runs pnpm build and pnpm lint, reports any failures
-model: GPT 5.3 Codex
+model: GPT-5.3-Codex
 tools: [execute, read]
 ---
 

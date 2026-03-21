@@ -154,6 +154,6 @@ When these fire, dispatch the named agent via `runSubagent(agentName)`. Follow t
 | 3 | Task Build Lint | 20 min | Yes |
 | 4 | Task Test Suite | 30 min | Yes |
 | 5 | Task Changelog Audit | 60 min | Yes |
-| 6 | Task Doc Hygiene | 60 min | Yes |
-| 8 | Task PR Review | 15 min | Yes |
-| 9 | Task PR Health | 30 min | Yes |
+| 6 | Task Doc Hygiene | 30 min | Yes |
+| 8 | Task PR Review | 10 min | Yes |
+| 9 | Task PR Health | 20 min | Yes |

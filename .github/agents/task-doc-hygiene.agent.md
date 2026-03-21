@@ -1,7 +1,7 @@
 ---
 name: Task Doc Hygiene
 description: Spot-checks documentation for broken links, stale content, and formatting issues
-model: GPT 5.4
+model: GPT-5.4
 tools: [read, search, execute]
 ---
 

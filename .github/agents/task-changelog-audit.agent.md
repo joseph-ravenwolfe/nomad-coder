@@ -1,7 +1,7 @@
 ---
 name: Task Changelog Audit
 description: Reviews changelog for completeness against recent commits
-model: GPT 5.4
+model: GPT-5.4
 tools: [read, search, execute]
 ---
 
