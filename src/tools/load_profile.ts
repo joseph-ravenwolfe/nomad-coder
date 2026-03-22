@@ -48,17 +48,17 @@ export function register(server: McpServer) {
 
       const applied: Record<string, unknown> = {};
 
-      if (profile.voice !== undefined) {
-        setSessionVoice(profile.voice);
-        applied.voice = profile.voice;
-      }
-
-      if (profile.voice_speed !== undefined) {
-        setSessionSpeed(profile.voice_speed);
-        applied.voice_speed = profile.voice_speed;
-      }
-
       try {
+        if (profile.voice !== undefined) {
+          setSessionVoice(profile.voice);
+          applied.voice = profile.voice;
+        }
+
+        if (profile.voice_speed !== undefined) {
+          setSessionSpeed(profile.voice_speed);
+          applied.voice_speed = profile.voice_speed;
+        }
+
         if (profile.animation_default !== undefined) {
           setSessionDefault(_sid, profile.animation_default);
           applied.animation_default = true;
@@ -103,7 +103,7 @@ export function register(server: McpServer) {
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        const isReminderLimit = message.includes("MAX_REMINDERS_PER_SESSION");
+        const isReminderLimit = message.includes("Max reminders per session");
         return toError({
           code: isReminderLimit ? "REMINDER_LIMIT_EXCEEDED" : "APPLY_FAILED",
           message,

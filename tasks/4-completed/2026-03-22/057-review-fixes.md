@@ -52,7 +52,25 @@ Fix critical and major bugs found during adversarial code review of PR #78.
 
 ## Acceptance Criteria
 
-- [ ] All fixes implemented with correct code changes
-- [ ] Existing tests pass (`pnpm test`)
-- [ ] New or updated tests where applicable (especially for bug #1 test fix)
-- [ ] Update `changelog/unreleased.md` — add Fixed entries for bugs #1 and #2
+- [x] All fixes implemented with correct code changes
+- [x] Existing tests pass (`pnpm test`)
+- [x] New or updated tests where applicable (especially for bug #1 test fix)
+- [x] Update `changelog/unreleased.md` — add Fixed entries for bugs #1 and #2
+
+## Completion
+
+All 6 fixes implemented. Tests: 1277 passed across 54 test files (2026-03-22).
+
+### Changes made
+
+| Fix | File | Change |
+|-----|------|--------|
+| #1 TTS speed type | `src/tts.ts` | `body: Record<string, string | number>`, `body.speed = speed` (no `String()`) |
+| #1 test | `src/tts.test.ts` | `expect(body.speed).toBe(1.5)` (number, not `"1.5"`) |
+| #2 error string | `src/tools/load_profile.ts` | `"Max reminders per session"` (was `"MAX_REMINDERS_PER_SESSION"`) |
+| #3 partial state | `src/tools/load_profile.ts` | voice/speed application moved inside try/catch |
+| #4 colon in key | `src/profile-store.ts` | Reject keys containing `:` in `resolveProfilePath` |
+| #5 backslash in key | `src/tools/save_profile.ts` | Reject keys containing `\` in addition to `/` |
+| #6 profile_hint | `src/tools/session_start.ts` | Added `profile_hint` to reconnect-via-name-match response |
+| changelog | `changelog/unreleased.md` | Added Fixed entries for all 6 bugs |
+

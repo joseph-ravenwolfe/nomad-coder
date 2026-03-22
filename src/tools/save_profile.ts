@@ -33,7 +33,7 @@ export function register(server: McpServer) {
       const _sid = requireAuth(identity);
       if (typeof _sid !== "number") return toError(_sid);
 
-      if (key.includes("/")) {
+      if (key.includes("/") || key.includes("\\")) {
         return toError({ code: "INVALID_KEY", message: "Path keys are not allowed in save_profile. Use a bare key (e.g. \"Overseer\")." });
       }
 

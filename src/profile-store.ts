@@ -51,6 +51,9 @@ export function resolveProfilePath(key: string): string {
   if (isAbsolute(key)) {
     throw new Error("Invalid profile key: absolute paths not allowed");
   }
+  if (key.includes(":")) {
+    throw new Error("Invalid profile key: colon not allowed");
+  }
 
   if (key.includes("/")) {
     // Path key — resolve relative to repo root

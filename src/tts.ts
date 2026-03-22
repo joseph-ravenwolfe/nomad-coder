@@ -196,10 +196,10 @@ async function synthesizeHttpToOgg(
   const resolvedVoice =
     voice ?? envVoice ?? (isOpenAi ? "alloy" : undefined);
 
-  const body: Record<string, string> = { input: text, response_format: nativeOgg ? fmt : "wav" };
+  const body: Record<string, string | number> = { input: text, response_format: nativeOgg ? fmt : "wav" };
   if (resolvedModel) body.model = resolvedModel;
   if (resolvedVoice) body.voice = resolvedVoice;
-  if (speed !== undefined && speed !== 1.0) body.speed = String(speed);
+  if (speed !== undefined && speed !== 1.0) body.speed = speed;
 
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;

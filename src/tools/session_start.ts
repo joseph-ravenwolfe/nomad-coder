@@ -301,6 +301,7 @@ export function register(server: McpServer) {
               sessions_active: reconSessActive,
               action: "reconnected",
               pending: 0,
+              profile_hint: "Call load_profile(key) to restore saved session configuration.",
               instructions: "You reconnected after a gap. "
                 + "Call get_chat_history to check for messages you may have missed. "
                 + "Re-save your SID and PIN to session memory if needed.",

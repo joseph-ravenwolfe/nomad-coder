@@ -398,7 +398,7 @@ describe("synthesizeToOgg (TTS_HOST provider)", () => {
 
     const [, opts] = mockFetch.mock.calls[0];
     const body = JSON.parse(opts.body);
-    expect(body.speed).toBe("1.5");
+    expect(body.speed).toBe(1.5);
   });
 
   it("omits speed from the request body when speed is not provided", async () => {

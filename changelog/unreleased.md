@@ -21,6 +21,12 @@
 
 ## Fixed
 
+- Fixed TTS speed sent as JSON string instead of number to the TTS API (`body.speed = speed` not `String(speed)`)
+- Fixed `REMINDER_LIMIT_EXCEEDED` error code detection in `load_profile` — was matching `"MAX_REMINDERS_PER_SESSION"` (never in thrown message), now matches `"Max reminders per session"`
+- Fixed partial state application in `load_profile` — voice/speed now applied inside try/catch, preventing committed state on subsequent error
+- Fixed Windows drive-relative path bypass in `resolveProfilePath` — keys containing `:` now rejected
+- Fixed backslash in `save_profile` keys creating unintended subdirectories — keys containing `\` now rejected
+- Added `profile_hint` to reconnect-via-name-match response in `session_start` (was present in fresh session response only)
 - `close_session` now calls `clearSessionReminders(sid)` to clean up orphaned reminders on session close
 - `save_profile` now rejects path keys (keys containing `/`); only bare keys accepted — prevents tool-written files outside the gitignored `data/profiles/` tier
 - `save_profile` no longer saves hardcoded animation default unconditionally — only saved when the session has a custom default set
