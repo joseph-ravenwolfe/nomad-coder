@@ -8,6 +8,7 @@ import { requireAuth } from "../session-gate.js";
 import { replaceSessionCallbackHooks } from "../message-store.js";
 import { dlog } from "../debug-log.js";
 import { stopPoller } from "../poller.js";
+import { clearSessionReminders } from "../reminder-state.js";
 import { IDENTITY_SCHEMA } from "./identity-schema.js";
 import { refreshGovernorCommand } from "../built-in-commands.js";
 
@@ -42,6 +43,7 @@ export function register(server: McpServer) {
       const orphaned = drainQueue(sid);
 
       removeSessionQueue(sid);
+      clearSessionReminders(sid);
       revokeAllForSession(sid);
       if (getActiveSession() === sid) setActiveSession(0);
 

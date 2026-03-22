@@ -21,6 +21,7 @@
 
 ## Fixed
 
+- `close_session` now calls `clearSessionReminders(sid)` to clean up orphaned reminders on session close
 - `save_profile` now rejects path keys (keys containing `/`); only bare keys accepted — prevents tool-written files outside the gitignored `data/profiles/` tier
 - `save_profile` no longer saves hardcoded animation default unconditionally — only saved when the session has a custom default set
 - `save_profile` no longer persists runtime reminder UUIDs — `id` is stripped from reminder serialization; profiles are templates

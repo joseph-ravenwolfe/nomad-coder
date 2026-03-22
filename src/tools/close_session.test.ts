@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
   resolveChat: vi.fn().mockReturnValue(1001),
   stopPoller: vi.fn(),
   activeSessionCount: vi.fn().mockReturnValue(0),
+  clearSessionReminders: vi.fn(),
 }));
 
 vi.mock("../session-manager.js", () => ({
@@ -78,6 +79,10 @@ vi.mock("../telegram.js", async (importOriginal) => {
 
 vi.mock("../poller.js", () => ({
   stopPoller: (...args: unknown[]) => mocks.stopPoller(...args),
+}));
+
+vi.mock("../reminder-state.js", () => ({
+  clearSessionReminders: (...args: unknown[]) => mocks.clearSessionReminders(...args),
 }));
 
 import { register } from "./close_session.js";
@@ -601,6 +606,18 @@ describe("close_session tool", () => {
     await call({ identity: [1, 123456] });
 
     expect(mocks.stopPoller).not.toHaveBeenCalled();
+  });
+
+  // =========================================================================
+  // Reminder cleanup on session close
+  // =========================================================================
+
+  it("clears session reminders on close", async () => {
+    mocks.listSessions.mockReturnValue([]);
+
+    await call({ identity: [1, 123456] });
+
+    expect(mocks.clearSessionReminders).toHaveBeenCalledWith(1);
   });
 });
 
