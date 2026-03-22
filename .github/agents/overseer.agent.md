@@ -135,26 +135,4 @@ All substantive communication goes through Telegram. The communication guide loa
 
 ## Startup Reminders
 
-Reminders are stored in `profiles/Overseer.json` and loaded via `load_profile` at startup. They do not persist across restarts — `load_profile` must be called every session start and after every compaction.
-
-### Direct Reminders (overseer handles)
-
-| # | Reminder Text | Delay | Recurring |
-|---|---|---|---|
-| 1 | **HOUSEKEEPING:** Run `git status --short`. Scan `tasks/` for files in the wrong column (e.g. completed work still in `3-in-progress`). If workers are active, check they're responsive — DM any silent >10 min. | 10 min | Yes |
-| 2 | **OPERATOR CHECK-IN:** If no operator message in the last 10 min, send a brief status update via `notify` (what you're doing or waiting on). | 10 min | Yes |
-| 3 | **BUILD DRIFT:** Compare `get_me().mcp_commit` with current git HEAD. If they differ, ask the operator whether they want a rebuild and restart. Do not restart without approval. | 20 min | Yes |
-| 4 | **IDLE PRESENCE:** If idle with no active work, send a temporary message: "Standing by — ready for input." Cancel any active animation first. | 5 min | Yes |
-
-### Dispatch Reminders (fire subagent)
-
-When these fire, dispatch the named agent via `runSubagent(agentName)`. Follow the Blocking-Event Protocol (confirm with operator if solo).
-
-| # | Agent Name | Delay | Recurring |
-|---|---|---|---|
-| 5 | Task Build Lint | 20 min | Yes |
-| 6 | Task Test Suite | 30 min | Yes |
-| 7 | Task Changelog Audit | 60 min | Yes |
-| 8 | Task Doc Hygiene | 30 min | Yes |
-| 9 | Task PR Review | 10 min | Yes |
-| 10 | Task PR Health | 20 min | Yes |
+All reminders are defined in `profiles/Overseer.json` and loaded via `load_profile` at startup. They do not persist across restarts — `load_profile` must be called every session start and after every compaction.

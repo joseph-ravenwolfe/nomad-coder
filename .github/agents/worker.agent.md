@@ -154,9 +154,4 @@ set_default_animation(name="{name}: waiting",  frames=["⏳ {name}: waiting…",
 
 ## Startup Reminders
 
-Reminders are stored in `profiles/Worker.json` and loaded via `load_profile` at startup. They do not persist across restarts — `load_profile` must be called every session start and after every compaction.
-
-| # | Reminder Text | Delay | Recurring |
-|---|---|---|---|
-| 1 | Check `tasks/2-queued/` for unassigned tasks — pick up and DM overseer | 5 min | Yes |
-| 2 | DM overseer with current status (working/idle/blocked) | 5 min | Yes |
+All reminders are defined in `profiles/Worker.json` and loaded via `load_profile` at startup. They do not persist across restarts — `load_profile` must be called every session start and after every compaction.
