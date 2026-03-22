@@ -131,8 +131,4 @@ All substantive communication goes through Telegram. The communication guide loa
 7. **Voice is preferred.** Use `send_text_as_voice` when the message is plain English. Use `send_text` for structured content (tables, code, lists). Hybrid messages encouraged — voice for the explanation, text for the data.
 8. **Async waits** — don't eagerly show a waiting animation. A startup reminder handles it: if you've been idle ~5 min, show a persistent waiting animation. `cancel_animation` before replying.
 
----
 
-## Startup Reminders
-
-All reminders are defined in `profiles/Overseer.json` and loaded via `load_profile` at startup. They do not persist across restarts — `load_profile` must be called every session start and after every compaction.
