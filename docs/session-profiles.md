@@ -21,9 +21,9 @@ Snapshots the current session's state to `data/profiles/{key}.json`. Only bare k
 
 Captures:
 
-- `voice` — voice name (string or null)
-- `voice_speed` — TTS speed multiplier (0.25–4.0), if set
-- `animation_default` — default animation frames
+- `voice` — voice name (omitted when not set)
+- `voice_speed` — TTS speed multiplier (0.25–4.0, omitted when not set)
+- `animation_default` — default animation frames (omitted when not set)
 - `animation_presets` — named preset map
 - `reminders` — active reminder definitions (text, delay, recurring)
 
