@@ -22,6 +22,7 @@ Snapshots the current session's state to `data/profiles/{key}.json`. Only bare k
 Captures:
 
 - `voice` — voice name (string or null)
+- `voice_speed` — TTS speed multiplier (0.25–4.0), if set
 - `animation_default` — default animation frames
 - `animation_presets` — named preset map
 - `reminders` — active reminder definitions (text, delay, recurring)
@@ -52,6 +53,7 @@ No listing, no discovery. The agent must know its profile key.
 ```jsonc
 {
   "voice": "alloy",
+  "voice_speed": 1.2,
   "animation_default": ["⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏"],
   "animation_presets": {
     "thinking": ["🤔 Thinking.", "🤔 Thinking..", "🤔 Thinking..."],

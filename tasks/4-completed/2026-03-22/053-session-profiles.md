@@ -135,3 +135,40 @@ Bump to **4.6.0** (minor — new feature).
 
 - Backlog task `40-016-session-persistence.md` (spike) — this task implements the design.
 - Backlog task `40-029-animation-persistence.md` — covered by animation preset persistence in profiles.
+
+## Completion
+
+**Date:** 2026-03-22
+**Status:** Done
+
+### Changes made
+
+| File | Change |
+| --- | --- |
+| `src/voice-state.ts` | Added `_speeds` map; added `getSessionSpeed`, `setSessionSpeed`, `clearSessionSpeed`, `getSessionSpeedFor`; updated `resetVoiceStateForTest` to clear speeds |
+| `src/tools/set_voice.ts` | Added optional `speed` parameter (0.25–4.0); calls `setSessionSpeed`/`clearSessionSpeed`; includes speed in return value |
+| `src/tts.ts` | Added `speed?: number` to `synthesizeHttpToOgg` and `synthesizeToOgg`; injects `speed` into request body when set and not 1.0 |
+| `src/tools/send_text_as_voice.ts` | Imported `getSessionSpeed`; resolves and passes `resolvedSpeed` to `synthesizeToOgg` |
+| `src/built-in-commands.ts` | Imported `getSessionSpeed`; resolves and passes speed to `synthesizeToOgg` in `sendVoiceSample` |
+| `src/profile-store.ts` | Added `voice_speed?: number` to `ProfileData` interface |
+| `src/tools/save_profile.ts` | Imported `getSessionSpeedFor`; captures speed and adds `voice_speed` to profile data |
+| `src/tools/load_profile.ts` | Imported `setSessionSpeed`; restores `voice_speed` from profile |
+| `docs/session-profiles.md` | Added `voice_speed` to Captures list and file format example |
+| `changelog/unreleased.md` | Added entries for `set_voice` speed param and `voice_speed` profile support |
+| `src/tts.test.ts` | Added 3 tests: speed included in body, omitted when absent, omitted when 1.0 |
+| `src/tools/send_text_as_voice.test.ts` | Updated `synthesizeToOgg` call assertions to 3 args; added `getSessionSpeed` mock; added 2 speed pass-through tests |
+| `src/tools/set_voice.test.ts` | Added speed mocks (`getSessionSpeed`, `setSessionSpeed`, `clearSessionSpeed`) to voice-state mock |
+| `src/profile-store.test.ts` | Added round-trip test including `voice_speed` |
+| `src/built-in-commands.test.ts` | Added `voice-state.js` mock with `getSessionSpeed`; updated `synthesizeToOgg` assertion to 3 args |
+
+### Test results
+
+- **Build:** pass
+- **Tests:** 1693 passed (1693)
+- **Lint:** pass (no output)
+
+### New tests added
+
+- `tts.test.ts`: 3 new (speed in body, speed omitted when absent, speed omitted at 1.0)
+- `send_text_as_voice.test.ts`: 2 new (session speed passed through, undefined when no speed)
+- `profile-store.test.ts`: 1 new (round-trip including voice_speed)

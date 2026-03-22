@@ -188,5 +188,27 @@ describe("profile-store", () => {
 
       expect(result).toEqual(original);
     });
+
+    it("includes voice_speed in round-trip when set", () => {
+      let stored = "";
+      mocks.mkdirSync.mockImplementation(() => undefined);
+      mocks.writeFileSync.mockImplementation((_p: string, content: string) => {
+        stored = content;
+      });
+      mocks.existsSync.mockReturnValue(true);
+      mocks.readFileSync.mockImplementation(() => stored);
+
+      const original = {
+        voice: "nova",
+        voice_speed: 1.5,
+        animation_default: ["a", "b"],
+      };
+
+      writeProfile("roundtrip-speed", original);
+      const result = readProfile("roundtrip-speed");
+
+      expect(result).toEqual(original);
+      expect(result?.voice_speed).toBe(1.5);
+    });
   });
 });

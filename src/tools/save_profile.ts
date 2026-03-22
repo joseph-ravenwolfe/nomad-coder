@@ -4,7 +4,7 @@ import { toResult, toError } from "../telegram.js";
 import { requireAuth } from "../session-gate.js";
 import { IDENTITY_SCHEMA } from "./identity-schema.js";
 import { writeProfile, resolveProfilePath } from "../profile-store.js";
-import { getSessionVoiceFor } from "../voice-state.js";
+import { getSessionVoiceFor, getSessionSpeedFor } from "../voice-state.js";
 import { getDefaultFrames, listPresets, getPreset } from "../animation-state.js";
 import { listReminders } from "../reminder-state.js";
 
@@ -40,6 +40,7 @@ export function register(server: McpServer) {
       const sections: string[] = [];
 
       const voice = getSessionVoiceFor(_sid);
+      const speed = getSessionSpeedFor(_sid);
       const animationDefault = getDefaultFrames(_sid);
       const presetNames = listPresets(_sid);
       const reminders = listReminders();
@@ -49,6 +50,11 @@ export function register(server: McpServer) {
       if (voice !== null) {
         data.voice = voice;
         sections.push("voice");
+      }
+
+      if (speed !== null) {
+        data.voice_speed = speed;
+        sections.push("voice_speed");
       }
 
       // Always snapshot animation_default (captures the active default, built-in or custom)

@@ -4,7 +4,7 @@ import { toResult, toError } from "../telegram.js";
 import { requireAuth } from "../session-gate.js";
 import { IDENTITY_SCHEMA } from "./identity-schema.js";
 import { readProfile } from "../profile-store.js";
-import { setSessionVoice } from "../voice-state.js";
+import { setSessionVoice, setSessionSpeed } from "../voice-state.js";
 import { setSessionDefault, registerPreset } from "../animation-state.js";
 import { addReminder } from "../reminder-state.js";
 
@@ -51,6 +51,11 @@ export function register(server: McpServer) {
       if (profile.voice !== undefined) {
         setSessionVoice(profile.voice);
         applied.voice = profile.voice;
+      }
+
+      if (profile.voice_speed !== undefined) {
+        setSessionSpeed(profile.voice_speed);
+        applied.voice_speed = profile.voice_speed;
       }
 
       try {

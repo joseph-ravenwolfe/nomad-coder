@@ -28,6 +28,7 @@ export interface ReminderDef {
 
 export interface ProfileData {
   voice?: string;
+  voice_speed?: number;
   animation_default?: string[];
   animation_presets?: Record<string, string[]>;
   reminders?: ReminderDef[];
