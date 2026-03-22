@@ -5,7 +5,7 @@ import { requireAuth } from "../session-gate.js";
 import { IDENTITY_SCHEMA } from "./identity-schema.js";
 import { writeProfile, resolveProfilePath } from "../profile-store.js";
 import { getSessionVoiceFor, getSessionSpeedFor } from "../voice-state.js";
-import { getDefaultFrames, listPresets, getPreset } from "../animation-state.js";
+import { hasSessionDefault, getDefaultFrames, listPresets, getPreset } from "../animation-state.js";
 import { listReminders } from "../reminder-state.js";
 
 const DESCRIPTION =
@@ -57,9 +57,11 @@ export function register(server: McpServer) {
         sections.push("voice_speed");
       }
 
-      // Always snapshot animation_default (captures the active default, built-in or custom)
-      data.animation_default = [...animationDefault];
-      sections.push("animation_default");
+      // Only save animation_default when the session has a custom default (not the built-in)
+      if (hasSessionDefault(_sid)) {
+        data.animation_default = [...animationDefault];
+        sections.push("animation_default");
+      }
 
       if (presetNames.length > 0) {
         const presets: Record<string, string[]> = {};
@@ -73,7 +75,6 @@ export function register(server: McpServer) {
 
       if (reminders.length > 0) {
         data.reminders = reminders.map(r => ({
-          id: r.id,
           text: r.text,
           delay_seconds: r.delay_seconds,
           recurring: r.recurring,

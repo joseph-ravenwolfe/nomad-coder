@@ -20,7 +20,6 @@ const REPO_ROOT = resolve(__dirname, "..");
 // ---------------------------------------------------------------------------
 
 export interface ReminderDef {
-  id?: string;
   text: string;
   delay_seconds: number;
   recurring: boolean;

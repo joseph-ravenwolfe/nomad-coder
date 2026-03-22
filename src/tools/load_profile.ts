@@ -6,7 +6,7 @@ import { IDENTITY_SCHEMA } from "./identity-schema.js";
 import { readProfile } from "../profile-store.js";
 import { setSessionVoice, setSessionSpeed } from "../voice-state.js";
 import { setSessionDefault, registerPreset } from "../animation-state.js";
-import { addReminder } from "../reminder-state.js";
+import { addReminder, listReminders, reminderContentHash } from "../reminder-state.js";
 
 const DESCRIPTION =
   "Restore a previously saved session profile. Sparse-merges into the current " +
@@ -73,19 +73,34 @@ export function register(server: McpServer) {
         }
         if (appliedPresets.length > 0) applied.presets = appliedPresets;
 
-        const appliedReminders: string[] = [];
+        const addedReminders: string[] = [];
+        const updatedReminders: string[] = [];
         if (profile.reminders !== undefined) {
+          const existing = listReminders();
           for (const r of profile.reminders) {
+            const reminderId = reminderContentHash(r.text, r.recurring);
+            const alreadyExists = existing.some(e => e.id === reminderId);
             const reminder = addReminder({
-              id: r.id ?? crypto.randomUUID(),
+              id: reminderId,
               text: r.text,
               delay_seconds: r.delay_seconds,
               recurring: r.recurring,
             });
-            appliedReminders.push(reminder.id);
+            if (alreadyExists) {
+              updatedReminders.push(reminder.id);
+            } else {
+              addedReminders.push(reminder.id);
+            }
           }
         }
-        if (appliedReminders.length > 0) applied.reminders = appliedReminders;
+        if (addedReminders.length > 0 || updatedReminders.length > 0) {
+          const reminderSummary: Record<string, unknown> = {
+            added: addedReminders,
+            updated: updatedReminders,
+          };
+          if (updatedReminders.length > 0) reminderSummary.review_recommended = true;
+          applied.reminders = reminderSummary;
+        }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         const isReminderLimit = message.includes("MAX_REMINDERS_PER_SESSION");
