@@ -131,7 +131,7 @@ async function requestReconnectApproval(chatId: number, name: string): Promise<b
         chatId,
         msgId,
         `🤖 *Session reconnect denied:* ${markdownToV2(name)} ✗`,
-        { parse_mode: "MarkdownV2" },
+        { parse_mode: "MarkdownV2", reply_markup: { inline_keyboard: [] } },
       )
       .catch(() => {});
   }
