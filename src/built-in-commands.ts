@@ -42,6 +42,7 @@ import { dumpTimeline, dumpTimelineSince, timelineSize, storeSize, setOnEvent } 
 import { listSessions, activeSessionCount } from "./session-manager.js";
 import { getGovernorSid, setGovernorSid } from "./routing-mode.js";
 import { deliverServiceMessage } from "./session-queue.js";
+import { getCallerSid, runInSessionContext } from "./session-context.js";
 
 // ---------------------------------------------------------------------------
 // Tracking panel message IDs so callback_query intercept can route back
@@ -72,6 +73,7 @@ export async function requestOperatorApproval(
   const chatId = resolveChat();
   if (typeof chatId !== "number") return "send_failed";
   const api = getApi();
+  const callerSid = getCallerSid();
 
   let msg: { message_id: number };
   try {
@@ -95,10 +97,12 @@ export async function requestOperatorApproval(
     const timer = setTimeout(() => {
       _pendingApprovals.delete(msg.message_id);
       _activePanels.delete(msg.message_id);
-      void api.editMessageText(chatId, msg.message_id, `${prompt}\n\n_⏱ Timed out_`, {
-        parse_mode: "Markdown",
-        reply_markup: { inline_keyboard: [] },
-      }).catch(() => {/* non-fatal */});
+      void runInSessionContext(callerSid, () =>
+        api.editMessageText(chatId, msg.message_id, `${prompt}\n\n_⏱ Timed out_`, {
+          parse_mode: "Markdown",
+          reply_markup: { inline_keyboard: [] },
+        })
+      ).catch(() => {/* non-fatal */});
       resolve("timed_out");
     }, timeoutMs);
 
@@ -106,10 +110,12 @@ export async function requestOperatorApproval(
       clearTimeout(timer);
       _activePanels.delete(msg.message_id);
       const suffix = approved ? "\n\n▸ ✅ *Approved*" : "\n\n▸ ❌ *Denied*";
-      void api.editMessageText(chatId, msg.message_id, `${prompt}${suffix}`, {
-        parse_mode: "Markdown",
-        reply_markup: { inline_keyboard: [] },
-      }).catch(() => {/* non-fatal */});
+      void runInSessionContext(callerSid, () =>
+        api.editMessageText(chatId, msg.message_id, `${prompt}${suffix}`, {
+          parse_mode: "Markdown",
+          reply_markup: { inline_keyboard: [] },
+        })
+      ).catch(() => {/* non-fatal */});
       resolve(approved ? "approved" : "denied");
     });
   });
@@ -450,12 +456,12 @@ async function handleGovernorCallback(
     if (sessions.length < 2) {
       _activePanels.delete(panelMsgId);
       try {
-        await api.editMessageText(
+        await runInSessionContext(0, () => api.editMessageText(
           chatId,
           panelMsgId,
           "ℹ️ Primary selection requires 2 or more active sessions.",
           { reply_markup: { inline_keyboard: [] } },
-        );
+        ));
       } catch { /* ignore */ }
       return;
     }
@@ -464,12 +470,12 @@ async function handleGovernorCallback(
     if (!newGovernor) {
       _activePanels.delete(panelMsgId);
       try {
-        await api.editMessageText(
+        await runInSessionContext(0, () => api.editMessageText(
           chatId,
           panelMsgId,
           "⚠️ The selected session is no longer active. Please reopen /primary to choose from the current list.",
           { reply_markup: { inline_keyboard: [] } },
-        );
+        ));
       } catch { /* ignore */ }
       return;
     }
@@ -480,12 +486,12 @@ async function handleGovernorCallback(
     if (newSid === oldSid) {
       _activePanels.delete(panelMsgId);
       try {
-        await api.editMessageText(
+        await runInSessionContext(0, () => api.editMessageText(
           chatId,
           panelMsgId,
           `${buildGovernorPanel(sessions).text}\n\n▸ ${newGovernor.color} ${newGovernor.name} is already the primary.`,
           { reply_markup: { inline_keyboard: [] } },
-        );
+        ));
       } catch { /* ignore */ }
       return;
     }
@@ -532,12 +538,12 @@ async function handleGovernorCallback(
     // Confirm selection in the panel message and close it
     _activePanels.delete(panelMsgId);
     try {
-      await api.editMessageText(
+      await runInSessionContext(0, () => api.editMessageText(
         chatId,
         panelMsgId,
         `${buildGovernorPanel(sessions).text}\n\n▸ ✅ Primary set to ${newLabel}`,
         { reply_markup: { inline_keyboard: [] } },
-      );
+      ));
     } catch { /* ignore */ }
   }
 }
@@ -670,10 +676,10 @@ async function handleVoiceCallback(
   // Refresh panel at the current wizard step
   const { text, keyboard } = await buildVoicePanel(step);
   try {
-    await api.editMessageText(chatId, panelMsgId, text, {
+    await runInSessionContext(0, () => api.editMessageText(chatId, panelMsgId, text, {
       parse_mode: "Markdown",
       reply_markup: { inline_keyboard: keyboard },
-    });
+    }));
   } catch { /* ignore */ }
 }
 
@@ -997,7 +1003,7 @@ async function handleSessionCallback(
   } else if (data === "session:autodump") {
     // Show threshold picker
     try {
-      await api.editMessageText(chatId, panelMsgId, "� *Auto-dump*\n\nDump the session record every N events:", {
+      await runInSessionContext(0, () => api.editMessageText(chatId, panelMsgId, "� *Auto-dump*\n\nDump the session record every N events:", {
         parse_mode: "Markdown",
         reply_markup: { inline_keyboard: [
           [
@@ -1008,7 +1014,7 @@ async function handleSessionCallback(
           ],
           [{ text: "✖ Cancel", callback_data: "session:dismiss" }],
         ] },
-      });
+      }));
     } catch { /* ignore */ }
     return;
   } else if (data.startsWith("session:setauto:")) {
@@ -1027,10 +1033,10 @@ async function handleSessionCallback(
   // Refresh the panel with new state
   const { text, keyboard } = buildSessionPanel();
   try {
-    await api.editMessageText(chatId, panelMsgId, text, {
+    await runInSessionContext(0, () => api.editMessageText(chatId, panelMsgId, text, {
       parse_mode: "Markdown",
       reply_markup: { inline_keyboard: keyboard },
-    });
+    }));
   } catch { /* ignore */ }
 }
 

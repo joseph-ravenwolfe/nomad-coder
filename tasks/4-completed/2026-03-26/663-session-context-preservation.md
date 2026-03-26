@@ -118,3 +118,49 @@ Add to `changelog/unreleased.md`:
 - [ ] Tests verify context preservation
 - [ ] All existing tests pass
 - [ ] `pnpm build` clean
+
+## Completion
+
+**Date:** 2026-03-26
+
+### Files Modified
+
+| File | Change |
+| ---- | ------ |
+| `src/built-in-commands.ts` | Added `import { getCallerSid, runInSessionContext } from "./session-context.js"`. In `requestOperatorApproval()`: captured `callerSid = getCallerSid()` at entry; wrapped both `editMessageText` calls (timeout + approval) in `runInSessionContext(callerSid, ...)`. In `handleGovernorCallback()`: wrapped all 4 `editMessageText` calls in `runInSessionContext(0, ...)`. In `handleVoiceCallback()`: wrapped panel-refresh `editMessageText` in `runInSessionContext(0, ...)`. In `handleSessionCallback()`: wrapped autodump picker and panel-refresh `editMessageText` calls in `runInSessionContext(0, ...)`. |
+| `src/built-in-commands.test.ts` | Added `runInSessionContext` and `getCallerSid` to `vi.hoisted` mocks; added `vi.mock("./session-context.js", ...)`. Imported `requestOperatorApproval`. Added `describe("session context preservation")` with 3 tests: approval callback preserves callerSid, timeout preserves callerSid, panel edits use SID 0. |
+| `changelog/unreleased.md` | Added `## Fixed` section with two changelog entries. |
+
+### `getApi()` Call Sites Audit
+
+| Call site | Disposition |
+| --------- | ----------- |
+| `requestOperatorApproval()` — `sendMessage` initial prompt | Already in caller's session ALS context — safe |
+| `requestOperatorApproval()` — `editMessageText` (timeout) | **Fixed** — wrapped in `runInSessionContext(callerSid, ...)` |
+| `requestOperatorApproval()` — `editMessageText` (approval) | **Fixed** — wrapped in `runInSessionContext(callerSid, ...)` |
+| `handleGovernorCallback()` — `editMessageText` ×4 | **Fixed** — wrapped in `runInSessionContext(0, ...)` |
+| `handleGovernorCallback()` — `answerCallbackQuery`, `deleteMessage` | No header injected — N/A |
+| `handleGovernorCommand()` — `sendMessage` | Poller context, system panel — acceptable (not a session message); send-only, no callback edit risk |
+| `handleVersionCommand()` — `sendMessage` | System informational message — acceptable |
+| `handleVoiceCommand()` — `sendMessage` ×2 | System panel sends — acceptable |
+| `handleVoiceCallback()` — `editMessageText` | **Fixed** — wrapped in `runInSessionContext(0, ...)` |
+| `handleVoiceCallback()` — `answerCallbackQuery`, `deleteMessage` | No header injected — N/A |
+| `sendVoiceSample()` — `sendMessage` (error fallback) | Error message, not a panel edit — acceptable |
+| `handleVoiceSampleCallback()` — `answerCallbackQuery` | No header injected — N/A |
+| `handleSessionCommand()` — `sendMessage` | System panel send — acceptable |
+| `handleSessionCallback()` — `editMessageText` (autodump picker) | **Fixed** — wrapped in `runInSessionContext(0, ...)` |
+| `handleSessionCallback()` — `editMessageText` (panel refresh) | **Fixed** — wrapped in `runInSessionContext(0, ...)` |
+| `handleSessionCallback()` — `answerCallbackQuery`, `deleteMessage` | No header injected — N/A |
+| `doTimelineDump()` — `sendMessage`, `sendDocument`, `editMessageCaption` | Called from poller/event listener; system messages not panel edits — outside scope; no callback edit risk |
+| `refreshGovernorCommand()` — `getMyCommands`, `setMyCommands` | No message sends — N/A |
+
+### Test Results
+
+- **1749 tests passed, 0 failed** (94 test files)
+- Build: clean (`tsc` + `gen-build-info.mjs` succeeded)
+
+### Code Review
+
+Reviewed by Code Reviewer agent. **Result: MINOR only** (no Critical or Major findings).
+
+Minor finding: The autodump picker message string starts with U+FFFD (replacement character) — `"<U+FFFD> *Auto-dump*..."`. This is a **pre-existing bug** in the original code, not introduced by this task. Noted for future cleanup.

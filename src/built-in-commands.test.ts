@@ -43,6 +43,9 @@ const mocks = vi.hoisted(() => ({
   setGovernorSid: vi.fn(),
   // session-queue
   deliverServiceMessage: vi.fn((): boolean => true),
+  // session-context
+  runInSessionContext: vi.fn(<T>(sid: number, fn: () => T): T => fn()),
+  getCallerSid: vi.fn((): number => 0),
 }));
 
 vi.mock("./telegram.js", () => ({
@@ -112,6 +115,11 @@ vi.mock("./session-queue.js", () => ({
   deliverServiceMessage: mocks.deliverServiceMessage,
 }));
 
+vi.mock("./session-context.js", () => ({
+  runInSessionContext: mocks.runInSessionContext,
+  getCallerSid: mocks.getCallerSid,
+}));
+
 vi.mock("./voice-state.js", () => ({
   getSessionSpeed: vi.fn((): number | null => null),
 }));
@@ -124,6 +132,7 @@ import {
   BUILT_IN_COMMANDS,
   resetBuiltInCommandsForTest,
   refreshGovernorCommand,
+  requestOperatorApproval,
 } from "./built-in-commands.js";
 
 // ---------------------------------------------------------------------------
@@ -932,6 +941,66 @@ describe("built-in-commands", () => {
     mocks.editMessageText.mockResolvedValue(true);
     const result = await handleIfBuiltIn(callbackUpdate(950, "governor:set:2"));
     expect(result).toBe(true);
+  });
+
+  // -- Session context preservation ---------------------------------------
+
+  describe("session context preservation", () => {
+    beforeEach(() => {
+      mocks.getCallerSid.mockReturnValue(42);
+      mocks.runInSessionContext.mockImplementation(<T>(_sid: number, fn: () => T): T => fn());
+    });
+
+    it("requestOperatorApproval edits preserve original session context on approval", async () => {
+      mocks.sendMessage.mockResolvedValue({ message_id: 111 });
+      mocks.editMessageText.mockResolvedValue(true);
+
+      const approvalPromise = requestOperatorApproval("Approve this?");
+      // Flush microtasks so sendMessage resolves and callbacks are registered
+      await new Promise<void>(r => { queueMicrotask(r); });
+      await new Promise<void>(r => { queueMicrotask(r); });
+
+      await handleIfBuiltIn(callbackUpdate(111, "approval:approve"));
+      const result = await approvalPromise;
+
+      expect(result).toBe("approved");
+      // runInSessionContext must have been called with the captured callerSid (42)
+      expect(mocks.runInSessionContext).toHaveBeenCalledWith(42, expect.any(Function));
+    });
+
+    it("requestOperatorApproval edits preserve original session context on timeout", async () => {
+      vi.useFakeTimers();
+      mocks.sendMessage.mockResolvedValue({ message_id: 112 });
+      mocks.editMessageText.mockResolvedValue(true);
+
+      const approvalPromise = requestOperatorApproval("Approve this?", 1000);
+      // Flush microtasks (fake timers don't affect microtasks)
+      await new Promise<void>(r => { queueMicrotask(r); });
+      await new Promise<void>(r => { queueMicrotask(r); });
+
+      vi.advanceTimersByTime(1001);
+      const result = await approvalPromise;
+
+      expect(result).toBe("timed_out");
+      expect(mocks.runInSessionContext).toHaveBeenCalledWith(42, expect.any(Function));
+
+      vi.useRealTimers();
+    });
+
+    it("panel edits use SID 0", async () => {
+      mocks.sendMessage.mockResolvedValueOnce({ message_id: 200 });
+      mocks.editMessageText.mockResolvedValue(true);
+      await handleIfBuiltIn(cmdUpdate("/session"));
+
+      vi.clearAllMocks();
+      mocks.runInSessionContext.mockImplementation(<T>(_sid: number, fn: () => T): T => fn());
+      mocks.editMessageText.mockResolvedValue(true);
+
+      await handleIfBuiltIn(callbackUpdate(200, "session:disable"));
+
+      expect(mocks.runInSessionContext).toHaveBeenCalledWith(0, expect.any(Function));
+      expect(mocks.editMessageText).toHaveBeenCalled();
+    });
   });
 
 });
