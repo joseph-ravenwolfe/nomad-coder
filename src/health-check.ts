@@ -21,11 +21,12 @@ import {
 } from "./session-manager.js";
 import { getGovernorSid, setGovernorSid } from "./routing-mode.js";
 import { deliverDirectMessage, deliverServiceMessage } from "./session-queue.js";
-import { getApi, resolveChat, sendServiceMessage } from "./telegram.js";
+import { getApi, getRawApi, resolveChat, sendServiceMessage } from "./telegram.js";
 import { markdownToV2 } from "./markdown.js";
 import { dlog } from "./debug-log.js";
 import { hasActiveAnimation } from "./animation-state.js";
 import { getCallerSid } from "./session-context.js";
+import { registerOnceOnSend, clearOnceOnSend } from "./outbound-proxy.js";
 
 // ── Constants ──────────────────────────────────────────────
 
@@ -46,6 +47,12 @@ const CB_WAIT         = "hc_wait";
 
 /** SIDs of sessions that have already been flagged to the operator. */
 const _flaggedSids = new Set<number>();
+
+/** message_id of the "unresponsive" warning posted for each session (SID → message_id). */
+const _unresponsiveMsgIds = new Map<number, number>();
+
+/** message_id of the "back online" message posted for each session (SID → message_id). */
+const _backOnlineMsgIds = new Map<number, number>();
 
 let _intervalHandle: ReturnType<typeof setInterval> | undefined;
 
@@ -162,7 +169,34 @@ async function runHealthCheck(thresholdMs: number): Promise<void> {
     _flaggedSids.delete(sid);
     const session = getSession(sid);
     const name = session?.name ?? `Session ${sid}`;
-    void sendServiceMessage(`✅ ${name} is back online.`).catch(() => {});
+
+    // Delete the "unresponsive" warning if we tracked its message_id
+    const warningMsgId = _unresponsiveMsgIds.get(sid);
+    _unresponsiveMsgIds.delete(sid);
+    if (warningMsgId !== undefined) {
+      const chatId = resolveChat();
+      if (typeof chatId === "number") {
+        void getRawApi().deleteMessage(chatId, warningMsgId).catch(() => {});
+      }
+    }
+
+    // Post "back online" and track its message_id for later deletion
+    const backOnlineMsgId = await sendServiceMessage(`✅ ${name} is back online.`).catch(() => undefined);
+    if (backOnlineMsgId !== undefined) {
+      _backOnlineMsgIds.set(sid, backOnlineMsgId);
+      // Delete "back online" on the session's first real outbound send
+      registerOnceOnSend(sid, () => {
+        const msgId = _backOnlineMsgIds.get(sid);
+        _backOnlineMsgIds.delete(sid);
+        if (msgId !== undefined) {
+          const chatId = resolveChat();
+          if (typeof chatId === "number") {
+            void getRawApi().deleteMessage(chatId, msgId).catch(() => {});
+          }
+        }
+      });
+    }
+
     dlog("health", `session recovered sid=${sid} name=${name}`);
   }
 
@@ -183,12 +217,16 @@ async function runHealthCheck(thresholdMs: number): Promise<void> {
           process.stderr.write(`[health-check] prompt error: ${String(e)}\n`);
         });
       } else {
-        void sendServiceMessage(
+        const msgId = await sendServiceMessage(
           `⚠️ ${session.name} (primary) appears unresponsive and no other session is available.`,
-        ).catch(() => {});
+        ).catch(() => undefined);
+        if (msgId !== undefined) _unresponsiveMsgIds.set(session.sid, msgId);
       }
     } else {
-      void sendServiceMessage(`⚠️ ${session.name} appears unresponsive.`).catch(() => {});
+      const msgId = await sendServiceMessage(
+        `⚠️ ${session.name} appears unresponsive.`,
+      ).catch(() => undefined);
+      if (msgId !== undefined) _unresponsiveMsgIds.set(session.sid, msgId);
     }
   }
 }
@@ -216,6 +254,9 @@ export function stopHealthCheck(): void {
     _intervalHandle = undefined;
   }
   _flaggedSids.clear();
+  _unresponsiveMsgIds.clear();
+  _backOnlineMsgIds.clear();
+  clearOnceOnSend();
 }
 
 /** Exposed for tests — directly run one health check tick. */

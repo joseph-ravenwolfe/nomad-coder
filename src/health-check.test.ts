@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   setGovernorSid: vi.fn(),
   deliverDirectMessage: vi.fn(() => true),
   deliverServiceMessage: vi.fn(() => true),
-  sendServiceMessage: vi.fn().mockResolvedValue(undefined),
+  sendServiceMessage: vi.fn().mockResolvedValue(undefined as number | undefined),
   resolveChat: vi.fn(() => 12345 as number | { code: string; message: string }),
   getApi: vi.fn(),
   listSessions: vi.fn(() => [] as { sid: number; name: string; createdAt: string }[]),
@@ -21,7 +21,10 @@ const mocks = vi.hoisted(() => ({
   sendMessage: vi.fn().mockResolvedValue({ message_id: 999 }),
   editMessageText: vi.fn().mockResolvedValue(undefined),
   answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
+  deleteMessage: vi.fn().mockResolvedValue(undefined),
   getCallerSid: vi.fn(() => 1),
+  registerOnceOnSend: vi.fn(),
+  clearOnceOnSend: vi.fn(),
 }));
 
 vi.mock("./session-manager.js", () => ({
@@ -52,8 +55,16 @@ vi.mock("./telegram.js", async (importActual) => {
       editMessageText: mocks.editMessageText,
       answerCallbackQuery: mocks.answerCallbackQuery,
     }),
+    getRawApi: () => ({
+      deleteMessage: mocks.deleteMessage,
+    }),
   };
 });
+
+vi.mock("./outbound-proxy.js", () => ({
+  registerOnceOnSend: mocks.registerOnceOnSend,
+  clearOnceOnSend: mocks.clearOnceOnSend,
+}));
 
 vi.mock("./message-store.js", () => ({
   registerCallbackHook: mocks.registerCallbackHook,
@@ -96,11 +107,12 @@ function pressButton(callbackData: string): void {
 describe("health-check", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    stopHealthCheck(); // clears _flaggedSids between tests
+    stopHealthCheck(); // clears _flaggedSids and message ID maps between tests
     mocks.resolveChat.mockReturnValue(12345);
     mocks.sendMessage.mockResolvedValue({ message_id: 999 });
     mocks.editMessageText.mockResolvedValue(undefined);
     mocks.answerCallbackQuery.mockResolvedValue(undefined);
+    mocks.deleteMessage.mockResolvedValue(undefined);
     mocks.sendServiceMessage.mockResolvedValue(undefined);
     mocks.deliverDirectMessage.mockReturnValue(true);
     mocks.deliverServiceMessage.mockReturnValue(true);
@@ -395,6 +407,124 @@ describe("health-check", () => {
       mocks.getUnhealthySessions.mockReturnValue([s]);
       await _runHealthCheckNow();
       expect(mocks.sendServiceMessage).toHaveBeenCalledTimes(3); // re-flagged
+    });
+  });
+
+  describe("self-cleaning status messages", () => {
+    it("deletes the unresponsive warning message on recovery", async () => {
+      const s = makeSession(2, "Worker");
+      mocks.getGovernorSid.mockReturnValue(1);
+      mocks.sendServiceMessage.mockResolvedValueOnce(42); // unresponsive msg_id = 42
+
+      // Tick 1: flag, warning posted with id 42
+      mocks.getUnhealthySessions.mockReturnValue([s]);
+      await _runHealthCheckNow();
+
+      // Tick 2: recover
+      mocks.getUnhealthySessions.mockReturnValue([]);
+      mocks.sendServiceMessage.mockResolvedValueOnce(99); // back-online msg_id = 99
+      await _runHealthCheckNow();
+
+      // The unresponsive warning (42) should have been deleted
+      expect(mocks.deleteMessage).toHaveBeenCalledWith(12345, 42);
+    });
+
+    it("posts back-online message after deleting the warning", async () => {
+      const s = makeSession(2, "Worker");
+      mocks.getGovernorSid.mockReturnValue(1);
+      mocks.sendServiceMessage.mockResolvedValueOnce(42); // warning
+
+      mocks.getUnhealthySessions.mockReturnValue([s]);
+      await _runHealthCheckNow();
+
+      mocks.getUnhealthySessions.mockReturnValue([]);
+      mocks.sendServiceMessage.mockResolvedValueOnce(99); // back-online
+      await _runHealthCheckNow();
+
+      expect(mocks.sendServiceMessage).toHaveBeenLastCalledWith(
+        expect.stringContaining("back online"),
+      );
+    });
+
+    it("registers a one-shot send hook after posting back-online", async () => {
+      const s = makeSession(2, "Worker");
+      mocks.getGovernorSid.mockReturnValue(1);
+      mocks.sendServiceMessage.mockResolvedValueOnce(42); // warning
+
+      mocks.getUnhealthySessions.mockReturnValue([s]);
+      await _runHealthCheckNow();
+
+      mocks.getUnhealthySessions.mockReturnValue([]);
+      mocks.sendServiceMessage.mockResolvedValueOnce(99); // back-online
+      await _runHealthCheckNow();
+
+      // registerOnceOnSend should be called with the session's SID (2)
+      expect(mocks.registerOnceOnSend).toHaveBeenCalledWith(2, expect.any(Function));
+    });
+
+    it("the one-shot hook deletes the back-online message when fired", async () => {
+      const s = makeSession(2, "Worker");
+      mocks.getGovernorSid.mockReturnValue(1);
+      mocks.sendServiceMessage.mockResolvedValueOnce(42); // warning
+
+      mocks.getUnhealthySessions.mockReturnValue([s]);
+      await _runHealthCheckNow();
+
+      mocks.getUnhealthySessions.mockReturnValue([]);
+      mocks.sendServiceMessage.mockResolvedValueOnce(99); // back-online id = 99
+      await _runHealthCheckNow();
+
+      // Fire the registered hook
+      const [, hook] = mocks.registerOnceOnSend.mock.calls[0] as [number, () => void];
+      hook();
+
+      expect(mocks.deleteMessage).toHaveBeenCalledWith(12345, 99);
+    });
+
+    it("does not delete unresponsive message when sendServiceMessage returns no id", async () => {
+      const s = makeSession(2, "Worker");
+      mocks.getGovernorSid.mockReturnValue(1);
+      mocks.sendServiceMessage.mockResolvedValue(undefined); // no id returned
+
+      mocks.getUnhealthySessions.mockReturnValue([s]);
+      await _runHealthCheckNow();
+
+      mocks.getUnhealthySessions.mockReturnValue([]);
+      await _runHealthCheckNow();
+
+      // No deletion should happen
+      expect(mocks.deleteMessage).not.toHaveBeenCalled();
+    });
+
+    it("does not register one-shot hook when back-online message has no id", async () => {
+      const s = makeSession(2, "Worker");
+      mocks.getGovernorSid.mockReturnValue(1);
+      mocks.sendServiceMessage.mockResolvedValue(undefined); // all calls return undefined
+
+      mocks.getUnhealthySessions.mockReturnValue([s]);
+      await _runHealthCheckNow();
+
+      mocks.getUnhealthySessions.mockReturnValue([]);
+      await _runHealthCheckNow();
+
+      expect(mocks.registerOnceOnSend).not.toHaveBeenCalled();
+    });
+
+    it("tracks warning message_id for governor-no-other-session case", async () => {
+      const gov = makeSession(1, "Primary");
+      mocks.getGovernorSid.mockReturnValue(1);
+      mocks.listSessions.mockReturnValue([gov]); // no other session
+      mocks.sendServiceMessage.mockResolvedValueOnce(77); // governor warning id = 77
+
+      mocks.getUnhealthySessions.mockReturnValue([gov]);
+      await _runHealthCheckNow();
+
+      // Recovery: should delete 77
+      mocks.getUnhealthySessions.mockReturnValue([]);
+      mocks.sendServiceMessage.mockResolvedValueOnce(88); // back-online
+      await _runHealthCheckNow();
+
+      expect(mocks.deleteMessage).toHaveBeenCalledWith(12345, 77);
     });
   });
 });
