@@ -1,12 +1,12 @@
 # Task: Update Reaction Rules in Communication Guide
 
 **Created:** 2026-04-01
-**Status:** queued
+**Status:** completed
 **GitHub Issue:** n/a (operator feedback)
 
 ## Objective
 
-Refine the `set_reaction` / 👀 rules section in `docs/communication-guide.md` to
+Refine the `set_reaction` / 👀 rules section in `docs/communication.md` to
 better reflect desired agent behavior.
 
 ## Context
@@ -24,7 +24,7 @@ agents weren't following it consistently. Operator clarified desired behavior:
 
 ## Acceptance Criteria
 
-1. Update the `👀 rules` table in `docs/communication-guide.md`:
+1. Update the `👀 rules` table in `docs/communication.md`:
    - Remove "Avoid on text" rule.
    - Add guidance: "Use sparingly — for messages you're genuinely focused on, not blanket ack."
    - Add 🤔 as a recommended reaction for active thinking/processing.

@@ -74,7 +74,7 @@ The thinking → working → `show_typing` pipeline gives the operator a live st
 - **Voice messages** — the server manages reactions automatically (✍ → 😴/🫡). No agent action required.
 - **Text messages** — 👀 is allowed when you are genuinely focused on the message (e.g., a long multi-part request). Use it sparingly — not as a blanket acknowledgement for every message.
 - **Draining a backlog** — skip reactions entirely when processing a queue of accumulated messages. Reactions on every item create noise.
-- **Always temporary** — any reaction you set must be `temporary: true` (`timeout_seconds ≤ 5`, omit `restore_emoji`) so it auto-clears.
+- **👀 is always temporary** — when you set 👀, always use `temporary: true` (`timeout_seconds ≤ 5`, omit `restore_emoji`) so it auto-clears. Other reactions (🫡, 👍, 🤔) may be permanent or temporary depending on context.
 - **🤔 for active thinking** — use 🤔 when you are actively processing or considering a message. Pair it with a thinking animation for a clear signal to the operator.
 
 `show_typing` = response is imminent — not a generic "received" signal. Call it just before you send. The full pipeline: receive → think (🤔 + animation) → work → `show_typing` → send → optionally update reaction to 🫡/👍.
