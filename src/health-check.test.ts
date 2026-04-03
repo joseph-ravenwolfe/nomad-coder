@@ -545,4 +545,113 @@ describe("health-check", () => {
       expect(mocks.deleteMessage).toHaveBeenCalledWith(12345, 77);
     });
   });
+
+  describe("orphaned back-online message eviction on multiple recoveries", () => {
+    it("deletes the previous back-online message when a session recovers a second time without sending", async () => {
+      const s = makeSession(2, "Worker");
+      mocks.getGovernorSid.mockReturnValue(1);
+
+      // Tick 1: session goes unhealthy
+      mocks.getUnhealthySessions.mockReturnValue([s]);
+      mocks.sendServiceMessage.mockResolvedValueOnce(10); // unresponsive warning id = 10
+      await _runHealthCheckNow();
+
+      // Tick 2: session recovers — back-online message posted with id 20
+      mocks.getUnhealthySessions.mockReturnValue([]);
+      mocks.sendServiceMessage.mockResolvedValueOnce(20); // back-online id = 20
+      await _runHealthCheckNow();
+      expect(mocks.registerOnceOnSend).toHaveBeenCalledWith(2, expect.any(Function));
+
+      // Session never sends (hook never fires), goes unhealthy again
+      mocks.getUnhealthySessions.mockReturnValue([s]);
+      mocks.sendServiceMessage.mockResolvedValueOnce(30); // second unresponsive warning id = 30
+      await _runHealthCheckNow();
+
+      // Tick 4: session recovers a second time
+      mocks.getUnhealthySessions.mockReturnValue([]);
+      mocks.sendServiceMessage.mockResolvedValueOnce(40); // second back-online id = 40
+      await _runHealthCheckNow();
+
+      // The orphaned back-online message from the first recovery (id 20) must have been deleted
+      expect(mocks.deleteMessage).toHaveBeenCalledWith(12345, 20);
+    });
+
+    it("calls clearOnceOnSend(sid) for the previous hook before registering the new one", async () => {
+      const s = makeSession(2, "Worker");
+      mocks.getGovernorSid.mockReturnValue(1);
+
+      // Tick 1: flag
+      mocks.getUnhealthySessions.mockReturnValue([s]);
+      mocks.sendServiceMessage.mockResolvedValueOnce(10);
+      await _runHealthCheckNow();
+
+      // Tick 2: recover (first time)
+      mocks.getUnhealthySessions.mockReturnValue([]);
+      mocks.sendServiceMessage.mockResolvedValueOnce(20);
+      await _runHealthCheckNow();
+
+      // Tick 3: goes unhealthy again (hook never fired)
+      mocks.getUnhealthySessions.mockReturnValue([s]);
+      mocks.sendServiceMessage.mockResolvedValueOnce(30);
+      await _runHealthCheckNow();
+
+      // Tick 4: recover (second time) — eviction should call clearOnceOnSend(2) before new registration
+      mocks.getUnhealthySessions.mockReturnValue([]);
+      mocks.sendServiceMessage.mockResolvedValueOnce(40);
+      await _runHealthCheckNow();
+
+      // clearOnceOnSend should have been called with sid=2 during eviction
+      expect(mocks.clearOnceOnSend).toHaveBeenCalledWith(2);
+    });
+  });
+
+  describe("overlapping tick guard", () => {
+    it("skips a concurrent tick if one is already running", async () => {
+      const s = makeSession(2, "Worker");
+      mocks.getGovernorSid.mockReturnValue(1);
+
+      // Make sendServiceMessage slow so the first tick is still in-flight
+      let resolveFirst!: () => void;
+      const firstCallPromise = new Promise<number>((resolve) => {
+        resolveFirst = () => resolve(42);
+      });
+
+      mocks.getUnhealthySessions.mockReturnValue([s]);
+      // First tick will await this slow sendServiceMessage
+      mocks.sendServiceMessage.mockReturnValueOnce(firstCallPromise as Promise<number | undefined>);
+
+      // Start the first tick but do not await it yet
+      const firstTick = _runHealthCheckNow();
+
+      // While first tick is awaiting, start a second tick — should be a no-op
+      const secondTick = _runHealthCheckNow();
+      await secondTick; // second tick should return immediately
+
+      // The second tick should NOT have called sendServiceMessage again
+      expect(mocks.sendServiceMessage).toHaveBeenCalledTimes(1);
+
+      // Now let the first tick complete
+      resolveFirst();
+      await firstTick;
+    });
+
+    it("allows a new tick once the previous one finishes", async () => {
+      const s = makeSession(2, "Worker");
+      mocks.getGovernorSid.mockReturnValue(1);
+      mocks.getUnhealthySessions.mockReturnValue([s]);
+      mocks.sendServiceMessage.mockResolvedValue(undefined);
+
+      // First tick completes fully
+      await _runHealthCheckNow();
+      expect(mocks.sendServiceMessage).toHaveBeenCalledTimes(1);
+
+      // Second tick on same unhealthy session is de-duped by _flaggedSids, not the guard;
+      // but a fresh stopHealthCheck + re-flag proves the guard resets.
+      stopHealthCheck();
+      mocks.getUnhealthySessions.mockReturnValue([s]);
+      mocks.sendServiceMessage.mockResolvedValue(undefined);
+      await _runHealthCheckNow();
+      expect(mocks.sendServiceMessage).toHaveBeenCalledTimes(2);
+    });
+  });
 });
