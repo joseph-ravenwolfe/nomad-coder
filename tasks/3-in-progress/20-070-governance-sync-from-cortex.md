@@ -5,7 +5,9 @@
 | Created  | 2026-03-26                     |
 | Priority | 20-070                         |
 | Scope    | Telegram-Bridge-MCP            |
-| Stage    | 1-drafts                       |
+| Stage    | 3-in-progress                  |
+| Assigned | Worker 3 (SID 6)               |
+| Assigned-date | 2026-04-03                |
 
 ## Goal
 
