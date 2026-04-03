@@ -1,7 +1,8 @@
 ---
 Created: 2026-04-03
-Status: In Progress
+Status: Completed
 Assignee: Worker 2 (SID 3)
+Completed: 2026-04-03
 Priority: 10
 Source: Operator directive (voice, 21948)
 Repo: electricessence/Telegram-Bridge-MCP
@@ -86,3 +87,23 @@ no details.
 
 Revert the identity-optional check. Require identity on all `list_sessions` calls
 (existing behavior).
+
+## Completion
+
+**Completed:** 2026-04-03  
+**Commit:** d2098c0 — `feat(list_sessions): allow unauthenticated probe returning SIDs only`  
+**Branch merged:** `10-198` → `dev` (fast-forward)  
+**Worktree removed:** `.worktrees/10-198`
+
+### Deliverables
+
+- `src/tools/list_sessions.ts` — optional `token` parameter; unauthenticated returns `{ sessions: [sid, ...] }`, authenticated returns full details
+- `src/tools/list_sessions.test.ts` — comprehensive tests for all three paths (unauthenticated, authenticated, invalid token)
+
+### Acceptance Criteria
+
+- [x] `list_sessions` works without token parameter
+- [x] Unauthenticated call returns only active SID numbers
+- [x] Authenticated call behavior unchanged (uses `requireAuth`)
+- [x] No PINs, names, or details exposed in unauthenticated response
+- [x] Tests for both authenticated and unauthenticated paths
