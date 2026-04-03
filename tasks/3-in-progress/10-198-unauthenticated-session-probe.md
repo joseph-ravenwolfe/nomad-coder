@@ -1,6 +1,7 @@
 ---
 Created: 2026-04-03
-Status: Draft
+Status: In Progress
+Assignee: Worker 2 (SID 3)
 Priority: 10
 Source: Operator directive (voice, 21948)
 Repo: electricessence/Telegram-Bridge-MCP
