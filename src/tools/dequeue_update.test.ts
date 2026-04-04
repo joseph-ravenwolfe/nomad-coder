@@ -37,6 +37,8 @@ const mocks = vi.hoisted(() => ({
   getMessageOwner: vi.fn((_msgId: number): number => 0),
   touchSession: vi.fn((_sid: number) => {}),
   validateSession: vi.fn((_sid: number, _pin: number) => true),
+  getDequeueDefault: vi.fn((_sid: number): number => 300),
+  setDequeueDefault: vi.fn((_sid: number, _timeout: number) => {}),
 }));
 
 vi.mock("../telegram.js", async (importActual) => {
@@ -67,11 +69,37 @@ vi.mock("../session-manager.js", () => ({
   validateSession: (sid: number, pin: number) => {
     return mocks.validateSession(sid, pin);
   },
+  getDequeueDefault: (sid: number) => mocks.getDequeueDefault(sid),
+  setDequeueDefault: (sid: number, timeout: number) => {
+    mocks.setDequeueDefault(sid, timeout);
+  },
 }));
 
 vi.mock("../session-queue.js", () => ({
   getSessionQueue: (sid: number) => mocks.getSessionQueue(sid),
   getMessageOwner: (msgId: number) => mocks.getMessageOwner(msgId),
+}));
+
+const reminderMocks = vi.hoisted(() => ({
+  promoteDeferred: vi.fn((_sid: number) => {}),
+  getActiveReminders: vi.fn((_sid: number): unknown[] => []),
+  popActiveReminders: vi.fn((_sid: number): unknown[] => []),
+  getSoonestDeferredMs: vi.fn((_sid: number): number | null => null),
+  buildReminderEvent: vi.fn((r: unknown) => ({
+    id: -1,
+    event: "reminder",
+    from: "system",
+    content: { type: "reminder", text: (r as { text: string }).text, reminder_id: "test-id", recurring: false },
+    routing: "ambiguous",
+  })),
+}));
+
+vi.mock("../reminder-state.js", () => ({
+  promoteDeferred: (sid: number) => reminderMocks.promoteDeferred(sid),
+  getActiveReminders: (sid: number) => reminderMocks.getActiveReminders(sid),
+  popActiveReminders: (sid: number) => reminderMocks.popActiveReminders(sid),
+  getSoonestDeferredMs: (sid: number) => reminderMocks.getSoonestDeferredMs(sid),
+  buildReminderEvent: (r: unknown) => reminderMocks.buildReminderEvent(r),
 }));
 
 
@@ -119,6 +147,9 @@ describe("dequeue_update tool", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.validateSession.mockReturnValue(true);
+    reminderMocks.getActiveReminders.mockReturnValue([]);
+    reminderMocks.popActiveReminders.mockReturnValue([]);
+    reminderMocks.getSoonestDeferredMs.mockReturnValue(null);
     mocks.pendingCount.mockReturnValue(0);
     mocks.waitForEnqueue.mockResolvedValue(undefined);
     // Default session queue for any sid proxies to the global mock fns
@@ -135,7 +166,7 @@ describe("dequeue_update tool", () => {
   it("returns batch of events when available", async () => {
     const evt = makeEvent(1, "Hello");
     mocks.dequeueBatch.mockReturnValueOnce([evt]);
-    const result = await call({ timeout: 0, identity: [1, 123456] });
+    const result = await call({ timeout: 0, token: 1_123_456 });
     expect(isError(result)).toBe(false);
     const data = parseResult<DequeueResult>(result);
     expect(data.updates).toHaveLength(1);
@@ -147,7 +178,7 @@ describe("dequeue_update tool", () => {
   it("strips _update and timestamp from compact output", async () => {
     const evt = makeEvent(2, "Hi");
     mocks.dequeueBatch.mockReturnValueOnce([evt]);
-    const result = await call({ timeout: 0, identity: [1, 123456] });
+    const result = await call({ timeout: 0, token: 1_123_456 });
     const data = parseResult<DequeueResult>(result);
     expect(data.updates[0]._update).toBeUndefined();
     expect(data.updates[0].timestamp).toBeUndefined();
@@ -157,7 +188,7 @@ describe("dequeue_update tool", () => {
     const evt = makeEvent(3, "A");
     mocks.dequeueBatch.mockReturnValueOnce([evt]);
     mocks.pendingCount.mockReturnValue(2);
-    const result = await call({ timeout: 0, identity: [1, 123456] });
+    const result = await call({ timeout: 0, token: 1_123_456 });
     const data = parseResult<DequeueResult>(result);
     expect(data.pending).toBe(2);
   });
@@ -166,14 +197,14 @@ describe("dequeue_update tool", () => {
     const evt = makeEvent(4, "B");
     mocks.dequeueBatch.mockReturnValueOnce([evt]);
     mocks.pendingCount.mockReturnValue(0);
-    const result = await call({ timeout: 0, identity: [1, 123456] });
+    const result = await call({ timeout: 0, token: 1_123_456 });
     const data = parseResult<DequeueResult>(result);
     expect(data.pending).toBeUndefined();
   });
 
   it("returns empty when queue is empty and timeout is 0 (instant poll)", async () => {
     mocks.dequeueBatch.mockReturnValue([]);
-    const result = await call({ timeout: 0, identity: [1, 123456] });
+    const result = await call({ timeout: 0, token: 1_123_456 });
     expect(isError(result)).toBe(false);
     const data = parseResult<DequeueResult>(result);
     expect(data.empty).toBe(true);
@@ -186,7 +217,7 @@ describe("dequeue_update tool", () => {
     // First call returns nothing, second call returns event
     mocks.dequeueBatch.mockReturnValueOnce([]).mockReturnValueOnce([evt]);
     mocks.waitForEnqueue.mockResolvedValue(undefined);
-    const result = await call({ timeout: 1, identity: [1, 123456] });
+    const result = await call({ timeout: 1, token: 1_123_456 });
     expect(isError(result)).toBe(false);
     const data = parseResult<DequeueResult>(result);
     expect(data.updates).toHaveLength(1);
@@ -200,7 +231,7 @@ describe("dequeue_update tool", () => {
     mocks.waitForEnqueue.mockImplementation(
       () => new Promise<void>((r) => setTimeout(r, 50)),
     );
-    const result = await call({ timeout: 1, identity: [1, 123456] });
+    const result = await call({ timeout: 1, token: 1_123_456 });
     const data = parseResult<DequeueResult>(result);
     expect(data.timed_out).toBe(true);
     expect(data.pending).toBe(0);
@@ -211,13 +242,13 @@ describe("dequeue_update tool", () => {
     mocks.waitForEnqueue.mockImplementation(
       () => new Promise<void>((r) => setTimeout(r, 50)),
     );
-    await call({ timeout: 1, identity: [1, 123456] });
+    await call({ timeout: 1, token: 1_123_456 });
     expect(mocks.waitForEnqueue).toHaveBeenCalled();
   });
 
   it("does not call waitForEnqueue when timeout is 0", async () => {
     mocks.dequeueBatch.mockReturnValue([]);
-    await call({ timeout: 0, identity: [1, 123456] });
+    await call({ timeout: 0, token: 1_123_456 });
     expect(mocks.waitForEnqueue).not.toHaveBeenCalled();
   });
 
@@ -227,7 +258,7 @@ describe("dequeue_update tool", () => {
     mocks.waitForEnqueue.mockImplementation(
       () => new Promise<void>((r) => setTimeout(r, 50)),
     );
-    const result = await call({ timeout: 1, identity: [1, 123456] });
+    const result = await call({ timeout: 1, token: 1_123_456 });
     const data = parseResult<DequeueResult>(result);
     expect(data.timed_out).toBe(true);
     expect(data.pending).toBe(3);
@@ -236,7 +267,7 @@ describe("dequeue_update tool", () => {
   it("reports pending 0 on instant poll when queue is truly empty (#7)", async () => {
     mocks.dequeueBatch.mockReturnValue([]);
     mocks.pendingCount.mockReturnValue(0);
-    const result = await call({ timeout: 0, identity: [1, 123456] });
+    const result = await call({ timeout: 0, token: 1_123_456 });
     const data = parseResult<DequeueResult>(result);
     expect(data.empty).toBe(true);
     expect(data.timed_out).toBeUndefined();
@@ -251,7 +282,7 @@ describe("dequeue_update tool", () => {
       .mockReturnValueOnce([])   // empty on first check → triggers block wait
       .mockReturnValueOnce([evt]); // event arrives after enqueue
     mocks.waitForEnqueue.mockResolvedValue(undefined);
-    const result = await call({ identity: [1, 123456] });
+    const result = await call({ token: 1_123_456 });
     expect(mocks.waitForEnqueue).toHaveBeenCalled();
     const data = parseResult<DequeueResult>(result);
     expect(data.updates).toHaveLength(1);
@@ -265,7 +296,7 @@ describe("dequeue_update tool", () => {
     const reaction = makeReaction(10, 5);
     const message = makeEvent(11, "Hello after reaction");
     mocks.dequeueBatch.mockReturnValueOnce([reaction, message]);
-    const result = await call({ timeout: 0, identity: [1, 123456] });
+    const result = await call({ timeout: 0, token: 1_123_456 });
     const data = parseResult<DequeueResult>(result);
     expect(data.updates).toHaveLength(2);
     expect(data.updates[0].event).toBe("reaction");
@@ -277,7 +308,7 @@ describe("dequeue_update tool", () => {
     const r1 = makeReaction(10, 5);
     const r2 = makeReaction(11, 6);
     mocks.dequeueBatch.mockReturnValueOnce([r1, r2]);
-    const result = await call({ timeout: 0, identity: [1, 123456] });
+    const result = await call({ timeout: 0, token: 1_123_456 });
     const data = parseResult<DequeueResult>(result);
     expect(data.updates).toHaveLength(2);
     expect(data.updates[0].event).toBe("reaction");
@@ -291,14 +322,14 @@ describe("dequeue_update tool", () => {
   it("acks voice messages on dequeue", async () => {
     const evt = makeVoiceEvent(77);
     mocks.dequeueBatch.mockReturnValueOnce([evt]);
-    await call({ timeout: 0, identity: [1, 123456] });
+    await call({ timeout: 0, token: 1_123_456 });
     expect(mocks.ackVoiceMessage).toHaveBeenCalledWith(77);
   });
 
   it("does not call ackVoiceMessage for non-voice events", async () => {
     const evt = makeEvent(88, "text message");
     mocks.dequeueBatch.mockReturnValueOnce([evt]);
-    await call({ timeout: 0, identity: [1, 123456] });
+    await call({ timeout: 0, token: 1_123_456 });
     expect(mocks.ackVoiceMessage).not.toHaveBeenCalled();
   });
 
@@ -314,7 +345,7 @@ describe("dequeue_update tool", () => {
     mocks.getActiveSession.mockReturnValueOnce(3);
     mocks.getSessionQueue.mockReturnValueOnce(mockSessionQueue);
 
-    await call({ timeout: 0, identity: [1, 123456] });
+    await call({ timeout: 0, token: 1_123_456 });
     expect(mocks.ackVoiceMessage).toHaveBeenCalledWith(90);
   });
 
@@ -329,7 +360,7 @@ describe("dequeue_update tool", () => {
     mocks.getActiveSession.mockReturnValueOnce(3);
     mocks.getSessionQueue.mockReturnValueOnce(mockSessionQueue);
 
-    await call({ timeout: 0, identity: [1, 123456] });
+    await call({ timeout: 0, token: 1_123_456 });
     expect(mocks.ackVoiceMessage).toHaveBeenCalledWith(91);
     expect(mocks.ackVoiceMessage).toHaveBeenCalledWith(92);
   });
@@ -348,7 +379,7 @@ describe("dequeue_update tool", () => {
     mocks.getActiveSession.mockReturnValue(3);
     mocks.getSessionQueue.mockReturnValue(mockSessionQueue);
 
-    await call({ timeout: 1, identity: [1, 123456] });
+    await call({ timeout: 1, token: 1_123_456 });
     expect(mocks.ackVoiceMessage).toHaveBeenCalledWith(93);
     mocks.getActiveSession.mockReturnValue(0);
     mocks.getSessionQueue.mockReturnValue(undefined);
@@ -365,7 +396,7 @@ describe("dequeue_update tool", () => {
     mocks.getActiveSession.mockReturnValueOnce(3);
     mocks.getSessionQueue.mockReturnValueOnce(mockSessionQueue);
 
-    await call({ timeout: 0, identity: [1, 123456] });
+    await call({ timeout: 0, token: 1_123_456 });
     expect(mocks.ackVoiceMessage).toHaveBeenCalledTimes(1);
     expect(mocks.ackVoiceMessage).toHaveBeenCalledWith(94);
   });
@@ -379,7 +410,7 @@ describe("dequeue_update tool", () => {
       .mockReturnValueOnce([evt]);
     mocks.waitForEnqueue.mockResolvedValue(undefined);
 
-    await call({ timeout: 1, identity: [1, 123456] });
+    await call({ timeout: 1, token: 1_123_456 });
     expect(mocks.ackVoiceMessage).toHaveBeenCalledWith(96);
   });
 
@@ -397,7 +428,7 @@ describe("dequeue_update tool", () => {
     mocks.getActiveSession.mockReturnValueOnce(7);
     mocks.getSessionQueue.mockReturnValueOnce(mockSessionQueue);
 
-    const result = await call({ timeout: 0, identity: [1, 123456] });
+    const result = await call({ timeout: 0, token: 1_123_456 });
     const data = parseResult<DequeueResult>(result);
     expect(data.updates[0].id).toBe(55);
     expect(mockSessionQueue.dequeueBatch).toHaveBeenCalled();
@@ -413,7 +444,7 @@ describe("dequeue_update tool", () => {
     mocks.getActiveSession.mockReturnValue(7);
     mocks.getSessionQueue.mockReturnValue(mockSessionQueue);
 
-    const result = await call({ timeout: 1, identity: [1, 123456] });
+    const result = await call({ timeout: 1, token: 1_123_456 });
     const data = parseResult<DequeueResult>(result);
     expect(data.updates[0].id).toBe(56);
     expect(mockSessionQueue.waitForEnqueue).toHaveBeenCalled();
@@ -426,7 +457,7 @@ describe("dequeue_update tool", () => {
     mocks.dequeueBatch.mockReturnValueOnce([]).mockReturnValueOnce([evt]);
     mocks.pendingCount.mockReturnValue(3);
     mocks.waitForEnqueue.mockResolvedValue(undefined);
-    const result = await call({ timeout: 1, identity: [1, 123456] });
+    const result = await call({ timeout: 1, token: 1_123_456 });
     const data = parseResult<DequeueResult>(result);
     expect(data.updates[0].id).toBe(66);
     expect(data.pending).toBe(3);
@@ -445,7 +476,7 @@ describe("dequeue_update tool", () => {
       sid === 3 ? mockSessionQueue : undefined,
     );
 
-    const result = await call({ identity: [3, 1234], timeout: 0 });
+    const result = await call({ token: 3_001_234, timeout: 0 });
     const data = parseResult<DequeueResult>(result);
     expect(data.updates[0].id).toBe(70);
     // getSessionQueue was called with the explicit sid, not the active one
@@ -473,7 +504,7 @@ describe("dequeue_update tool", () => {
       sid === 3 ? mockSessionQueue : undefined,
     );
 
-    await call({ identity: [3, 1234], timeout: 0 });
+    await call({ token: 3_001_234, timeout: 0 });
     // resync always fires so subsequent tool calls see the correct session
     expect(mocks.setActiveSession).toHaveBeenCalledWith(3);
   });
@@ -490,7 +521,7 @@ describe("dequeue_update tool", () => {
       sid === 5 ? mockSessionQueue : undefined,
     );
 
-    const result = await call({ identity: [5, 1234], timeout: 1 });
+    const result = await call({ token: 5_001_234, timeout: 1 });
     const data = parseResult<DequeueResult>(result);
     expect(data.updates).toBeDefined();
     // setActiveSession should have been called at least twice (start + return)
@@ -513,7 +544,7 @@ describe("dequeue_update tool", () => {
 
     const controller = new AbortController();
     void Promise.resolve().then(() => { controller.abort(); });
-    const result = await call({ identity: [4, 1234], timeout: 60 }, { signal: controller.signal });
+    const result = await call({ token: 4_001_234, timeout: 60 }, { signal: controller.signal });
     const data = parseResult<DequeueResult>(result);
     expect(data.timed_out).toBe(true);
     // resync must fire even on abort path
@@ -522,7 +553,7 @@ describe("dequeue_update tool", () => {
 
   it("does not call setActiveSession on SESSION_NOT_FOUND error path", async () => {
     mocks.getSessionQueue.mockReturnValue(undefined);
-    await call({ identity: [99, 1234] });
+    await call({ token: 99_001_234 });
     expect(mocks.setActiveSession).not.toHaveBeenCalled();
   });
 
@@ -534,7 +565,7 @@ describe("dequeue_update tool", () => {
     mocks.dequeueBatch.mockReturnValue([]);
     const controller = new AbortController();
     controller.abort();
-    const result = await call({ timeout: 60, identity: [1, 123456] }, { signal: controller.signal });
+    const result = await call({ timeout: 60, token: 1_123_456 }, { signal: controller.signal });
     const data = parseResult<DequeueResult>(result);
     expect(data.timed_out).toBe(true);
   });
@@ -544,14 +575,14 @@ describe("dequeue_update tool", () => {
     mocks.waitForEnqueue.mockImplementation(() => new Promise(() => {})); // never resolves
     const controller = new AbortController();
     void Promise.resolve().then(() => { controller.abort(); });
-    const result = await call({ timeout: 60, identity: [1, 123456] }, { signal: controller.signal });
+    const result = await call({ timeout: 60, token: 1_123_456 }, { signal: controller.signal });
     const data = parseResult<DequeueResult>(result);
     expect(data.timed_out).toBe(true);
   });
 
   it("returns error when explicit sid has no session queue", async () => {
     mocks.getSessionQueue.mockReturnValue(undefined);
-    const result = await call({ identity: [42, 1234] });
+    const result = await call({ token: 42_001_234 });
     expect(isError(result)).toBe(true);
     const content = (result as { content: { text: string }[] }).content[0];
     expect(content.text).toContain("SESSION_NOT_FOUND");
@@ -572,7 +603,7 @@ describe("dequeue_update tool", () => {
 
     it("returns AUTH_FAILED when pin does not match", async () => {
       mocks.validateSession.mockReturnValueOnce(false);
-      const result = await call({ identity: [3, 9999], timeout: 0 });
+      const result = await call({ token: 3_009_999, timeout: 0 });
       expect(isError(result)).toBe(true);
       const text = JSON.stringify(result);
       expect(text).toContain("AUTH_FAILED");
@@ -586,7 +617,7 @@ describe("dequeue_update tool", () => {
         waitForEnqueue: vi.fn().mockResolvedValue(undefined),
       };
       mocks.getSessionQueue.mockReturnValueOnce(mockSessionQueue);
-      await call({ identity: [3, 1234], timeout: 0 });
+      await call({ token: 3_001_234, timeout: 0 });
       expect(mocks.validateSession).toHaveBeenCalledWith(3, 1234);
     });
 
@@ -598,7 +629,7 @@ describe("dequeue_update tool", () => {
         waitForEnqueue: vi.fn().mockResolvedValue(undefined),
       };
       mocks.getSessionQueue.mockReturnValueOnce(mockSessionQueue);
-      const result = await call({ identity: [3, 1234], timeout: 0 });
+      const result = await call({ token: 3_001_234, timeout: 0 });
       expect(isError(result)).toBe(false);
       const data = parseResult<DequeueResult>(result);
       expect(data.updates[0].id).toBe(2);
@@ -625,7 +656,7 @@ describe("dequeue_update tool", () => {
       mocks.getMessageOwner.mockReturnValue(0); // no owner → ambiguous
       const evt = makeEvent(10, "hello");
       mocks.dequeueBatch.mockReturnValueOnce([evt]);
-      const result = await call({ timeout: 0, identity: [1, 123456] });
+      const result = await call({ timeout: 0, token: 1_123_456 });
       const data = parseResult<DequeueResult>(result);
       expect(data.updates[0].routing).toBe("ambiguous");
     });
@@ -634,7 +665,7 @@ describe("dequeue_update tool", () => {
       mocks.getMessageOwner.mockImplementation((msgId: number) => msgId === 50 ? 1 : 0);
       const evt = makeReplyEvent(10, 50);
       mocks.dequeueBatch.mockReturnValueOnce([evt]);
-      const result = await call({ timeout: 0, identity: [1, 123456] });
+      const result = await call({ timeout: 0, token: 1_123_456 });
       const data = parseResult<DequeueResult>(result);
       expect(data.updates[0].routing).toBe("targeted");
     });
@@ -650,7 +681,7 @@ describe("dequeue_update tool", () => {
         _update: { update_id: 11 } as never,
       };
       mocks.dequeueBatch.mockReturnValueOnce([cbEvt]);
-      const result = await call({ timeout: 0, identity: [1, 123456] });
+      const result = await call({ timeout: 0, token: 1_123_456 });
       const data = parseResult<DequeueResult>(result);
       expect(data.updates[0].routing).toBe("targeted");
     });
@@ -659,7 +690,7 @@ describe("dequeue_update tool", () => {
       mocks.getMessageOwner.mockReturnValue(0);
       const evt = makeEvent(12, "hi");
       mocks.dequeueBatch.mockReturnValueOnce([evt]);
-      const result = await call({ timeout: 0, identity: [1, 123456] });
+      const result = await call({ timeout: 0, token: 1_123_456 });
       const data = parseResult<DequeueResult>(result);
       expect(data.updates[0].routing).toBe("ambiguous");
     });
@@ -669,7 +700,7 @@ describe("dequeue_update tool", () => {
       const evt1 = makeEvent(14, "first");
       const evt2 = makeEvent(15, "second");
       mocks.dequeueBatch.mockReturnValueOnce([evt1, evt2]);
-      const result = await call({ timeout: 0, identity: [1, 123456] });
+      const result = await call({ timeout: 0, token: 1_123_456 });
       const data = parseResult<DequeueResult>(result);
       expect(data.updates[0].routing).toBe("ambiguous");
       expect(data.updates[1].routing).toBe("ambiguous");
@@ -680,7 +711,7 @@ describe("dequeue_update tool", () => {
       mocks.getMessageOwner.mockReturnValue(0); // untracked → 0
       const evt = makeReplyEvent(16, 999);
       mocks.dequeueBatch.mockReturnValueOnce([evt]);
-      const result = await call({ timeout: 0, identity: [1, 123456] });
+      const result = await call({ timeout: 0, token: 1_123_456 });
       const data = parseResult<DequeueResult>(result);
       expect(data.updates[0].routing).toBe("ambiguous");
     });
@@ -701,14 +732,14 @@ describe("dequeue_update tool", () => {
       };
       mocks.activeSessionCount.mockReturnValue(1);
       mocks.getSessionQueue.mockReturnValueOnce(mockSessionQueue);
-      await call({ timeout: 0, identity: [5, 1234] });
+      await call({ timeout: 0, token: 5_001_234 });
       expect(mocks.touchSession).toHaveBeenCalledWith(5);
     });
 
     it("calls touchSession with the sid from identity", async () => {
       mocks.dequeueBatch.mockReturnValueOnce([makeEvent(1, "hi")]);
       mocks.pendingCount.mockReturnValue(0);
-      await call({ timeout: 0, identity: [1, 123456] });
+      await call({ timeout: 0, token: 1_123_456 });
       expect(mocks.touchSession).toHaveBeenCalledWith(1);
     });
 
@@ -722,7 +753,7 @@ describe("dequeue_update tool", () => {
       mocks.getSessionQueue.mockImplementation((sid: number) =>
         sid === 0 ? mockQueue0 : undefined,
       );
-      await call({ identity: [0, 123456], timeout: 0 });
+      await call({ token: 123456, timeout: 0 });
       expect(mocks.touchSession).not.toHaveBeenCalled();
     });
 
@@ -738,9 +769,127 @@ describe("dequeue_update tool", () => {
       };
       mocks.activeSessionCount.mockReturnValue(1);
       mocks.getSessionQueue.mockReturnValue(mockSessionQueue);
-      await call({ timeout: 1, identity: [7, 1234] });
+      await call({ timeout: 1, token: 7_001_234 });
       expect(mocks.touchSession).toHaveBeenCalledWith(7);
       mocks.getSessionQueue.mockReturnValue(undefined);
+    });
+  });
+
+  // =========================================================================
+  // force gate — timeout exceeds session default
+  // =========================================================================
+
+  describe("force gate", () => {
+    it("rejects timeout > session default when force is false (default)", async () => {
+      // Default session default is 300; timeout 500 should be rejected
+      mocks.getDequeueDefault.mockReturnValue(300);
+      const result = await call({ timeout: 500, token: 1_123_456 });
+      expect(isError(result)).toBe(false);
+      const data = parseResult<Record<string, unknown>>(result);
+      expect(data.error).toBe("TIMEOUT_EXCEEDS_DEFAULT");
+      expect(data.message).toContain("500");
+      expect(data.message).toContain("300");
+    });
+
+    it("rejects timeout > session default when force is explicitly false", async () => {
+      mocks.getDequeueDefault.mockReturnValue(300);
+      const result = await call({ timeout: 400, force: false, token: 1_123_456 });
+      const data = parseResult<Record<string, unknown>>(result);
+      expect(data.error).toBe("TIMEOUT_EXCEEDS_DEFAULT");
+    });
+
+    it("allows timeout > session default when force is true", async () => {
+      // Use getDequeueDefault=1 so timeout=2 > 1, but actual poll only waits 1s
+      mocks.getDequeueDefault.mockReturnValue(1);
+      mocks.dequeueBatch.mockReturnValue([]);
+      mocks.waitForEnqueue.mockImplementation(
+        () => new Promise<void>((r) => setTimeout(r, 50)),
+      );
+      const result = await call({ timeout: 2, force: true, token: 1_123_456 });
+      // Should NOT return TIMEOUT_EXCEEDS_DEFAULT — actual poll behavior fires
+      const data = parseResult<Record<string, unknown>>(result);
+      expect(data.error).toBeUndefined();
+      expect(data.timed_out).toBe(true);
+    });
+
+    it("allows timeout <= session default without force", async () => {
+      mocks.getDequeueDefault.mockReturnValue(2);
+      mocks.dequeueBatch.mockReturnValue([]);
+      mocks.waitForEnqueue.mockImplementation(
+        () => new Promise<void>((r) => setTimeout(r, 50)),
+      );
+      const result = await call({ timeout: 1, token: 1_123_456 });
+      const data = parseResult<Record<string, unknown>>(result);
+      expect(data.error).toBeUndefined();
+      expect(data.timed_out).toBe(true);
+    });
+
+    it("allows timeout > default with custom session default of 600 (simulated)", async () => {
+      // Simulate: default is set to 5 (>1 second realistic), timeout=3 < 5 → passes
+      mocks.getDequeueDefault.mockReturnValue(5);
+      mocks.dequeueBatch.mockReturnValue([]);
+      mocks.waitForEnqueue.mockImplementation(
+        () => new Promise<void>((r) => setTimeout(r, 50)),
+      );
+      const result = await call({ timeout: 3, token: 1_123_456 });
+      const data = parseResult<Record<string, unknown>>(result);
+      expect(data.error).toBeUndefined();
+      expect(data.timed_out).toBe(true);
+    });
+
+    it("hint field in structured error response guides the user", async () => {
+      mocks.getDequeueDefault.mockReturnValue(300);
+      const result = await call({ timeout: 600, token: 1_123_456 });
+      const data = parseResult<Record<string, unknown>>(result);
+      expect(data.error).toBe("TIMEOUT_EXCEEDS_DEFAULT");
+      expect(typeof data.hint).toBe("string");
+      expect(data.hint as string).toContain("force: true");
+      expect(data.hint as string).toContain("set_dequeue_default");
+    });
+  });
+
+  // =========================================================================
+  // Reminder fire path — tokenHint propagation
+  // =========================================================================
+
+  describe("reminder fire path", () => {
+    it("includes tokenHint hint when a string token is used and a reminder fires", async () => {
+      // Strategy: mock Date.now so that idleDuration immediately exceeds
+      // REMINDER_IDLE_THRESHOLD_MS (60_000 ms) on the first loop iteration.
+      // This lets us test the reminder-fire return path without real delays
+      // or fake timers (which cause V8 heap issues in this test runner).
+      const realDateNow = Date.now;
+      const fakeStart = realDateNow();
+      let dateNowCallCount = 0;
+      Date.now = () => {
+        // Calls in dequeue_update.ts (in order):
+        //   0: deadline = Date.now() + timeout * 1000   → fakeStart (normal)
+        //   1: reminderIdleStart = Date.now()           → fakeStart (normal)
+        //   2: while (Date.now() < deadline)            → fakeStart (enters loop)
+        //   3: const now = Date.now()                   → fakeStart + 61_000 (idleDuration >= threshold)
+        const callIdx = dateNowCallCount++;
+        return callIdx < 3 ? fakeStart : fakeStart + 61_000;
+      };
+
+      try {
+        const fakeReminder = { id: "rem-1", text: "test reminder", recurring: false, delay_seconds: 0, created_at: fakeStart, activated_at: fakeStart, state: "active" as const };
+        reminderMocks.getActiveReminders.mockReturnValue([fakeReminder]);
+        reminderMocks.popActiveReminders.mockReturnValue([fakeReminder]);
+
+        // Pass token as a string to trigger the tokenHint, with a long timeout
+        // (300s deadline). The loop fires reminders before the deadline.
+        const result = await call({ timeout: 300, token: "1123456" as unknown as number });
+        const data = parseResult<Record<string, unknown>>(result);
+
+        // The reminder-fire path should have fired
+        expect(data.updates).toBeDefined();
+        expect(Array.isArray(data.updates)).toBe(true);
+        // tokenHint must be present because token was passed as a string
+        expect(typeof data.hint).toBe("string");
+        expect(data.hint as string).toContain("string");
+      } finally {
+        Date.now = realDateNow;
+      }
     });
   });
 });

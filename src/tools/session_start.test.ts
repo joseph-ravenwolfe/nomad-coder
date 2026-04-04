@@ -126,6 +126,7 @@ describe("session_start tool", () => {
     const result = parseResult(await call({}));
 
     expect(result).toEqual({
+      token: 1123456,
       sid: 1,
       pin: 123456,
       sessions_active: 1,
@@ -143,6 +144,7 @@ describe("session_start tool", () => {
     const result = parseResult(await call({}));
 
     expect(result).toEqual({
+      token: 1123456,
       sid: 1,
       pin: 123456,
       sessions_active: 1,
@@ -166,7 +168,7 @@ describe("session_start tool", () => {
 
     await call({ name: "Worker Bee" });
 
-    expect(mocks.createSession).toHaveBeenCalledWith("Worker Bee", undefined);
+    expect(mocks.createSession).toHaveBeenCalledWith("Worker Bee", undefined, false);
   });
 
   it("passes 'Primary' when name is omitted for first session", async () => {
@@ -175,7 +177,7 @@ describe("session_start tool", () => {
 
     await call({});
 
-    expect(mocks.createSession).toHaveBeenCalledWith("Primary", undefined);
+    expect(mocks.createSession).toHaveBeenCalledWith("Primary", undefined, false);
   });
 
   it("returns session credentials from createSession", async () => {
@@ -352,7 +354,7 @@ describe("session_start tool", () => {
     const result = parseResult(await call({ name: "Scout" }));
 
     expect(result.sid).toBe(2);
-    expect(mocks.createSession).toHaveBeenCalledWith("Scout", undefined);
+    expect(mocks.createSession).toHaveBeenCalledWith("Scout", undefined, false);
   });
 
   it("first session gets 'Primary' default even when other sessions exist", async () => {
@@ -364,7 +366,7 @@ describe("session_start tool", () => {
     const result = parseResult(await call({}));
 
     expect(result.sid).toBe(2);
-    expect(mocks.createSession).toHaveBeenCalledWith("Primary", undefined);
+    expect(mocks.createSession).toHaveBeenCalledWith("Primary", undefined, false);
   });
 
   // =========================================================================
@@ -500,7 +502,7 @@ describe("session_start tool", () => {
 
     await call({});
 
-    expect(mocks.createSession).toHaveBeenCalledWith("Primary", undefined);
+    expect(mocks.createSession).toHaveBeenCalledWith("Primary", undefined, false);
   });
 
   it("second session requires operator approval and succeeds on approve", async () => {
@@ -518,7 +520,7 @@ describe("session_start tool", () => {
     const result = parseResult(await call({ name: "Scout" }));
 
     expect(mocks.registerCallbackHook).toHaveBeenCalled();
-    expect(mocks.createSession).toHaveBeenCalledWith("Scout", "🟦");
+    expect(mocks.createSession).toHaveBeenCalledWith("Scout", "🟦", true);
     expect(result.sid).toBe(2);
   });
 
@@ -615,7 +617,7 @@ describe("session_start tool", () => {
     const result = await call({ name: "Scout Alpha" });
 
     expect(isError(result)).toBe(false);
-    expect(mocks.createSession).toHaveBeenCalledWith("Scout Alpha", undefined);
+    expect(mocks.createSession).toHaveBeenCalledWith("Scout Alpha", undefined, false);
   });
 
   it("trims whitespace before validation — leading/trailing spaces are allowed", async () => {
@@ -626,7 +628,7 @@ describe("session_start tool", () => {
     const result = await call({ name: "  Scout  " });
 
     expect(isError(result)).toBe(false);
-    expect(mocks.createSession).toHaveBeenCalledWith("Scout", undefined);
+    expect(mocks.createSession).toHaveBeenCalledWith("Scout", undefined, false);
   });
 
   it("whitespace-only name on first session → uses 'Primary' default", async () => {
@@ -637,7 +639,7 @@ describe("session_start tool", () => {
     const result = await call({ name: "   " });
 
     expect(isError(result)).toBe(false);
-    expect(mocks.createSession).toHaveBeenCalledWith("Primary", undefined);
+    expect(mocks.createSession).toHaveBeenCalledWith("Primary", undefined, false);
   });
 
   it("alphanumeric name with digits is accepted", async () => {
@@ -648,7 +650,7 @@ describe("session_start tool", () => {
     const result = await call({ name: "Scout2" });
 
     expect(isError(result)).toBe(false);
-    expect(mocks.createSession).toHaveBeenCalledWith("Scout2", undefined);
+    expect(mocks.createSession).toHaveBeenCalledWith("Scout2", undefined, false);
   });
 
   // =========================================================================
@@ -935,7 +937,7 @@ describe("session_start tool", () => {
     await call({ name: "Worker" });
 
     // createSession should receive the operator-chosen color 🟩
-    expect(mocks.createSession).toHaveBeenCalledWith("Worker", "🟩");
+    expect(mocks.createSession).toHaveBeenCalledWith("Worker", "🟩", true);
   });
 
   it("approval prompt deleted (not edited) after operator approves", async () => {
@@ -1065,6 +1067,110 @@ describe("session_start tool", () => {
     expect(mocks.getAvailableColors).toHaveBeenCalledWith("🟩");
   });
 
+  it("first fresh color gets primary button style when no hint provided", async () => {
+    mocks.pendingCount.mockReturnValue(0);
+    mocks.activeSessionCount.mockReturnValue(1);
+    // 🟦 is used; fresh colors start with 🟩
+    mocks.listSessions
+      .mockReturnValueOnce([{ sid: 1, name: "Primary", createdAt: "2026-03-17" }])
+      .mockReturnValue([{ sid: 1, name: "Primary", color: "🟦", createdAt: "2026-03-17" }]);
+    mocks.getAvailableColors.mockReturnValue(["🟩", "🟨", "🟧", "🟥", "🟪", "🟦"]);
+    mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
+      void Promise.resolve().then(() => { fn({ content: { data: "approve_1", qid: "q1" } }); });
+    });
+    mocks.sendMessage.mockResolvedValueOnce({ message_id: 50 });
+    mocks.createSession.mockReturnValue({ sid: 2, pin: 200002, name: "Worker", color: "🟩", sessionsActive: 2 });
+
+    await call({ name: "Worker" });
+
+    const promptOpts = (mocks.sendMessage.mock.calls[0] as unknown[])[2] as Record<string, unknown>;
+    const keyboard = (promptOpts.reply_markup as Record<string, unknown>).inline_keyboard as unknown[][];
+    const buttons = keyboard[0] as Array<Record<string, unknown>>;
+    const firstButton = buttons[0];
+    expect(firstButton.text).toBe("🟩");
+    expect(firstButton.style).toBe("primary");
+    const usedButton = buttons.find(b => b.text === "🟦");
+    expect(usedButton?.style).not.toBe("primary");
+  });
+
+  it("hint gets primary style when hint is a fresh color", async () => {
+    mocks.pendingCount.mockReturnValue(0);
+    mocks.activeSessionCount.mockReturnValue(1);
+    // 🟦 is used; hint 🟥 is fresh
+    mocks.listSessions
+      .mockReturnValueOnce([{ sid: 1, name: "Primary", createdAt: "2026-03-17" }])
+      .mockReturnValue([{ sid: 1, name: "Primary", color: "🟦", createdAt: "2026-03-17" }]);
+    mocks.getAvailableColors.mockReturnValue(["🟥", "🟩", "🟨", "🟧", "🟪", "🟦"]);
+    mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
+      void Promise.resolve().then(() => { fn({ content: { data: "approve_4", qid: "q1" } }); });
+    });
+    mocks.sendMessage.mockResolvedValueOnce({ message_id: 50 });
+    mocks.createSession.mockReturnValue({ sid: 2, pin: 200002, name: "Worker", color: "🟥", sessionsActive: 2 });
+
+    await call({ name: "Worker", color: "🟥" });
+
+    const promptOpts = (mocks.sendMessage.mock.calls[0] as unknown[])[2] as Record<string, unknown>;
+    const keyboard = (promptOpts.reply_markup as Record<string, unknown>).inline_keyboard as unknown[][];
+    const buttons = keyboard[0] as Array<Record<string, unknown>>;
+    const hintButton = buttons.find(b => b.text === "🟥");
+    expect(hintButton?.style).toBe("primary");
+  });
+
+  it("first fresh color gets primary style when hint is already used", async () => {
+    mocks.pendingCount.mockReturnValue(0);
+    mocks.activeSessionCount.mockReturnValue(1);
+    // 🟦 and 🟥 are used; hint is 🟥 (used); first fresh is 🟩
+    mocks.listSessions
+      .mockReturnValueOnce([{ sid: 1, name: "Primary", createdAt: "2026-03-17" }])
+      .mockReturnValue([
+        { sid: 1, name: "Primary", color: "🟦", createdAt: "2026-03-17" },
+        { sid: 2, name: "Other", color: "🟥", createdAt: "2026-03-17" },
+      ]);
+    mocks.getAvailableColors.mockReturnValue(["🟥", "🟩", "🟨", "🟧", "🟪", "🟦"]);
+    mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
+      void Promise.resolve().then(() => { fn({ content: { data: "approve_1", qid: "q1" } }); });
+    });
+    mocks.sendMessage.mockResolvedValueOnce({ message_id: 50 });
+    mocks.createSession.mockReturnValue({ sid: 3, pin: 300003, name: "Worker2", color: "🟩", sessionsActive: 3 });
+
+    await call({ name: "Worker2", color: "🟥" });
+
+    const promptOpts = (mocks.sendMessage.mock.calls[0] as unknown[])[2] as Record<string, unknown>;
+    const keyboard = (promptOpts.reply_markup as Record<string, unknown>).inline_keyboard as unknown[][];
+    const buttons = keyboard[0] as Array<Record<string, unknown>>;
+    const hintButton = buttons.find(b => b.text === "🟥");
+    expect(hintButton?.style).not.toBe("primary");
+    const firstFreshButton = buttons.find(b => b.text === "🟩");
+    expect(firstFreshButton?.style).toBe("primary");
+  });
+
+  it("invalid colorHint (not in palette) is ignored — first fresh color gets primary style", async () => {
+    mocks.pendingCount.mockReturnValue(0);
+    mocks.activeSessionCount.mockReturnValue(1);
+    mocks.listSessions
+      .mockReturnValueOnce([{ sid: 1, name: "Primary", createdAt: "2026-03-17" }])
+      .mockReturnValue([{ sid: 1, name: "Primary", color: "🟦", createdAt: "2026-03-17" }]);
+    // getAvailableColors correctly ignores invalid hint; 🟩 is first fresh
+    mocks.getAvailableColors.mockReturnValue(["🟩", "🟨", "🟧", "🟥", "🟪", "🟦"]);
+    mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
+      void Promise.resolve().then(() => { fn({ content: { data: "approve_0", qid: "q1" } }); });
+    });
+    mocks.sendMessage.mockResolvedValueOnce({ message_id: 50 });
+    mocks.createSession.mockReturnValue({ sid: 2, pin: 200002, name: "Worker", color: "🟩", sessionsActive: 2 });
+
+    await call({ name: "Worker", color: "❌" }); // invalid hint — not in COLOR_PALETTE
+
+    const promptOpts = (mocks.sendMessage.mock.calls[0] as unknown[])[2] as Record<string, unknown>;
+    const keyboard = (promptOpts.reply_markup as Record<string, unknown>).inline_keyboard as unknown[][];
+    const buttons = keyboard[0] as Array<Record<string, unknown>>;
+    // Invalid hint must not appear as a button
+    const invalidButton = buttons.find(b => b.text === "❌");
+    expect(invalidButton).toBeUndefined();
+    // First fresh palette color should be the primary button
+    const firstFreshButton = buttons.find(b => b.text === "🟩");
+    expect(firstFreshButton?.style).toBe("primary");
+  });
+
   it("reconnect variant color-picker still works", async () => {
     mocks.pendingCount.mockReturnValue(0);
     mocks.activeSessionCount.mockReturnValue(1);
@@ -1084,7 +1190,7 @@ describe("session_start tool", () => {
 
     await call({ name: "Worker", reconnect: true });
 
-    expect(mocks.createSession).toHaveBeenCalledWith("Worker", "🟩");
+    expect(mocks.createSession).toHaveBeenCalledWith("Worker", "🟩", true);
   });
 
   // =========================================================================

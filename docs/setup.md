@@ -142,6 +142,19 @@ All config comes from `.env` — no credentials in your editor settings.
 
 **Claude Desktop** (`claude_desktop_config.json`): same shape as Claude Code.
 
+**Cursor** (`.cursor/mcp.json` in your project root):
+
+```json
+{
+  "mcpServers": {
+    "telegram": {
+      "type": "streamable-http",
+      "url": "http://127.0.0.1:3099/mcp"
+    }
+  }
+}
+```
+
 > **Do not add to global `~/.claude.json` `mcpServers`.** Global servers spawn in *every* session, generating noise and competing for the same bot.
 
 <details>
@@ -187,10 +200,26 @@ If you can't run a persistent server, stdio mode spawns a dedicated process per 
 
 **Claude Code** (`.mcp.json`): same shape as Claude Desktop.
 
+**Cursor** (`.cursor/mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "telegram": {
+      "command": "node",
+      "args": ["/absolute/path/to/telegram-bridge-mcp/dist/index.js"],
+      "env": {
+        "BOT_TOKEN": "YOUR_TOKEN_HERE",
+        "ALLOWED_USER_ID": "123456789"
+      }
+    }
+  }
+}
+```
+
 A `dist/launcher.js` convenience script is also available — it auto-starts the HTTP server if none is running, then bridges stdio ↔ HTTP. This lets you use a stdio config while still benefiting from a shared server.
 
 **Launcher bridge** (auto-starts the HTTP server):
-
 Instead of starting the server manually, use `dist/launcher.js` as a drop-in stdio replacement. It auto-starts the HTTP server on first use and bridges stdin/stdout ↔ HTTP for all subsequent connections. Credentials come from `.env` — no need to duplicate them in editor config.
 
 **VS Code** (`.vscode/mcp.json`):
@@ -209,6 +238,19 @@ Instead of starting the server manually, use `dist/launcher.js` as a drop-in std
 ```
 
 **Claude Desktop** (`claude_desktop_config.json`) / **Claude Code** (`.mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "telegram": {
+      "command": "node",
+      "args": ["/absolute/path/to/telegram-bridge-mcp/dist/launcher.js"]
+    }
+  }
+}
+```
+
+**Cursor** (`.cursor/mcp.json`):
 
 ```json
 {

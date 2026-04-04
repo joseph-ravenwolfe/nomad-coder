@@ -4,7 +4,7 @@ import { toResult, toError } from "../telegram.js";
 import { requireAuth } from "../session-gate.js";
 import { getSession } from "../session-manager.js";
 import { deliverDirectMessage } from "../session-queue.js";
-import { IDENTITY_SCHEMA } from "./identity-schema.js";
+import { TOKEN_SCHEMA } from "./identity-schema.js";
 
 const DESCRIPTION =
   "Send a direct message to another session. The message is " +
@@ -18,11 +18,12 @@ export function register(server: McpServer) {
     {
       description: DESCRIPTION,
       inputSchema: {
-        identity: IDENTITY_SCHEMA,
+        token: TOKEN_SCHEMA,
         target_sid: z
-          .number()
-          .int()
-          .positive()
+          .preprocess(
+            (v) => typeof v === "string" && /^\d+$/.test(v as string) ? parseInt(v as string, 10) : v,
+            z.number().int().positive(),
+          )
           .describe("Session ID of the recipient"),
         text: z
           .string()
@@ -30,8 +31,8 @@ export function register(server: McpServer) {
           .describe("Message text to send"),
       },
     },
-    ({ identity, target_sid, text }) => {
-      const _sid = requireAuth(identity);
+    ({ token, target_sid, text }) => {
+      const _sid = requireAuth(token);
       if (typeof _sid !== "number") return toError(_sid);
 
       if (_sid === target_sid) {
