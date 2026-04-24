@@ -20,6 +20,6 @@ action(type: "transcribe", token: 3165424, file_id: "AwACAgIAAxkB...", message_i
 
 ## Notes
 - Dequeue auto-transcribes voice messages on arrival (no manual call needed)
-- STT_HOST (optional): OpenAI-compatible Whisper server; omit to use the embedded local ONNX model (zero config)
+- STT_HOST (optional) — set to an OpenAI-compatible Whisper server URL; omit to use the embedded local ONNX model (zero-config)
 
 Related: download, message/get

@@ -194,17 +194,15 @@ export class TemporalQueue<T> {
 
   /**
    * Non-destructive peek: returns the first item matching the predicate, or undefined.
-   * Items are temporarily drained from the internal queue then re-enqueued in order.
+   * Safe: `@tsdotnet/queue` Queue._getIterator() is a non-consuming generator that reads
+   * by index offset into the internal array — early return does not drain or corrupt state.
    * Does not check isReady — finds items regardless of readiness.
    */
   peekFirst(predicate: (item: T) => boolean): T | undefined {
-    const items = [...this._queue.consumer()];
-    let found: T | undefined;
-    for (const item of items) {
-      if (found === undefined && predicate(item)) found = item;
-      this._queue.enqueue(item);
+    for (const item of this._queue) {
+      if (predicate(item)) return item;
     }
-    return found;
+    return undefined;
   }
 
   /** True if the given ID has been dequeued. */
