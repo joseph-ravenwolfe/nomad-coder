@@ -27,7 +27,17 @@ const mocks = vi.hoisted(() => ({
   handleSendDirectMessage: vi.fn(),
   handleConfirm: vi.fn(),
   handleAppendText: vi.fn(),
+  handleSendChoice: vi.fn(),
+  handleSendNewChecklist: vi.fn(),
+  handleAsk: vi.fn(),
+  handleChoose: vi.fn(),
   deliverServiceMessage: vi.fn(),
+  getFirstUseHint: vi.fn((): string | null => null),
+  markFirstUseHintSeen: vi.fn((): boolean => false),
+  enqueueAsyncSend: vi.fn(() => -1_000_000_001),
+  resetAsyncSendQueueForTest: vi.fn(),
+  acquireRecordingIndicator: vi.fn(),
+  releaseRecordingIndicator: vi.fn(),
 }));
 
 vi.mock("../telegram.js", async (importActual) => {
@@ -82,28 +92,69 @@ vi.mock("../session-manager.js", () => ({
   validateSession: (sid: number, suffix: number) => mocks.validateSession(sid, suffix),
 }));
 
-vi.mock("./show_animation.js", () => ({
+vi.mock("./animation/show.js", () => ({
   handleShowAnimation: (args: unknown) => mocks.handleShowAnimation(args),
 }));
 
-vi.mock("./send_new_progress.js", () => ({
+vi.mock("./progress/new.js", () => ({
   handleSendNewProgress: (args: unknown) => mocks.handleSendNewProgress(args),
 }));
 
-vi.mock("./send_direct_message.js", () => ({
+vi.mock("./send/dm.js", () => ({
   handleSendDirectMessage: (args: unknown) => mocks.handleSendDirectMessage(args),
 }));
 
-vi.mock("./confirm.js", () => ({
+vi.mock("./confirm/handler.js", () => ({
   handleConfirm: (args: unknown) => mocks.handleConfirm(args),
 }));
 
-vi.mock("./append_text.js", () => ({
+vi.mock("./send/append.js", () => ({
   handleAppendText: (args: unknown) => mocks.handleAppendText(args),
 }));
 
 vi.mock("../session-queue.js", () => ({
   deliverServiceMessage: (...args: unknown[]) => mocks.deliverServiceMessage(...args),
+}));
+
+vi.mock("../async-send-queue.js", () => ({
+  enqueueAsyncSend: (...args: unknown[]) => mocks.enqueueAsyncSend(...args),
+  resetAsyncSendQueueForTest: () => mocks.resetAsyncSendQueueForTest(),
+  acquireRecordingIndicator: (...args: unknown[]) => mocks.acquireRecordingIndicator(...args),
+  releaseRecordingIndicator: (...args: unknown[]) => mocks.releaseRecordingIndicator(...args),
+}));
+
+vi.mock("../first-use-hints.js", () => ({
+  getFirstUseHint: (...args: unknown[]) => mocks.getFirstUseHint(...args),
+  markFirstUseHintSeen: (...args: unknown[]) => mocks.markFirstUseHintSeen(...args),
+  appendHintToResult: <T extends { content: { type: string; text: string }[]; isError?: true }>(result: T, hint: string | null): T => {
+    if (!hint || result.isError) return result;
+    try {
+      const entry = result.content[0];
+      if (entry.type !== "text") return result;
+      const parsed = JSON.parse(entry.text) as Record<string, unknown>;
+      parsed._first_use_hint = hint;
+      entry.text = JSON.stringify(parsed);
+    } catch {
+      // no-op
+    }
+    return result;
+  },
+}));
+
+vi.mock("./send/choice.js", () => ({
+  handleSendChoice: (args: unknown) => mocks.handleSendChoice(args),
+}));
+
+vi.mock("./checklist/update.js", () => ({
+  handleSendNewChecklist: (args: unknown) => mocks.handleSendNewChecklist(args),
+}));
+
+vi.mock("./send/ask.js", () => ({
+  handleAsk: (args: unknown, signal: unknown) => mocks.handleAsk(args, signal),
+}));
+
+vi.mock("./send/choose.js", () => ({
+  handleChoose: (args: unknown, signal: unknown) => mocks.handleChoose(args, signal),
 }));
 
 import { register } from "./send.js";
@@ -156,11 +207,10 @@ describe("send tool", () => {
   // Case 2: voice-only (string)
   // ---------------------------------------------------------------------------
   it("voice-only (string): calls TTS and sends voice note", async () => {
-    const result = await call({ audio: "nova", token: TOKEN });
+    const result = await call({ audio: "nova", async: false, token: TOKEN });
     expect(isError(result)).toBe(false);
     const data = parseResult(result);
     expect(data.message_id).toBe(43);
-    expect(data.audio).toBe(true);
     expect(mocks.synthesizeToOgg).toHaveBeenCalledOnce();
     expect(mocks.sendVoiceDirect).toHaveBeenCalledOnce();
     expect(mocks.sendMessage).not.toHaveBeenCalled();
@@ -170,11 +220,10 @@ describe("send tool", () => {
   // Case 3: audio-only (no voice override — uses session/default)
   // ---------------------------------------------------------------------------
   it("audio-only: calls TTS with session voice (or undefined if none set)", async () => {
-    const result = await call({ audio: "hello", token: TOKEN });
+    const result = await call({ audio: "hello", async: false, token: TOKEN });
     expect(isError(result)).toBe(false);
     const data = parseResult(result);
     expect(data.message_id).toBe(43);
-    expect(data.audio).toBe(true);
     expect(mocks.synthesizeToOgg).toHaveBeenCalledWith("hello", undefined, undefined);
     expect(mocks.sendVoiceDirect).toHaveBeenCalledOnce();
   });
@@ -183,11 +232,10 @@ describe("send tool", () => {
   // Case 4: combined mode (text + voice)
   // ---------------------------------------------------------------------------
   it("combined mode: sends voice note with text as caption", async () => {
-    const result = await call({ text: "caption text", audio: "shimmer", token: TOKEN });
+    const result = await call({ text: "caption text", audio: "shimmer", async: false, token: TOKEN });
     expect(isError(result)).toBe(false);
     const data = parseResult(result);
     expect(data.message_id).toBe(43);
-    expect(data.audio).toBe(true);
     // Voice was sent (not text message)
     expect(mocks.sendVoiceDirect).toHaveBeenCalledOnce();
     expect(mocks.sendMessage).not.toHaveBeenCalled();
@@ -253,7 +301,7 @@ describe("send tool", () => {
   it("combined mode: auto-splits into two messages when text exceeds 964 chars", async () => {
     const longText = "A".repeat(965); // 965 chars > MAX_CAPTION (964)
     mocks.sendMessage.mockResolvedValue({ message_id: 99 });
-    const result = await call({ text: longText, audio: "nova", token: TOKEN });
+    const result = await call({ text: longText, audio: "nova", async: false, token: TOKEN });
     expect(isError(result)).toBe(false);
     const data = parseResult(result);
     // Voice note was sent (no caption)
@@ -261,12 +309,10 @@ describe("send tool", () => {
     expect(mocks.sendVoiceDirect).toHaveBeenCalledOnce();
     // Text message was sent separately
     expect(mocks.sendMessage).toHaveBeenCalledOnce();
-    // Result has split + both IDs + _hint
-    expect(data.audio).toBe(true);
+    // Result has split + both IDs
     expect(data.split).toBe(true);
     expect(data.message_id).toBe(43);
     expect(data.text_message_id).toBe(99);
-    expect(typeof data._hint).toBe("string");
     // Voice note sent with no caption
     const voiceCallArgs = mocks.sendVoiceDirect.mock.calls[0] as [unknown, unknown, { caption?: string }];
     expect(voiceCallArgs[2].caption).toBeUndefined();
@@ -277,15 +323,13 @@ describe("send tool", () => {
   // ---------------------------------------------------------------------------
   it("combined mode: no split when text is under 964 chars (single hybrid message)", async () => {
     const shortText = "A".repeat(963); // under MAX_CAPTION (964)
-    const result = await call({ text: shortText, audio: "nova", token: TOKEN });
+    const result = await call({ text: shortText, audio: "nova", async: false, token: TOKEN });
     expect(isError(result)).toBe(false);
     const data = parseResult(result);
     // Voice note sent with caption
     expect(mocks.sendVoiceDirect).toHaveBeenCalledOnce();
     expect(mocks.sendMessage).not.toHaveBeenCalled();
-    expect(data.audio).toBe(true);
     expect(data.split).toBeUndefined();
-    expect(data._hint).toBeUndefined();
     expect(data.text_message_id).toBeUndefined();
     const voiceCallArgs = mocks.sendVoiceDirect.mock.calls[0] as [unknown, unknown, { caption?: string }];
     expect(voiceCallArgs[2].caption).toBeDefined();
@@ -300,7 +344,7 @@ describe("send tool", () => {
     mocks.validateText
       .mockReturnValueOnce(null)
       .mockReturnValueOnce({ code: "MESSAGE_TOO_LONG", message: "chunk too long" });
-    const result = await call({ audio: "hello world", token: TOKEN });
+    const result = await call({ audio: "hello world", async: false, token: TOKEN });
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("MESSAGE_TOO_LONG");
     // No synthesis or delivery — validation runs before the send loop
@@ -322,7 +366,7 @@ describe("send tool", () => {
     // First sendVoiceDirect call succeeds
     mocks.sendVoiceDirect.mockResolvedValueOnce({ message_id: 43 });
 
-    const result = await call({ audio: "hello world chunk test", token: TOKEN });
+    const result = await call({ audio: "hello world chunk test", async: false, token: TOKEN });
 
     expect(isError(result)).toBe(true);
     // First chunk was already sent; error propagates from the second
@@ -341,12 +385,99 @@ describe("send tool", () => {
       new Error("user restricted receiving of voice note messages"),
     );
 
-    const result = await call({ audio: "say something", token: TOKEN });
+    const result = await call({ audio: "say something", async: false, token: TOKEN });
 
     expect(isError(result)).toBe(true);
     expect(errorCode(result)).toBe("VOICE_RESTRICTED");
     // cancelTypingIfSameGeneration cleanup must still run (finally block)
     expect(mocks.cancelTypingIfSameGeneration).toHaveBeenCalled();
+  });
+
+  // ---------------------------------------------------------------------------
+  // Async path tests
+  // ---------------------------------------------------------------------------
+
+  it("async TTS: send(type: text, audio, async: true) returns queued response immediately", async () => {
+    mocks.enqueueAsyncSend.mockReturnValue(-1_000_000_001);
+    const result = await call({ type: "text", audio: "hello async", async: true, token: TOKEN });
+    expect(isError(result)).toBe(false);
+    const data = parseResult(result);
+    expect(data.ok).toBe(true);
+    expect(data.message_id_pending).toBe(-1_000_000_001);
+    expect(data.status).toBe("queued");
+  });
+
+  it("async TTS: enqueueAsyncSend is called instead of synchronous TTS path", async () => {
+    mocks.enqueueAsyncSend.mockReturnValue(-1_000_000_001);
+    await call({ type: "text", audio: "hello async", async: true, token: TOKEN });
+    expect(mocks.enqueueAsyncSend).toHaveBeenCalledOnce();
+    expect(mocks.synthesizeToOgg).not.toHaveBeenCalled();
+    expect(mocks.sendVoiceDirect).not.toHaveBeenCalled();
+  });
+
+  it("async: false — synchronous TTS path is used (enqueueAsyncSend not called)", async () => {
+    await call({ audio: "hello sync", async: false, token: TOKEN });
+    expect(mocks.enqueueAsyncSend).not.toHaveBeenCalled();
+    expect(mocks.synthesizeToOgg).toHaveBeenCalledOnce();
+    expect(mocks.sendVoiceDirect).toHaveBeenCalledOnce();
+  });
+
+  it("async omitted — async TTS path is used by default (enqueueAsyncSend called)", async () => {
+    mocks.enqueueAsyncSend.mockReturnValue(-1_000_000_001);
+    const result = await call({ audio: "hello no async flag", token: TOKEN });
+    expect(mocks.enqueueAsyncSend).toHaveBeenCalledOnce();
+    expect(mocks.synthesizeToOgg).not.toHaveBeenCalled();
+    expect(mocks.sendVoiceDirect).not.toHaveBeenCalled();
+    expect(isError(result)).toBe(false);
+    const parsed = parseResult(result);
+    expect(parsed.message_id_pending).toBe(-1_000_000_001);
+    expect(parsed.status).toBe("queued");
+  });
+});
+
+// =============================================================================
+// Sync voice path — acquireRecordingIndicator / releaseRecordingIndicator
+// =============================================================================
+describe("send — sync voice path recording indicator", () => {
+  let call: (args: Record<string, unknown>) => Promise<unknown>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.validateSession.mockReturnValue(true);
+    mocks.resolveChat.mockReturnValue(42);
+    mocks.validateText.mockReturnValue(null);
+    mocks.isTtsEnabled.mockReturnValue(true);
+    mocks.stripForTts.mockImplementation((t: string) => t);
+    mocks.applyTopicToText.mockImplementation((t: string) => t);
+    mocks.markdownToV2.mockImplementation((t: string) => t);
+    mocks.splitMessage.mockImplementation((t: string) => [t]);
+    mocks.synthesizeToOgg.mockResolvedValue(Buffer.from("ogg"));
+    mocks.sendVoiceDirect.mockResolvedValue(SENT_VOICE_MSG);
+    mocks.showTyping.mockResolvedValue(undefined);
+
+    const server = createMockServer();
+    register(server);
+    call = server.getHandler("send");
+  });
+
+  it("sync voice: acquireRecordingIndicator called once before send", async () => {
+    await call({ audio: "hello", async: false, token: TOKEN });
+    expect(mocks.acquireRecordingIndicator).toHaveBeenCalledOnce();
+    expect(mocks.acquireRecordingIndicator).toHaveBeenCalledWith(42);
+  });
+
+  it("sync voice: releaseRecordingIndicator called once in finally (success path)", async () => {
+    await call({ audio: "hello", async: false, token: TOKEN });
+    expect(mocks.releaseRecordingIndicator).toHaveBeenCalledOnce();
+    expect(mocks.releaseRecordingIndicator).toHaveBeenCalledWith(42);
+  });
+
+  it("sync voice: releaseRecordingIndicator still called in finally when sendVoiceDirect rejects", async () => {
+    mocks.sendVoiceDirect.mockRejectedValue(new Error("network failure"));
+    const result = await call({ audio: "hello", async: false, token: TOKEN });
+    expect(isError(result)).toBe(true);
+    expect(mocks.releaseRecordingIndicator).toHaveBeenCalledOnce();
+    expect(mocks.releaseRecordingIndicator).toHaveBeenCalledWith(42);
   });
 });
 
@@ -395,11 +526,8 @@ describe("send — message alias", () => {
   });
 
   it("message alias: send(message: 'hello', audio: 'spoken') works — voice with caption alias (no hint)", async () => {
-    const result = await call({ message: "caption via alias", audio: "spoken content", token: TOKEN });
+    const result = await call({ message: "caption via alias", audio: "spoken content", async: false, token: TOKEN });
     expect(isError(result)).toBe(false);
-    const data = parseResult(result);
-    expect(data.audio).toBe(true);
-    expect(data.hint).toBeUndefined();
     expect(mocks.sendVoiceDirect).toHaveBeenCalledOnce();
   });
 
@@ -536,7 +664,7 @@ describe("send type routing", () => {
   });
 
   it("type: append routes to handleAppendText with correct params", async () => {
-    mocks.handleAppendText.mockResolvedValue({ content: [{ type: "text", text: '{"message_id":10,"length":14}' }] });
+    mocks.handleAppendText.mockResolvedValue({ content: [{ type: "text", text: '{"message_id":10}' }] });
     const result = await call({ type: "append", message_id: 10, text: "hello", separator: " | ", token: TOKEN });
     expect(isError(result)).toBe(false);
     expect(mocks.handleAppendText).toHaveBeenCalledOnce();
@@ -639,7 +767,7 @@ describe("hybrid auto-split on caption overflow", () => {
 
   it("sends two messages when text exceeds 1024-char limit with audio, response has split:true, both IDs, and _hint", async () => {
     const longText = "X".repeat(970); // > MAX_CAPTION (964)
-    const result = await call({ text: longText, audio: "hello", token: TOKEN });
+    const result = await call({ text: longText, audio: "hello", async: false, token: TOKEN });
     expect(isError(result)).toBe(false);
     const data = parseResult(result);
 
@@ -649,12 +777,8 @@ describe("hybrid auto-split on caption overflow", () => {
 
     // Response shape
     expect(data.split).toBe(true);
-    expect(data.audio).toBe(true);
     expect(data.message_id).toBe(43);
     expect(data.text_message_id).toBe(99);
-    expect(typeof data._hint).toBe("string");
-    expect(data._hint).toContain("43");
-    expect(data._hint).toContain("99");
 
     // Voice note sent with no caption (overflow → no caption)
     const voiceCallArgs = mocks.sendVoiceDirect.mock.calls[0] as [unknown, unknown, { caption?: string }];
@@ -667,7 +791,7 @@ describe("hybrid auto-split on caption overflow", () => {
 
   it("sends single hybrid message (no split) when text is under the 1024-char limit", async () => {
     const shortText = "Y".repeat(500); // < MAX_CAPTION (964)
-    const result = await call({ text: shortText, audio: "hello", token: TOKEN });
+    const result = await call({ text: shortText, audio: "hello", async: false, token: TOKEN });
     expect(isError(result)).toBe(false);
     const data = parseResult(result);
 
@@ -676,9 +800,7 @@ describe("hybrid auto-split on caption overflow", () => {
     expect(mocks.sendMessage).not.toHaveBeenCalled();
 
     // Response shape — no split
-    expect(data.audio).toBe(true);
     expect(data.split).toBeUndefined();
-    expect(data._hint).toBeUndefined();
     expect(data.text_message_id).toBeUndefined();
     expect(data.message_id).toBe(43);
 
@@ -762,18 +884,16 @@ describe("unrenderable char warning — audio+caption and captionOverflow paths"
   // ---------------------------------------------------------------------------
   it("audio+caption: no warning when caption contains an em-dash (no longer flagged)", async () => {
     const captionWithEmDash = "Status\u2014done"; // em dash U+2014 — no longer flagged
-    const result = await call({ text: captionWithEmDash, audio: "spoken content", token: TOKEN });
+    const result = await call({ text: captionWithEmDash, audio: "spoken content", async: false, token: TOKEN });
 
     expect(isError(result)).toBe(false);
-    const data = parseResult(result);
-    expect(data.audio).toBe(true);
     expect(mocks.sendVoiceDirect).toHaveBeenCalledOnce();
     expect(mocks.sendMessage).not.toHaveBeenCalled();
     expect(mocks.deliverServiceMessage).not.toHaveBeenCalled();
   });
 
   it("audio+caption: no warning when caption is clean ASCII", async () => {
-    const result = await call({ text: "clean caption text", audio: "spoken", token: TOKEN });
+    const result = await call({ text: "clean caption text", audio: "spoken", async: false, token: TOKEN });
 
     expect(isError(result)).toBe(false);
     expect(mocks.sendVoiceDirect).toHaveBeenCalledOnce();
@@ -786,7 +906,7 @@ describe("unrenderable char warning — audio+caption and captionOverflow paths"
   it("captionOverflow: fires warning when overflow text message contains an unrenderable char", async () => {
     // Build a string > MAX_CAPTION (1024-60=964) that contains an arrow (→ U+2192)
     const longTextWithBadChar = "A".repeat(962) + "\u2192end"; // 966 chars > 964, contains →
-    const result = await call({ text: longTextWithBadChar, audio: "hello", token: TOKEN });
+    const result = await call({ text: longTextWithBadChar, audio: "hello", async: false, token: TOKEN });
 
     expect(isError(result)).toBe(false);
     const data = parseResult(result);
@@ -794,12 +914,346 @@ describe("unrenderable char warning — audio+caption and captionOverflow paths"
     expect(mocks.sendVoiceDirect).toHaveBeenCalledOnce();
     expect(mocks.sendMessage).toHaveBeenCalledOnce();
     expect(data.split).toBe(true);
-    expect(data.audio).toBe(true);
     // Warning fired for the overflow text
     expect(mocks.deliverServiceMessage).toHaveBeenCalledOnce();
     const warningMsg = (mocks.deliverServiceMessage.mock.calls[0] as unknown[])[1] as string;
     expect(warningMsg).toContain("U+2192");
     const eventType = (mocks.deliverServiceMessage.mock.calls[0] as unknown[])[2] as string;
     expect(eventType).toBe("unrenderable_chars_warning");
+  });
+});
+
+// =============================================================================
+// First-use hint key correctness + happy-path routing for new branches
+// =============================================================================
+describe("send — first-use hint injection and happy-path routing", () => {
+  let call: (args: Record<string, unknown>) => Promise<unknown>;
+
+  const HINT_SENTINEL = "__test_hint__";
+  // Factory returns a fresh object each time to prevent mutations from leaking across tests.
+  const makeOkResult = () => ({ content: [{ type: "text", text: JSON.stringify({ ok: true }) }] });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.validateSession.mockReturnValue(true);
+    mocks.resolveChat.mockReturnValue(42);
+    mocks.validateText.mockReturnValue(null);
+    mocks.splitMessage.mockImplementation((t: string) => [t]);
+    mocks.markdownToV2.mockImplementation((t: string) => t);
+    mocks.applyTopicToText.mockImplementation((t: string) => t);
+    mocks.sendMessage.mockResolvedValue({ message_id: 99 });
+    // Return the sentinel hint for all calls
+    mocks.getFirstUseHint.mockReturnValue(HINT_SENTINEL);
+    // Default handler mocks return a fresh result each call to avoid cross-test mutation.
+    mocks.handleSendChoice.mockImplementation(() => Promise.resolve(makeOkResult()));
+    mocks.handleSendNewChecklist.mockImplementation(() => Promise.resolve(makeOkResult()));
+    mocks.handleAsk.mockImplementation(() => Promise.resolve(makeOkResult()));
+    mocks.handleChoose.mockImplementation(() => Promise.resolve(makeOkResult()));
+    mocks.handleShowAnimation.mockImplementation(() => Promise.resolve(makeOkResult()));
+    mocks.handleSendNewProgress.mockImplementation(() => Promise.resolve(makeOkResult()));
+    mocks.handleAppendText.mockImplementation(() => Promise.resolve(makeOkResult()));
+
+    const server = createMockServer();
+    register(server);
+    call = server.getHandler("send");
+  });
+
+  // ---------------------------------------------------------------------------
+  // Hint key correctness: verify exact key passed to getFirstUseHint per branch
+  // ---------------------------------------------------------------------------
+
+  it("choice branch passes 'send:choice' hint key and injects hint into result", async () => {
+    const result = await call({
+      type: "choice",
+      text: "Pick one",
+      options: [{ label: "A", value: "a" }, { label: "B", value: "b" }],
+      token: TOKEN,
+    });
+    expect(isError(result)).toBe(false);
+    expect(mocks.handleSendChoice).toHaveBeenCalledOnce();
+    expect(mocks.getFirstUseHint).toHaveBeenCalledWith(expect.any(Number), "send:choice");
+    const data = parseResult(result);
+    expect(data._first_use_hint).toBe(HINT_SENTINEL);
+  });
+
+  it("append branch passes 'send:append' hint key and injects hint into result", async () => {
+    const result = await call({
+      type: "append",
+      message_id: 10,
+      text: "more text",
+      token: TOKEN,
+    });
+    expect(isError(result)).toBe(false);
+    expect(mocks.handleAppendText).toHaveBeenCalledOnce();
+    expect(mocks.getFirstUseHint).toHaveBeenCalledWith(expect.any(Number), "send:append");
+    const data = parseResult(result);
+    expect(data._first_use_hint).toBe(HINT_SENTINEL);
+  });
+
+  it("animation branch passes 'send:animation' hint key and injects hint into result", async () => {
+    const result = await call({
+      type: "animation",
+      preset: "working",
+      token: TOKEN,
+    });
+    expect(isError(result)).toBe(false);
+    expect(mocks.handleShowAnimation).toHaveBeenCalledOnce();
+    expect(mocks.getFirstUseHint).toHaveBeenCalledWith(expect.any(Number), "send:animation");
+    const data = parseResult(result);
+    expect(data._first_use_hint).toBe(HINT_SENTINEL);
+  });
+
+  it("checklist branch passes 'send:checklist' hint key and injects hint into result", async () => {
+    const result = await call({
+      type: "checklist",
+      title: "My Steps",
+      steps: [{ label: "Step 1", status: "pending" }],
+      token: TOKEN,
+    });
+    expect(isError(result)).toBe(false);
+    expect(mocks.handleSendNewChecklist).toHaveBeenCalledOnce();
+    expect(mocks.getFirstUseHint).toHaveBeenCalledWith(expect.any(Number), "send:checklist");
+    const data = parseResult(result);
+    expect(data._first_use_hint).toBe(HINT_SENTINEL);
+  });
+
+  it("progress branch passes 'send:progress' hint key and injects hint into result", async () => {
+    const result = await call({
+      type: "progress",
+      percent: 50,
+      token: TOKEN,
+    });
+    expect(isError(result)).toBe(false);
+    expect(mocks.handleSendNewProgress).toHaveBeenCalledOnce();
+    expect(mocks.getFirstUseHint).toHaveBeenCalledWith(expect.any(Number), "send:progress");
+    const data = parseResult(result);
+    expect(data._first_use_hint).toBe(HINT_SENTINEL);
+  });
+
+  it("question/choose branch passes 'send:question:choose' hint key and injects hint into result", async () => {
+    const result = await call({
+      type: "question",
+      text: "Pick one",
+      choose: [{ label: "A", value: "a" }, { label: "B", value: "b" }],
+      token: TOKEN,
+    });
+    expect(isError(result)).toBe(false);
+    expect(mocks.handleChoose).toHaveBeenCalledOnce();
+    expect(mocks.getFirstUseHint).toHaveBeenCalledWith(expect.any(Number), "send:question:choose");
+    const data = parseResult(result);
+    expect(data._first_use_hint).toBe(HINT_SENTINEL);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Happy-path routing: verify handlers are called for previously untested branches
+  // ---------------------------------------------------------------------------
+
+  it("question/ask happy path: routes to handleAsk", async () => {
+    const result = await call({
+      type: "question",
+      ask: "What is your name?",
+      token: TOKEN,
+    });
+    expect(isError(result)).toBe(false);
+    expect(mocks.handleAsk).toHaveBeenCalledOnce();
+  });
+
+  // ---------------------------------------------------------------------------
+  // Verify null hint does NOT inject _first_use_hint field
+  // ---------------------------------------------------------------------------
+
+  it("when getFirstUseHint returns null, _first_use_hint is absent from result", async () => {
+    mocks.getFirstUseHint.mockReturnValue(null);
+    // Use a fresh result object to avoid cross-test mutation from appendHintToResult
+    mocks.handleSendChoice.mockResolvedValue({ content: [{ type: "text", text: JSON.stringify({ ok: true }) }] });
+    const result = await call({
+      type: "choice",
+      text: "Pick one",
+      options: [{ label: "A", value: "a" }, { label: "B", value: "b" }],
+      token: TOKEN,
+    });
+    expect(isError(result)).toBe(false);
+    const data = parseResult(result);
+    expect(data._first_use_hint).toBeUndefined();
+  });
+});
+
+// =============================================================================
+// response_format: "compact" — split/split_count omitted
+// =============================================================================
+describe("send — response_format: compact (split/split_count omitted)", () => {
+  let call: (args: Record<string, unknown>) => Promise<unknown>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.validateSession.mockReturnValue(true);
+    mocks.resolveChat.mockReturnValue(42);
+    mocks.validateText.mockReturnValue(null);
+    mocks.isTtsEnabled.mockReturnValue(true);
+    mocks.stripForTts.mockImplementation((t: string) => t);
+    mocks.applyTopicToText.mockImplementation((t: string) => t);
+    mocks.markdownToV2.mockImplementation((t: string) => t);
+    mocks.splitMessage.mockImplementation((t: string) => [t]);
+    mocks.synthesizeToOgg.mockResolvedValue(Buffer.from("ogg"));
+    mocks.sendMessage.mockResolvedValue({ message_id: 99 });
+    mocks.sendVoiceDirect.mockResolvedValue({ message_id: 43 });
+    mocks.showTyping.mockResolvedValue(undefined);
+    mocks.deliverServiceMessage.mockReturnValue(undefined);
+
+    const server = createMockServer();
+    register(server);
+    call = server.getHandler("send");
+  });
+
+  it("compact: text split omits split:true and split_count when multiple chunks", async () => {
+    mocks.splitMessage.mockReturnValue(["chunk1", "chunk2"]);
+    mocks.sendMessage
+      .mockResolvedValueOnce({ message_id: 10 })
+      .mockResolvedValueOnce({ message_id: 11 });
+    const result = await call({ text: "long text", response_format: "compact", token: TOKEN });
+    expect(isError(result)).toBe(false);
+    const data = parseResult(result);
+    expect(data.message_ids).toBeDefined();
+    expect(data.split).toBeUndefined();
+    expect(data.split_count).toBeUndefined();
+  });
+
+  it("default: text split includes split:true and split_count when multiple chunks", async () => {
+    mocks.splitMessage.mockReturnValue(["chunk1", "chunk2"]);
+    mocks.sendMessage
+      .mockResolvedValueOnce({ message_id: 10 })
+      .mockResolvedValueOnce({ message_id: 11 });
+    const result = await call({ text: "long text", response_format: "default", token: TOKEN });
+    expect(isError(result)).toBe(false);
+    const data = parseResult(result);
+    expect(data.split).toBe(true);
+    expect(data.split_count).toBe(2);
+  });
+
+  it("omitted response_format: text split includes split:true and split_count (backward compat)", async () => {
+    mocks.splitMessage.mockReturnValue(["chunk1", "chunk2"]);
+    mocks.sendMessage
+      .mockResolvedValueOnce({ message_id: 10 })
+      .mockResolvedValueOnce({ message_id: 11 });
+    const result = await call({ text: "long text", token: TOKEN });
+    expect(isError(result)).toBe(false);
+    const data = parseResult(result);
+    expect(data.split).toBe(true);
+    expect(data.split_count).toBe(2);
+  });
+
+  it("compact: audio multi-chunk omits split:true and split_count", async () => {
+    mocks.splitMessage.mockReturnValue(["audio1", "audio2"]);
+    mocks.sendVoiceDirect
+      .mockResolvedValueOnce({ message_id: 43 })
+      .mockResolvedValueOnce({ message_id: 44 });
+    const result = await call({ audio: "hello", async: false, response_format: "compact", token: TOKEN });
+    expect(isError(result)).toBe(false);
+    const data = parseResult(result);
+    expect(data.message_ids).toBeDefined();
+    expect(data.split).toBeUndefined();
+    expect(data.split_count).toBeUndefined();
+    expect(data.audio).toBe(true);
+  });
+
+  it("default: audio multi-chunk includes split:true and split_count", async () => {
+    mocks.splitMessage.mockReturnValue(["audio1", "audio2"]);
+    mocks.sendVoiceDirect
+      .mockResolvedValueOnce({ message_id: 43 })
+      .mockResolvedValueOnce({ message_id: 44 });
+    const result = await call({ audio: "hello", async: false, response_format: "default", token: TOKEN });
+    expect(isError(result)).toBe(false);
+    const data = parseResult(result);
+    expect(data.split).toBe(true);
+    expect(data.split_count).toBe(2);
+    expect(data.audio).toBe(true);
+  });
+
+  it("compact: caption-overflow path omits split:true (single audio chunk)", async () => {
+    const longText = "X".repeat(970); // > MAX_CAPTION (964)
+    mocks.sendMessage.mockResolvedValue({ message_id: 99 });
+    const result = await call({ text: longText, audio: "hello", async: false, response_format: "compact", token: TOKEN });
+    expect(isError(result)).toBe(false);
+    const data = parseResult(result);
+    expect(data.audio).toBe(true);
+    expect(data.split).toBeUndefined();
+    expect(data.message_id).toBe(43);
+    expect(data.text_message_id).toBe(99);
+  });
+
+  it("default: caption-overflow path includes split:true (single audio chunk)", async () => {
+    const longText = "X".repeat(970);
+    mocks.sendMessage.mockResolvedValue({ message_id: 99 });
+    const result = await call({ text: longText, audio: "hello", async: false, response_format: "default", token: TOKEN });
+    expect(isError(result)).toBe(false);
+    const data = parseResult(result);
+    expect(data.split).toBe(true);
+    expect(data.audio).toBe(true);
+  });
+});
+
+// =============================================================================
+// Audio markup leak detection
+// =============================================================================
+describe("audio markup leak detection", () => {
+  let call: (args: Record<string, unknown>) => Promise<unknown>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.validateSession.mockReturnValue(true);
+    mocks.resolveChat.mockReturnValue(42);
+    mocks.validateText.mockReturnValue(null);
+    mocks.isTtsEnabled.mockReturnValue(true);
+    mocks.stripForTts.mockImplementation((t: string) => t);
+    mocks.applyTopicToText.mockImplementation((t: string) => t);
+    mocks.markdownToV2.mockImplementation((t: string) => t);
+    mocks.splitMessage.mockImplementation((t: string) => [t]);
+    mocks.synthesizeToOgg.mockResolvedValue(Buffer.from("ogg"));
+    mocks.sendVoiceDirect.mockResolvedValue(SENT_VOICE_MSG);
+    mocks.sendMessage.mockResolvedValue(SENT_MSG);
+    mocks.showTyping.mockResolvedValue(undefined);
+    mocks.deliverServiceMessage.mockReturnValue(undefined);
+
+    const server = createMockServer();
+    register(server);
+    call = server.getHandler("send");
+  });
+
+  it("audio markup leak: </audio> tag → strips audio and returns AUDIO_MARKUP_LEAK warning", async () => {
+    const result = await call({
+      audio: "Diagnosis. TMCP help send hybrid guidance is underspecified.</audio>\n<parameter name=\"text\">TMCP bug located.</parameter>",
+      async: false,
+      token: TOKEN,
+    });
+    expect(isError(result)).toBe(false);
+    const data = parseResult(result);
+    expect(data.warning).toBeDefined();
+    expect((data.warning as { code: string }).code).toBe("AUDIO_MARKUP_LEAK");
+    // TTS should receive only the pre-tag content (voice/speed are undefined from mocks)
+    expect(mocks.synthesizeToOgg).toHaveBeenCalledWith(
+      "Diagnosis. TMCP help send hybrid guidance is underspecified.",
+      undefined,
+      undefined,
+    );
+  });
+
+  it("audio markup leak: recovers caption from trailing <parameter name=\"text\"> block", async () => {
+    const result = await call({
+      audio: "Voice content here.</audio>\n<parameter name=\"text\">Recovered caption text.</parameter>",
+      async: false,
+      token: TOKEN,
+    });
+    expect(isError(result)).toBe(false);
+    const data = parseResult(result);
+    expect(data.warning).toBeDefined();
+    // Caption (effectiveText) should have been passed to markdownToV2
+    expect(mocks.markdownToV2).toHaveBeenCalledWith(expect.stringContaining("Recovered caption text."));
+  });
+
+  it("clean audio payload: no warning in response", async () => {
+    const result = await call({ audio: "Clean voice message.", async: false, token: TOKEN });
+    expect(isError(result)).toBe(false);
+    const data = parseResult(result);
+    expect(data.warning).toBeUndefined();
   });
 });

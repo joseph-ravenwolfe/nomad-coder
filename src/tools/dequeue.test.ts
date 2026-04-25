@@ -41,6 +41,12 @@ const mocks = vi.hoisted(() => ({
   validateSession: vi.fn((_sid: number, _suffix: number) => true),
   getDequeueDefault: vi.fn((_sid: number): number => 300),
   setDequeueDefault: vi.fn((_sid: number, _timeout: number) => {}),
+  checkConnectionToken: vi.fn((_sid: number, _token: string | undefined): "match" | "mismatch" | "absent" => "absent"),
+  deliverServiceMessage: vi.fn((_targetSid: number, ..._args: unknown[]) => true),
+  getGovernorSid: vi.fn((): number => 0),
+  getSession: vi.fn((_sid: number) => ({ name: "TestSession" })),
+  takeSilenceHint: vi.fn((_sid: number): string | undefined => undefined),
+  setDequeueIdle: vi.fn((_sid: number, _idle: boolean) => {}),
 }));
 
 vi.mock("../telegram.js", async (importActual) => {
@@ -75,16 +81,30 @@ vi.mock("../session-manager.js", () => ({
   setDequeueDefault: (sid: number, timeout: number) => {
     mocks.setDequeueDefault(sid, timeout);
   },
-  setDequeueIdle: vi.fn(),
-  isTutorialEnabled: vi.fn(() => false),
-  markTutorialToolSeen: vi.fn(() => false),
-  getSession: vi.fn(() => ({ name: "TestSession" })),
+  setDequeueIdle: (sid: number, idle: boolean) => { mocks.setDequeueIdle(sid, idle); },
+  getSession: (sid: number) => mocks.getSession(sid),
+  takeSilenceHint: (sid: number) => mocks.takeSilenceHint(sid),
+  checkConnectionToken: (sid: number, token: string | undefined) => mocks.checkConnectionToken(sid, token),
 }));
 
 vi.mock("../session-queue.js", () => ({
   getSessionQueue: (sid: number) => mocks.getSessionQueue(sid),
   getMessageOwner: (msgId: number) => mocks.getMessageOwner(msgId),
   peekSessionCategories: (sid: number) => mocks.peekSessionCategories(sid),
+  deliverServiceMessage: (targetSid: number, ...args: unknown[]) => mocks.deliverServiceMessage(targetSid, ...args),
+}));
+
+vi.mock("../routing-mode.js", () => ({
+  getGovernorSid: () => mocks.getGovernorSid(),
+}));
+
+vi.mock("../service-messages.js", () => ({
+  SERVICE_MESSAGES: {
+    DUPLICATE_SESSION_DETECTED: {
+      eventType: "duplicate_session_detected",
+      text: (sid: number, name: string) => `Duplicate session detected: SID ${sid} Name ${name}`,
+    },
+  },
 }));
 
 vi.mock("../trace-log.js", () => ({
@@ -166,6 +186,10 @@ describe("dequeue tool", () => {
     mocks.pendingCount.mockReturnValue(0);
     mocks.waitForEnqueue.mockResolvedValue(undefined);
     mocks.peekSessionCategories.mockReturnValue(undefined);
+    // Default: connection token check returns "absent" (caller omitted token)
+    mocks.checkConnectionToken.mockReturnValue("absent");
+    // Default: no governor set
+    mocks.getGovernorSid.mockReturnValue(0);
     // Default session queue for any sid proxies to the global mock fns
     mocks.getSessionQueue.mockImplementation(() => ({
       dequeueBatch: () => mocks.dequeueBatch(),
@@ -248,7 +272,7 @@ describe("dequeue tool", () => {
     const result = await call({ timeout: 1, token: 1_123_456 });
     const data = parseResult<DequeueResult>(result);
     expect(data.timed_out).toBe(true);
-    expect(data.pending).toBe(0);
+    expect(data.pending).toBeUndefined();
   });
 
   it("calls waitForEnqueue when queue is empty and timeout > 0", async () => {
@@ -1067,7 +1091,7 @@ describe("dequeue tool", () => {
       const data = parseResult<DequeueResult>(result);
       expect(data.hint).toBeDefined();
       expect(data.hint).toContain("2 voice msg pending");
-      expect(data.hint).toContain("reaction preset");
+      expect(data.hint).toContain("processing preset");
     });
 
     it("does not include hint when batch has voice but no pending voice", async () => {
@@ -1080,17 +1104,20 @@ describe("dequeue tool", () => {
       expect(data.hint).toBeUndefined();
     });
 
-    it("does not include hint when batch is text-only even if pending voice exists", async () => {
+    it("does not include voice hint when batch is text-only even if pending voice exists", async () => {
       const evt = makeEvent(103, "text only");
       mocks.dequeueBatch.mockReturnValueOnce([evt]);
       mocks.pendingCount.mockReturnValue(1);
       mocks.peekSessionCategories.mockReturnValue({ voice: 3 });
       const result = await call({ timeout: 0, token: 1_123_456 });
       const data = parseResult<DequeueResult>(result);
-      expect(data.hint).toBeUndefined();
+      // No voice backlog hint, but pending nudge IS present (pending=1)
+      expect(data.hint).toBeDefined();
+      expect(data.hint).not.toContain("voice msg pending");
+      expect(data.hint).toContain("pending=1");
     });
 
-    it("does not include hint when batch has voice but only text is pending (no voice key)", async () => {
+    it("does not include voice hint when batch has voice but only text is pending (no voice key)", async () => {
       const evt = makeVoiceEvent(104);
       mocks.dequeueBatch.mockReturnValueOnce([evt]);
       mocks.pendingCount.mockReturnValue(2);
@@ -1098,7 +1125,10 @@ describe("dequeue tool", () => {
       mocks.peekSessionCategories.mockReturnValue({ text: 2 });
       const result = await call({ timeout: 0, token: 1_123_456 });
       const data = parseResult<DequeueResult>(result);
-      expect(data.hint).toBeUndefined();
+      // No voice backlog hint, but pending nudge IS present (pending=2)
+      expect(data.hint).toBeDefined();
+      expect(data.hint).not.toContain("voice msg pending");
+      expect(data.hint).toContain("pending=2");
     });
 
     it("cascade: consecutive dequeues in a voice backlog each produce a hint", async () => {
@@ -1113,6 +1143,7 @@ describe("dequeue tool", () => {
       const data1 = parseResult<DequeueResult>(result1);
       expect(data1.hint).toBeDefined();
       expect(data1.hint).toContain("1 voice msg pending");
+      expect(data1.hint).toContain("pending=1");
 
       // Second dequeue: returns v2, 0 voice pending (backlog exhausted)
       mocks.dequeueBatch.mockReturnValueOnce([v2]);
@@ -1121,6 +1152,58 @@ describe("dequeue tool", () => {
       const result2 = await call({ timeout: 0, token: 1_123_456 });
       const data2 = parseResult<DequeueResult>(result2);
       expect(data2.hint).toBeUndefined();
+    });
+  });
+
+  // =========================================================================
+  // Pending-queue nudge hint
+  // =========================================================================
+
+  describe("pending-queue nudge hint", () => {
+    it("does not include pending nudge hint when pending is 0", async () => {
+      const evt = makeEvent(200, "no backlog");
+      mocks.dequeueBatch.mockReturnValueOnce([evt]);
+      mocks.pendingCount.mockReturnValue(0);
+      const result = await call({ timeout: 0, token: 1_123_456 });
+      const data = parseResult<DequeueResult>(result);
+      expect(data.pending).toBeUndefined();
+      // hint should not contain a pending nudge; it may be undefined or contain
+      // other hints (e.g. silence/voice) — just confirm no pending nudge text
+      expect(data.hint ?? "").not.toContain("pending=");
+    });
+
+    it("includes pending nudge hint with correct N when pending > 0", async () => {
+      // peekSessionCategories is not mocked here: the voice hint requires a voice
+      // event in the batch; this is a text event so the voice hint cannot fire.
+      const evt = makeEvent(201, "has backlog");
+      mocks.dequeueBatch.mockReturnValueOnce([evt]);
+      mocks.pendingCount.mockReturnValue(2);
+      const result = await call({ timeout: 0, token: 1_123_456 });
+      const data = parseResult<DequeueResult>(result);
+      expect(data.pending).toBe(2);
+      expect(data.hint).toBeDefined();
+      expect(data.hint).toContain("pending=2");
+      expect(data.hint).toContain("processing preset");
+    });
+
+    it("pending nudge hint reflects the exact pending count", async () => {
+      const evt = makeEvent(202, "large backlog");
+      mocks.dequeueBatch.mockReturnValueOnce([evt]);
+      mocks.pendingCount.mockReturnValue(7);
+      const result = await call({ timeout: 0, token: 1_123_456 });
+      const data = parseResult<DequeueResult>(result);
+      expect(data.hint).toContain("pending=7");
+    });
+
+    it("pending nudge coexists with voice backlog hint in hint string", async () => {
+      const evt = makeVoiceEvent(203);
+      mocks.dequeueBatch.mockReturnValueOnce([evt]);
+      mocks.pendingCount.mockReturnValue(3);
+      mocks.peekSessionCategories.mockReturnValue({ voice: 3 });
+      const result = await call({ timeout: 0, token: 1_123_456 });
+      const data = parseResult<DequeueResult>(result);
+      expect(data.hint).toContain("voice msg pending");
+      expect(data.hint).toContain("pending=3");
     });
   });
 
@@ -1163,6 +1246,232 @@ describe("dequeue tool", () => {
       } finally {
         Date.now = realDateNow;
       }
+    });
+  });
+
+  // =========================================================================
+  // Option A — Duplicate session detection (connection_token mismatch)
+  // =========================================================================
+
+  describe("duplicate session detection (Option A)", () => {
+    // Valid v4 UUIDs for use across tests
+    const UUID_A = "550e8400-e29b-41d4-a716-446655440000";
+    const UUID_B = "6ba7b810-9dad-41d1-80b4-00c04fd430c8";
+
+    it("does not alert governor when connection_token matches stored token", async () => {
+      const evt = makeEvent(1, "hello");
+      mocks.dequeueBatch.mockReturnValueOnce([evt]);
+      mocks.checkConnectionToken.mockReturnValue("match");
+      mocks.getGovernorSid.mockReturnValue(2); // governor exists
+
+      const result = await call({ token: 1_123_456, timeout: 0, connection_token: UUID_A });
+      expect(isError(result)).toBe(false);
+      // Governor should NOT be alerted on a match
+      expect(mocks.deliverServiceMessage).not.toHaveBeenCalled();
+    });
+
+    it("does not alert governor when connection_token is absent (legacy caller)", async () => {
+      const evt = makeEvent(2, "no token");
+      mocks.dequeueBatch.mockReturnValueOnce([evt]);
+      mocks.checkConnectionToken.mockReturnValue("absent");
+      mocks.getGovernorSid.mockReturnValue(2);
+
+      await call({ token: 1_123_456, timeout: 0 }); // no connection_token
+      expect(mocks.deliverServiceMessage).not.toHaveBeenCalled();
+    });
+
+    it("alerts governor when connection_token mismatches stored token", async () => {
+      const evt = makeEvent(3, "duplicate");
+      const mockSessionQueue = {
+        dequeueBatch: vi.fn(() => [evt] as TimelineEvent[]),
+        pendingCount: vi.fn(() => 0),
+        waitForEnqueue: vi.fn().mockResolvedValue(undefined),
+      };
+      mocks.getSessionQueue.mockImplementation((sid: number) =>
+        sid === 1 ? mockSessionQueue : undefined,
+      );
+      mocks.checkConnectionToken.mockReturnValue("mismatch");
+      mocks.getGovernorSid.mockReturnValue(2); // governor is SID 2
+
+      await call({ token: 1_123_456, timeout: 0, connection_token: UUID_B });
+
+      // Governor (SID 2) should receive a service message alert
+      expect(mocks.deliverServiceMessage).toHaveBeenCalledWith(
+        2,
+        expect.stringContaining("Duplicate session detected"),
+        "duplicate_session_detected",
+        expect.objectContaining({ sid: 1 }),
+      );
+    });
+
+    it("does not alert when governor sid is 0 (no governor set)", async () => {
+      const evt = makeEvent(4, "no governor");
+      mocks.dequeueBatch.mockReturnValueOnce([evt]);
+      mocks.checkConnectionToken.mockReturnValue("mismatch");
+      mocks.getGovernorSid.mockReturnValue(0); // no governor
+
+      await call({ token: 1_123_456, timeout: 0, connection_token: UUID_A });
+      // No governor to alert — silently drops
+      expect(mocks.deliverServiceMessage).not.toHaveBeenCalled();
+    });
+
+    it("does not alert governor when the duplicate IS the governor (avoids self-alert)", async () => {
+      const evt = makeEvent(5, "self alert guard");
+      mocks.dequeueBatch.mockReturnValueOnce([evt]);
+      mocks.checkConnectionToken.mockReturnValue("mismatch");
+      mocks.getGovernorSid.mockReturnValue(1); // governor SID == caller SID
+
+      await call({ token: 1_123_456, timeout: 0, connection_token: UUID_B });
+      // Governor === duplicate session: skip alert to avoid self-delivery
+      expect(mocks.deliverServiceMessage).not.toHaveBeenCalled();
+    });
+
+    it("still returns valid dequeue result even after a mismatch alert", async () => {
+      const evt = makeEvent(6, "still proceeds");
+      const mockSessionQueue = {
+        dequeueBatch: vi.fn(() => [evt] as TimelineEvent[]),
+        pendingCount: vi.fn(() => 0),
+        waitForEnqueue: vi.fn().mockResolvedValue(undefined),
+      };
+      mocks.getSessionQueue.mockImplementation((sid: number) =>
+        sid === 1 ? mockSessionQueue : undefined,
+      );
+      mocks.checkConnectionToken.mockReturnValue("mismatch");
+      mocks.getGovernorSid.mockReturnValue(2);
+
+      const result = await call({ token: 1_123_456, timeout: 0, connection_token: UUID_A });
+      // Call must NOT be rejected — the duplicate alert is advisory only
+      expect(isError(result)).toBe(false);
+      const data = parseResult<DequeueResult>(result);
+      expect(data.updates).toBeDefined();
+      expect(data.updates[0].id).toBe(6);
+    });
+
+    it("does not call checkConnectionToken when sid is 0", async () => {
+      // sid=0 is the no-session sentinel — skip duplicate check
+      const mockQueue0 = {
+        dequeueBatch: vi.fn(() => [] as TimelineEvent[]),
+        pendingCount: vi.fn(() => 0),
+        waitForEnqueue: vi.fn().mockResolvedValue(undefined),
+      };
+      mocks.getSessionQueue.mockImplementation((sid: number) =>
+        sid === 0 ? mockQueue0 : undefined,
+      );
+      await call({ token: 123456, timeout: 0, connection_token: UUID_B });
+      expect(mocks.checkConnectionToken).not.toHaveBeenCalled();
+    });
+  });
+
+  // =========================================================================
+  // Option B — Dead session explicit error (existing behavior confirmed)
+  // =========================================================================
+
+  describe("dead session explicit error (Option B)", () => {
+    it("returns session_closed with isError: false when no session queue exists", async () => {
+      mocks.getSessionQueue.mockReturnValue(undefined);
+      const result = await call({ token: 5_001_234 });
+      expect(isError(result)).toBe(false);
+      const data = parseResult(result);
+      expect(data.error).toBe("session_closed");
+      expect(typeof data.message).toBe("string");
+      expect((data.message as string).length).toBeGreaterThan(0);
+    });
+
+    it("includes the SID in the session_closed message", async () => {
+      mocks.getSessionQueue.mockReturnValue(undefined);
+      const result = await call({ token: 13_001_234 });
+      const data = parseResult(result);
+      expect(data.error).toBe("session_closed");
+      expect((data.message as string)).toContain("13");
+    });
+
+    it("does not set setActiveSession on session_closed path", async () => {
+      mocks.getSessionQueue.mockReturnValue(undefined);
+      await call({ token: 8_001_234 });
+      expect(mocks.setActiveSession).not.toHaveBeenCalled();
+    });
+  });
+
+  // =========================================================================
+  // response_format: "compact" — omits empty/timed_out fields
+  // =========================================================================
+
+  describe("response_format: compact", () => {
+    it("compact: omits empty:true on instant poll (timeout:0, empty queue)", async () => {
+      mocks.dequeueBatch.mockReturnValue([]);
+      const result = await call({ timeout: 0, token: 1_123_456, response_format: "compact" });
+      expect(isError(result)).toBe(false);
+      const data = parseResult<DequeueResult>(result);
+      expect(data.empty).toBeUndefined();
+      // pending is still present
+      expect(data.pending).toBe(0);
+    });
+
+    it("compact: timed_out:true is present when blocking wait expires (always emitted)", async () => {
+      mocks.dequeueBatch.mockReturnValue([]);
+      mocks.waitForEnqueue.mockImplementation(
+        () => new Promise<void>((r) => setTimeout(r, 50)),
+      );
+      const result = await call({ timeout: 1, token: 1_123_456, response_format: "compact" });
+      expect(isError(result)).toBe(false);
+      const data = parseResult<DequeueResult>(result);
+      expect(data.timed_out).toBe(true);
+    });
+
+    it("default: empty:true is present on instant poll (response_format: default)", async () => {
+      mocks.dequeueBatch.mockReturnValue([]);
+      const result = await call({ timeout: 0, token: 1_123_456, response_format: "default" });
+      const data = parseResult<DequeueResult>(result);
+      expect(data.empty).toBe(true);
+    });
+
+    it("default: timed_out:true is present when blocking wait expires (response_format: default)", async () => {
+      mocks.dequeueBatch.mockReturnValue([]);
+      mocks.waitForEnqueue.mockImplementation(
+        () => new Promise<void>((r) => setTimeout(r, 50)),
+      );
+      const result = await call({ timeout: 1, token: 1_123_456, response_format: "default" });
+      const data = parseResult<DequeueResult>(result);
+      expect(data.timed_out).toBe(true);
+    });
+
+    it("omitted response_format: empty:true is present (backward compat)", async () => {
+      mocks.dequeueBatch.mockReturnValue([]);
+      const result = await call({ timeout: 0, token: 1_123_456 });
+      const data = parseResult<DequeueResult>(result);
+      expect(data.empty).toBe(true);
+    });
+
+    it("omitted response_format: timed_out:true is present (backward compat)", async () => {
+      mocks.dequeueBatch.mockReturnValue([]);
+      mocks.waitForEnqueue.mockImplementation(
+        () => new Promise<void>((r) => setTimeout(r, 50)),
+      );
+      const result = await call({ timeout: 1, token: 1_123_456 });
+      const data = parseResult<DequeueResult>(result);
+      expect(data.timed_out).toBe(true);
+    });
+
+    it("compact has no effect on batch responses — shape is identical to default", async () => {
+      const evt = makeEvent(42, "batch event");
+      mocks.dequeueBatch.mockReturnValueOnce([evt]);
+      mocks.pendingCount.mockReturnValue(1);
+      const resultCompact = await call({ timeout: 0, token: 1_123_456, response_format: "compact" });
+      const dataCompact = parseResult<DequeueResult>(resultCompact);
+      expect(dataCompact.updates).toHaveLength(1);
+      expect(dataCompact.updates[0].id).toBe(42);
+      expect(dataCompact.pending).toBe(1);
+
+      mocks.dequeueBatch.mockReturnValueOnce([evt]);
+      mocks.pendingCount.mockReturnValue(1);
+      const resultDefault = await call({ timeout: 0, token: 1_123_456, response_format: "default" });
+      const dataDefault = parseResult<DequeueResult>(resultDefault);
+      expect(dataDefault.updates).toHaveLength(1);
+      expect(dataDefault.updates[0].id).toBe(42);
+      expect(dataDefault.pending).toBe(1);
+
+      // Compact and default batch shapes are identical
+      expect(JSON.stringify(dataCompact)).toBe(JSON.stringify(dataDefault));
     });
   });
 });

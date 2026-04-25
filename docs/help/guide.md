@@ -1,40 +1,5 @@
 # Agent Guide: Telegram Bridge MCP
 
-## What is this server?
-
-This is **Telegram Bridge MCP** — a Model Context Protocol server that bridges you (the AI assistant) to a Telegram bot. You can send messages, ask questions, present choices, react to messages, and receive replies through Telegram.
-
-**Platform-agnostic by design.** Works with any MCP-compatible host: VS Code Copilot, Claude Code, Cursor, or any framework that speaks MCP. Claude, GPT, Gemini, and local models all work identically.
-
-**Your role:** You are the bot. The user communicates via their Telegram client. Everything you send appears instantly in their chat; everything they send comes back as structured tool results.
-
-**Single-user server.** The bot is locked to one Telegram user (`ALLOWED_USER_ID`) via environment config. You are never talking to strangers.
-
----
-
-## Personality & communication style
-
-- **Concise.** Telegram is a messaging app. Say what matters.
-- **Proactive.** Announce before significant work; confirm after.
-- **Conversational.** Be direct and human. Avoid filler like "Certainly!" or "Great question!".
-- **Responsive.** React to messages with emoji instead of "Got it" texts.
-- **Decisive.** When you have enough information to act, act.
-
----
-
-## Session startup
-
-When starting a new session with this MCP:
-
-1. Call `help(topic: "guide")` to load behavioral rules.
-2. Read the `telegram-bridge-mcp://communication-guide` resource — compact communication patterns, tool selection rules, and loop behavior.
-3. Call `action(type: "session/start")` — sends an intro message and handles pending messages from a previous session (offers Resume / Start Fresh if any exist).
-4. Enter the `dequeue` loop — call with no arguments to block up to 300 s (the default).
-
-**`help` tool:** Call `help()` for a tool overview, `help(topic: "guide")` for this guide, or `help(topic: "<tool>")` for per-tool documentation.
-
-**Transport:** The server supports both stdio and streaming HTTP transports. HTTP clients that reconnect after a drop should keep using their existing session token if they still have it. If the token was lost, use `action(type: "session/reconnect", name: "…")` to recover the same session token after operator re-authorization.
-
 **`dequeue` is the sole tool for receiving updates.** It handles messages, voice (pre-transcribed), commands, reactions, and callback queries in a single unified queue. The response lane (reactions and callbacks) drains before the message lane on each call.
 
 ### `dequeue` loop pattern
@@ -57,6 +22,22 @@ Normal drain-then-block sequence:
 
 `pending` (included when more updates are queued) tells you how many items are still waiting. When `pending > 0`, skip straight to another `dequeue(max_wait: 0)` instead of blocking.
 
+### Compact mode (`response_format: "compact"`)
+
+Pass `response_format: "compact"` to any `dequeue` call to reduce token usage (~445 tokens/session saved). In compact mode, certain always-inferrable fields are omitted:
+
+- **Empty poll result:** `empty: true` is suppressed. Infer empty from the *absence* of an `updates` key.
+- **Timeout:** `timed_out: true` is **always** emitted (never suppressed) — so a `timed_out` key still signals the timeout case reliably.
+
+Compact mode drain-then-block pattern:
+
+```text
+Default:  if (result.empty) { /* empty */ } else if (result.timed_out) { /* timeout */ } else { /* process result.updates */ }
+Compact:  if (!result.updates) { /* empty — no updates key means empty poll */ } else if (result.timed_out) { /* timeout — always present */ } else { /* process result.updates */ }
+```
+
+`response_format` defaults to `"default"` — no existing calls are affected unless you opt in.
+
 ### Handling a full timeout
 
 When `dequeue()` returns `{ timed_out: true }` after a full blocking wait (not a `max_wait: 0` drain poll), 5 minutes have passed with no activity. Do not silently loop:
@@ -76,15 +57,9 @@ Use `action(type: "message/get", message_id: ...)` to retrieve a previously seen
 
 The operator should **always** know what you are doing. Silence is confusing.
 
-**While working:** Send frequent `send(type: "notification")` (silent) updates — brief, one per significant action (editing a file, running a command, thinking about a design decision).
-
-**When done:** Explicitly say so. Never leave an animation running or go silent while waiting for input. Cancel any animation and send a completion message before entering a wait.
-
-**Rule: never confuse working with waiting.** An active animation while idle misleads the operator.
-
 Before any significant action, send a **silent** `send(type: "notification", disable_notification: true)`: title = short action label, text = brief description of what and why.
 
-**On completion:** Send a `send(type: "notification")` with the outcome whenever a task took meaningful time — even outside an active loop. Use `severity: "success"` or `severity: "error"`. The user may have walked away; a completion notification is how they know to come back.
+**When done:** Cancel any active animation, send a completion `send(type: "notification")` with `severity: "success"` or `severity: "error"`. Never go silent while waiting for input — silence is indistinguishable from stuck.
 
 ---
 
@@ -94,8 +69,6 @@ When you receive a message with `reply_to_message_id`, the user is responding to
 
 - Acknowledge which message they're replying to if relevant.
 - Use `reply_to_message_id` when sending your response — this creates a visible quote block.
-
-When sending a follow-up about a specific earlier message, reply to that message rather than sending standalone.
 
 ---
 
@@ -109,7 +82,7 @@ Never treat a pre-existing message as an answer to a question you just asked.
 
 ## Tool usage: `send(type: "question")` for confirmations
 
-**Never** ask a finite-answer question using `send(type: "notification")`/`send(type: "text")` + `dequeue` or `send(type: "question", ask: "...")`.  
+**Never** ask a finite-answer question using `send(type: "notification")`/`send(type: "text")` + `dequeue` or `send(type: "question", ask: "...")`.
 Whenever the user's response can be one of a predictable set of options — yes/no, proceed/cancel, option A/B/C — use `send(type: "question", choose: [...])` with labeled buttons.
 
 Only use `send(type: "question", ask: "...")` or `dequeue` for truly open-ended free-text input where choices cannot be enumerated.
@@ -319,26 +292,15 @@ The bot must be in the Always Allow exceptions list. The base setting can stay a
 
 ## Reactions from the user
 
-`DEFAULT_ALLOWED_UPDATES` includes `"message_reaction"` so user reactions come through.
-
-- `dequeue` returns reaction events with `content.type: "reaction"` containing `added` and `removed` emoji arrays.
-- Reactions arrive on the response lane (higher priority than messages).
-
-Use this to acknowledge what the user reacted to and adapt behavior accordingly.
+`dequeue` returns reaction events with `content.type: "reaction"` containing `added` and `removed` emoji arrays. Reactions arrive on the response lane (higher priority than messages).
 
 ---
 
 ## Received file handling
 
-When `dequeue` returns an event with a non-text `content.type`, **always ask the user what to do — never read or process the file automatically.**
+When `dequeue` returns an event with a non-text `content.type`, **always ask the user what to do — never read or process the file automatically.** Do not call `action(type: "download")` until the user has selected an action requiring it — the file name and MIME type from `dequeue` are sufficient to present the choice.
 
 Optionally react with 👀 to signal receipt, then use `send(type: "question", choose: [...])` with inferred action buttons.
-
-### Core rule: always ask first, download only when needed
-
-Do **not** call `action(type: "download")` until the user has selected an action that requires it. The metadata returned by `dequeue` (file name, MIME type) is sufficient to present the choice.
-
-Never silently download, read, or process a received file without explicit instruction.
 
 ### Handling batched file uploads
 
@@ -403,8 +365,6 @@ The message store records all inbound and outbound events automatically. The rol
 
 **Key rules:**
 
-- The timeline is **always on** and in-memory only. It does not persist across server restarts.
-- The timeline is a rolling window — oldest events are evicted when the 1000-event limit is reached.
 - `dump_session_record()` contains sensitive user content. Only call when the user explicitly requests session history, context recovery, or an audit.
 - The document caption includes the `file_id` in monospace for crash recovery.
 - Use `action(type: "download")` with the returned `file_id` to retrieve the JSON content.
@@ -465,7 +425,7 @@ When 2+ agent sessions are active simultaneously, additional rules apply.
 
 ### Session identity
 
-`action(type: "session/start")` returns a `sid` (session ID), your session `name` (if set), a `discarded` count (always 0 when no pending messages were discarded), and a `fellow_sessions` list of co-active agents (always present; empty array in single-session).
+`action(type: "session/start")` returns a `sid` (session ID), your session `name` (if set), a `discarded` count, and a `fellow_sessions` list of co-active agents (empty array in single-session).
 
 Your outbound messages automatically include a `🤖 YourName` header line — you do not need to add it manually.
 
@@ -508,7 +468,7 @@ Governor status transfers automatically when sessions close — the next lowest-
 
 **Always set a topic** when starting a session, especially in multi-session mode. Topics serve as at-a-glance identifiers and guide routing decisions.
 
-Good topics: `Refactoring animation state`, `Reviewing PR #40`, `Overseeing v4 branch`  
+Good topics: `Refactoring animation state`, `Reviewing PR #40`, `Overseeing v4 branch`
 Bad topics: `Working`, `Agent`, `Session 2`
 
 ### Inter-session communication
@@ -568,6 +528,18 @@ When `sessions_active > 1`, a parallel agent may be working on related tasks. Ch
 
 ---
 
+## Server message severity tiers
+
+The server communicates with agents through two distinct channels with different interruption weights:
+
+**Service messages** are interruption-worthy events injected directly into the `dequeue` stream as first-class update objects. Reserve service messages for situations that require the agent to change behavior immediately and cannot be ignored: for example, a `shutdown` event (the server is exiting — stop the dequeue loop, wait for restart) or a `forced_stop` recovery event (the previous session ended uncleanly — take corrective action before resuming). Service messages break normal flow by design.
+
+**Envelope hints** are lightweight, in-band nudges attached to an existing dequeue response as a `hint` string. They are informational and non-disruptive — the agent processes its update normally and may act on the hint at its own discretion. Examples: a pending-backlog reaction suggestion (`pending=N; react with processing preset to signal you see the backlog`) appended when `pending > 0`, or a voice-backlog note advising the agent that additional voice messages are queued. Envelope hints are space-joined to the `hint` field of the response envelope; they do not add new top-level fields and do not interrupt the current task.
+
+When adding a new server-to-agent signal, use this rule: if missing the signal could cause data loss, user-visible failure, or require operator intervention, it is a service message. If it is a suggestion that helps efficiency or visibility but can safely be ignored, it is an envelope hint.
+
+---
+
 ## Loop Guard: Keeping Agents Alive
 
 ### Why the dequeue loop must never exit
@@ -591,12 +563,3 @@ The loop guard hooks intercept the host's Stop event before the agent conversati
 | `.claude/hooks/telegram-loop-guard.sh` | Claude Code | macOS / Linux (Bash) |
 
 See [`docs/agent-setup.md`](agent-setup.md) for step-by-step installation instructions.
-
-### What happens without the hook
-
-- The host IDE may terminate the agent conversation after inactivity, a context limit, or any unhandled stop condition.
-- The Telegram session is silently dropped — the operator receives no notification.
-- Pending messages queue up and are delivered to the next agent that calls `action(type: "session/start")`.
-- If another agent is not started promptly, the operator sees silence with no indication the session ended.
-
-The hook is not strictly required for basic use, but strongly recommended for long-lived or unattended sessions.

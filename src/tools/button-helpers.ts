@@ -210,20 +210,22 @@ async function appendSuffixAndEdit(
   text: string,
   suffix: string,
   isVoice?: boolean,
+  replyMarkup?: { inline_keyboard: { text: string; callback_data: string; style?: ButtonStyle }[][] },
 ): Promise<void> {
+  const markup = replyMarkup ?? { inline_keyboard: [] };
   if (isVoice) {
     await getApi()
       .editMessageCaption(chatId, messageId, {
         caption: markdownToV2(`${text}\n\n${suffix}`),
         parse_mode: "MarkdownV2",
-        reply_markup: { inline_keyboard: [] },
+        reply_markup: markup,
       })
       .catch((e: unknown) => { console.error("[button-helpers] editMessageCaption failed:", e); });
   } else {
     await getApi()
       .editMessageText(chatId, messageId, markdownToV2(`${text}\n\n${suffix}`), {
         parse_mode: "MarkdownV2",
-        reply_markup: { inline_keyboard: [] },
+        reply_markup: markup,
       })
       .catch((e: unknown) => { console.error("[button-helpers] editMessageText failed:", e); });
   }
@@ -231,7 +233,9 @@ async function appendSuffixAndEdit(
 
 /**
  * Acknowledges a callback_query (removes the Telegram spinner) and edits the
- * host message to show ▸ chosenLabel with all buttons removed.
+ * host message to show ▸ chosenLabel. When highlightedRows is provided the
+ * keyboard is updated to mark the clicked button as primary; otherwise all
+ * buttons are removed.
  */
 export async function ackAndEditSelection(
   chatId: number,
@@ -240,13 +244,65 @@ export async function ackAndEditSelection(
   chosenLabel: string,
   callbackQueryId: string | undefined,
   isVoice?: boolean,
+  highlightedRows?: { text: string; callback_data: string; style?: ButtonStyle }[][],
 ): Promise<void> {
+  if (callbackQueryId) {
+    await getApi()
+      .answerCallbackQuery(callbackQueryId)
+      .catch((e: unknown) => { console.error('[ackAndEditSelection] answerCallbackQuery failed:', e); });
+  }
+  const replyMarkup = highlightedRows ? { inline_keyboard: highlightedRows } : undefined;
+  await appendSuffixAndEdit(chatId, messageId, originalText, `▸ *${chosenLabel}*`, isVoice, replyMarkup);
+}
+
+/**
+ * Perform a two-stage highlight-then-collapse for one-shot choice callbacks:
+ *
+ * Stage 1 (immediate): Answer the callback query (removes Telegram spinner) and
+ *   edit the keyboard so the chosen button is highlighted while all others are
+ *   stripped plain. The message text is NOT changed yet.
+ *
+ * Stage 2 (~delayMs later): Remove the keyboard entirely and append the
+ *   "▸ label" selection suffix to the message text — matching the end state of
+ *   send(type:"question") / choose.
+ *
+ * Race condition: if a second tap arrives between stage 1 and stage 2, the
+ * keyboard is already in collapse-pending state. Intended behaviour: ignore —
+ * the keyboard is being removed and any additional callback query for this
+ * message will be acked-only by the caller's hook (which is one-shot and won't
+ * re-enter this path). This is acceptable because the user already committed
+ * to a choice in stage 1.
+ *
+ * @param delayMs - Milliseconds between stage 1 and stage 2. Default 150 ms.
+ */
+export async function highlightThenCollapse(
+  chatId: number,
+  messageId: number,
+  originalText: string,
+  chosenLabel: string,
+  callbackQueryId: string | undefined,
+  highlightedRows: { text: string; callback_data: string; style?: ButtonStyle }[][],
+  delayMs = 150,
+): Promise<void> {
+  // Stage 1: ack spinner + show highlight keyboard immediately.
   if (callbackQueryId) {
     await getApi()
       .answerCallbackQuery(callbackQueryId)
       .catch(() => {/* non-fatal */});
   }
-  await appendSuffixAndEdit(chatId, messageId, originalText, `▸ *${chosenLabel}*`, isVoice);
+  // Edit only the reply_markup (no text change yet) — keyboard shows highlight.
+  await getApi()
+    .editMessageReplyMarkup(chatId, messageId, { reply_markup: { inline_keyboard: highlightedRows } })
+    .catch((e: unknown) => { console.error("[button-helpers] highlightThenCollapse stage-1 failed:", e); });
+
+  // Stage 2: collapse after brief delay — remove keyboard and append suffix.
+  await new Promise<void>((r) => setTimeout(r, delayMs));
+  // Must pass reply_markup: { inline_keyboard: [] } explicitly; editMessageText alone
+  // does NOT clear an existing inline keyboard.
+  // isVoice is always false here: highlightThenCollapse is only used by send_choice
+  // (non-blocking keyboard), which is a text message context. Voice context is handled
+  // by choose/confirm via ackAndEditSelection which has an explicit isVoice parameter.
+  await appendSuffixAndEdit(chatId, messageId, originalText, `▸ *${chosenLabel}*`, false, { inline_keyboard: [] });
 }
 
 /**
@@ -301,6 +357,33 @@ export function buildKeyboardRows(
     );
   }
   return rows;
+}
+
+/**
+ * Rebuild keyboard rows for the highlight step of a one-shot choice:
+ * - The clicked button keeps its original style, or falls back to "primary".
+ * - All other buttons have their style stripped (plain Telegram default — no color).
+ *
+ * This creates a clear visual "winner" before the keyboard collapses entirely
+ * in the subsequent collapse step (~150 ms later).
+ */
+export function buildHighlightedRows(
+  options: KeyboardOption[],
+  columns: number,
+  clickedValue: string,
+): { text: string; callback_data: string; style?: ButtonStyle }[][] {
+  return buildKeyboardRows(
+    options.map((o) => {
+      if (o.value === clickedValue) {
+        // Keep original style if set; fall back to primary as highlight indicator.
+        return { ...o, style: (o.style ?? "primary") as ButtonStyle };
+      }
+      // Strip style from all non-clicked buttons so they appear plain.
+      const { style: _dropped, ...rest } = o;
+      return rest;
+    }),
+    columns,
+  );
 }
 
 export interface SendChoiceMessageOptions {

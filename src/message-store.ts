@@ -2,7 +2,7 @@
  * Always-on message store — the core of V3.
  *
  * Two access patterns over one set of objects:
- *   1. Timeline: ordered event log (dump_session_record)
+ *   1. Timeline: ordered event log (get_chat_history)
  *   2. Index:    Map<message_id, Map<version, event>> (get_message)
  *
  * Both point to the same TimelineEvent objects — no duplication.
@@ -697,7 +697,7 @@ export function getVersions(messageId: number): number[] {
 }
 
 // ---------------------------------------------------------------------------
-// Timeline dump — full event log for dump_session_record
+// Timeline dump — full event log
 // ---------------------------------------------------------------------------
 
 /**
@@ -780,6 +780,33 @@ export function resetStoreForTest(): void {
 /** Register a one-shot auto-lock hook for a send_choice message. */
 export function registerCallbackHook(messageId: number, fn: CallbackHookFn, ownerSid?: number): void {
   _callbackHooks.set(messageId, fn);
+  if (ownerSid !== undefined && ownerSid > 0) {
+    _callbackHookOwners.set(messageId, ownerSid);
+  }
+}
+
+/**
+ * Register a persistent hook that re-registers itself after each fire.
+ * Used by send_choice in persistent/multi-tap mode so every button press
+ * invokes the hook — not just the first one.
+ *
+ * The hook stays alive until the message is explicitly removed via
+ * clearCallbackHook, replaceSessionCallbackHooks (session teardown), or
+ * resetStoreForTest. Errors inside the hook are non-fatal (swallowed by
+ * the caller in recordInbound).
+ */
+export function registerPersistentCallbackHook(messageId: number, fn: CallbackHookFn, ownerSid?: number): void {
+  const wrapper: CallbackHookFn = (evt) => {
+    // Re-register BEFORE calling fn so the hook is live again immediately,
+    // even if fn is async (fire-and-forget — no await here).
+    //
+    // Safe because JS is single-threaded: recordInbound deletes the hook before
+    // calling it, and we re-register synchronously before fn(evt) — so the hook
+    // is live again before any subsequent callback event can be processed.
+    registerPersistentCallbackHook(messageId, fn, ownerSid);
+    fn(evt);
+  };
+  _callbackHooks.set(messageId, wrapper);
   if (ownerSid !== undefined && ownerSid > 0) {
     _callbackHookOwners.set(messageId, ownerSid);
   }

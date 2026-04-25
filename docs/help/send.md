@@ -3,6 +3,8 @@ send — Send a message or route to a specialized mode.
 Pass `type` to select a mode. Omit all args to list available types.
 Default mode (no `type` or `type: "text"`) sends a plain text message.
 
+> **`type` is optional** — omitting it defaults to `"text"`. The `"text"` handler supports text-only, audio-only, and audio+text (voice note with caption) automatically. There is no `"hybrid"` type — pass `audio` and/or `text` without specifying `type` and it works.
+
 ## Available Types
 
 | type | Purpose | Key required params |
@@ -57,9 +59,6 @@ is passed; the bridge builds the full accumulated string.
   supported.
 - Telegram rate-limits edits to approximately 1 edit/second per message. Rapid
   appends may be throttled; the bridge will surface the API error if this occurs.
-- In rare cases Telegram's API returns `true` instead of a message object. The
-  bridge handles this gracefully by returning
-  `{ message_id: <original_id>, length: <previous_length> }`.
 - Passing an empty `text` string when the message already has content will append
   only the separator (e.g. `"existing\n"`). To avoid this, validate that `text`
   is non-empty before calling append.
@@ -88,18 +87,21 @@ send(type: "append", token: <token>, message_id, text: "…", separator: " ")
 
 ## Other Modes (brief)
 
-**text** — Auto-splits messages over 4096 chars. Markdown auto-converted to
-MarkdownV2. Pass `audio` for TTS voice note. Both text+audio → caption + voice.
-Reply threading: pass `reply_to: <message_id>`.
+**text** — Reply threading: pass `reply_to: <message_id>`.
 
-**Hybrid:** `send(type: "text", text: "...", audio: "...")` → voice note + text caption in one msg.
+**Audio + Text (`"text"` type):** `send(type: "text", text: "...", audio: "...")` → voice note + text caption in one msg.
 Use for urgent updates where operator may be away from phone.
-Pattern: voice = full detail, caption = TL;DR.
+Two valid patterns: (1) long fluid audio + brief caption — audio carries the explanation, caption is a topic label only; (2) short orienting audio + long structured text — audio frames the payload, text carries it.
+**Hard rule:** never restate audio content in the caption, even paraphrased — Telegram may transcribe voice notes automatically — caption restatement adds noise. Caption must add something audio cannot (topic label, structured payload, link). See help('audio') for full guide.
+Good: audio = "Diagnosis. TMCP help send hybrid guidance is underspecified…" | caption = "TMCP bug located. See help('send') hybrid section."
+Bad:  audio = "TMCP's help send guidance is underspecified…"               | caption = "TMCP's help send guidance is underspecified."
 In `type: "text"` mode, buttons can't be added to that same msg — send a
 `send(type: "question", confirm: "...")`/yes-no prompt immediately after if response is needed.
 If you need audio + caption + inline buttons in one message, use interactive
 modes such as `send(type: "question", choose: [...], audio: "...")`,
 `send(type: "choice", options: [...], audio: "...")`, or `send(type: "question", confirm: "...")`.
+
+**Async default for audio:** When `audio` is present, the send is async by default — returns `{ message_id_pending, status: "queued" }` immediately; result delivered via `dequeue` as a `send_callback` event. Pass `async: false` to force synchronous execution (blocks until TTS completes, returns real `message_id`). Non-audio sends are always synchronous.
 
 **notification** — Formatted block with severity emoji header. Required: `title`.
 Optional: `text`, `severity` (info/success/warning/error). Silent by default.

@@ -2,6 +2,17 @@ reactions — Reaction protocol for agent sessions.
 
 Reactions are acknowledgments, not action triggers. Never mutate state from a reaction.
 
+## Emoji semantics
+
+| Emoji | Meaning | When to use |
+| --- | --- | --- |
+| 👌 | Weakest ack — "received, no commitment" | Message noted; not committing to action |
+| 👍 | Strong ack — "received, will do" | Committing to act on this message |
+| 🫡 | Auto-salute — auto-fired on voice dequeue | Do not send manually; override only to convey meaning beyond receipt |
+| ❤️+ | Reserved for meaning | High-valence reactions; use sparingly and only when the emotion is real |
+
+Common drift: confusing 👌 with 🆗 (regional indicator); using 👍 as the default/weakest ack. 👌 is weakest; 👍 commits.
+
 ## Voice vs. text
 
 - **Voice messages** are auto-saluted on dequeue with 🫡. Override only when you need to convey additional meaning (e.g. `react(preset: "processing")` during long work).
@@ -22,6 +33,23 @@ Reactions are acknowledgments, not action triggers. Never mutate state from a re
 - Some emojis are temporary by default: 🤔, 👀, ⏳, ✍, 👨‍💻. They auto-revert on the next outbound action from your session.
 - All other emojis are permanent by default.
 - Pass `temporary: true` to force auto-revert, or `temporary: false` to pin a normally-temporary emoji. Explicit always wins.
+
+## Unsupported emoji fallback
+
+Some emoji are commonly used by agents but are not accepted by Telegram as reactions (e.g. 👂 ear, 🤚 raised hand, 🧠 brain, 👁 single eye, 🦻 ear with hearing aid). Rather than failing, the bridge remaps these to the closest supported semantic equivalent and returns a hint:
+
+```json
+{
+  "ok": true,
+  "temporary": true,
+  "hint": "emoji_alias_applied",
+  "hint_detail": "👂 is not a supported Telegram reaction. Used 👀 (closest semantic alias). The fallback uses the same temporality rules as the alias target directly."
+}
+```
+
+The response also includes standard fields from the normal routing path such as `temporary`, `restore_emoji`, and `timeout_seconds`, reflecting the actual routing taken after substitution.
+
+This applies to the single-emoji path only. The alias target is substituted and then routed normally — including `temporary`, `timeout_seconds`, and TEMPORARY_BY_DEFAULT rules. Unknown unsupported emoji (with no semantic mapping) still return `REACTION_EMOJI_INVALID`.
 
 ## Constraints
 

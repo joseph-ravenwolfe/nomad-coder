@@ -1,8 +1,9 @@
-import { vi, describe, it, expect, beforeEach } from "vitest";
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   answerCallbackQuery: vi.fn(),
   editMessageText: vi.fn(),
+  editMessageReplyMarkup: vi.fn(),
   dequeueMatch: vi.fn(),
   waitForEnqueue: vi.fn(),
   ackVoiceMessage: vi.fn(),
@@ -43,8 +44,10 @@ import {
   ackAndEditSelection,
   editWithTimedOut,
   editWithSkipped,
+  highlightThenCollapse,
   pollButtonPress,
   pollButtonOrTextOrVoice,
+  buildHighlightedRows,
 } from "./button-helpers.js";
 
 describe("button-helpers", () => {
@@ -80,6 +83,222 @@ describe("button-helpers", () => {
       mocks.answerCallbackQuery.mockResolvedValue(true);
       mocks.editMessageText.mockRejectedValue(new Error("Message not modified"));
       await expect(ackAndEditSelection(42, 1, "Question?", "Yes", "cq1")).resolves.toBeUndefined();
+    });
+
+    it("passes highlighted keyboard when highlightedRows is provided", async () => {
+      mocks.answerCallbackQuery.mockResolvedValue(true);
+      mocks.editMessageText.mockResolvedValue(true);
+      const rows = [[
+        { text: "Yes", callback_data: "yes", style: "primary" as const },
+        { text: "No", callback_data: "no" },
+      ]];
+      await ackAndEditSelection(42, 1, "Question?", "Yes", "cq1", false, rows);
+      expect(mocks.editMessageText).toHaveBeenCalledWith(
+        42, 1, expect.any(String),
+        expect.objectContaining({ reply_markup: { inline_keyboard: rows } }),
+      );
+    });
+
+    it("removes buttons when highlightedRows is omitted", async () => {
+      mocks.answerCallbackQuery.mockResolvedValue(true);
+      mocks.editMessageText.mockResolvedValue(true);
+      await ackAndEditSelection(42, 1, "Question?", "Yes", "cq1");
+      expect(mocks.editMessageText).toHaveBeenCalledWith(
+        42, 1, expect.any(String),
+        expect.objectContaining({ reply_markup: { inline_keyboard: [] } }),
+      );
+    });
+  });
+
+  describe("buildHighlightedRows", () => {
+    it("sets unstyled clicked button to primary style", () => {
+      const opts = [
+        { label: "A", value: "a" },
+        { label: "B", value: "b" },
+      ];
+      const rows = buildHighlightedRows(opts, 2, "a");
+      expect(rows).toEqual([[
+        { text: "A", callback_data: "a", style: "primary" },
+        { text: "B", callback_data: "b" },
+      ]]);
+    });
+
+    it("leaves non-clicked buttons without style (stripped plain)", () => {
+      const opts = [
+        { label: "X", value: "x" },
+        { label: "Y", value: "y" },
+        { label: "Z", value: "z" },
+      ];
+      const rows = buildHighlightedRows(opts, 3, "z");
+      expect(rows[0][0]).not.toHaveProperty("style");
+      expect(rows[0][1]).not.toHaveProperty("style");
+      expect(rows[0][2]).toMatchObject({ style: "primary" });
+    });
+
+    it("preserves original style on clicked button; strips style from non-clicked", () => {
+      const opts = [
+        { label: "Good", value: "good", style: "success" as const },
+        { label: "Bad", value: "bad", style: "danger" as const },
+      ];
+      const rows = buildHighlightedRows(opts, 2, "bad");
+      // Non-clicked button has its style stripped (plain)
+      expect(rows[0][0]).not.toHaveProperty("style");
+      // Clicked button keeps its original style (danger, not overridden to primary)
+      expect(rows[0][1]).toMatchObject({ style: "danger" });
+    });
+
+    it("clicked button with no style falls back to primary", () => {
+      const opts = [
+        { label: "Good", value: "good", style: "success" as const },
+        { label: "Plain", value: "plain" },
+      ];
+      const rows = buildHighlightedRows(opts, 2, "plain");
+      // Clicked button (no original style) gets primary as fallback
+      expect(rows[0][1]).toMatchObject({ style: "primary" });
+      // Non-clicked button has its style stripped
+      expect(rows[0][0]).not.toHaveProperty("style");
+    });
+
+    it("respects column layout", () => {
+      const opts = [
+        { label: "A", value: "a" },
+        { label: "B", value: "b" },
+        { label: "C", value: "c" },
+      ];
+      const rows = buildHighlightedRows(opts, 1, "b");
+      expect(rows).toHaveLength(3);
+      expect(rows[1][0]).toMatchObject({ style: "primary" });
+    });
+
+    it("applies no highlight when clickedValue does not match any option", () => {
+      const opts = [
+        { label: "A", value: "a" },
+        { label: "B", value: "b" },
+      ];
+      const rows = buildHighlightedRows(opts, 2, "ghost");
+      expect(rows[0][0]).not.toHaveProperty("style");
+      expect(rows[0][1]).not.toHaveProperty("style");
+    });
+  });
+
+  describe("highlightThenCollapse", () => {
+    const HIGHLIGHTED_ROWS = [[
+      { text: "Like it", callback_data: "like", style: "primary" as const },
+      { text: "Dislike it", callback_data: "dislike" },
+    ]];
+
+    beforeEach(() => {
+      mocks.answerCallbackQuery.mockResolvedValue(undefined);
+      mocks.editMessageReplyMarkup.mockResolvedValue(undefined);
+      mocks.editMessageText.mockResolvedValue(undefined);
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("stage 1: answers callback query and calls editMessageReplyMarkup with highlighted keyboard", async () => {
+      vi.useFakeTimers();
+      const p = highlightThenCollapse(42, 1, "Pick one", "Like it", "cq1", HIGHLIGHTED_ROWS);
+      // Flush microtasks for stage 1
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(mocks.answerCallbackQuery).toHaveBeenCalledWith("cq1");
+      expect(mocks.editMessageReplyMarkup).toHaveBeenCalledWith(
+        42, 1,
+        expect.objectContaining({ reply_markup: { inline_keyboard: HIGHLIGHTED_ROWS } }),
+      );
+      // Stage 2 not yet fired — timer hasn't advanced
+      expect(mocks.editMessageText).not.toHaveBeenCalled();
+
+      await vi.runAllTimersAsync();
+      await p;
+    });
+
+    it("stage 2: after delay calls editMessageText with empty keyboard and selection suffix", async () => {
+      vi.useFakeTimers();
+      const p = highlightThenCollapse(42, 1, "Pick one", "Like it", "cq1", HIGHLIGHTED_ROWS);
+      await Promise.resolve();
+      await Promise.resolve();
+
+      await vi.advanceTimersByTimeAsync(200);
+      await p;
+
+      expect(mocks.editMessageText).toHaveBeenCalledWith(
+        42, 1,
+        expect.stringContaining("Like it"),
+        expect.objectContaining({ reply_markup: { inline_keyboard: [] } }),
+      );
+    });
+
+    it("stage 1 error: editMessageReplyMarkup throws — error swallowed, stage 2 still runs", async () => {
+      vi.useFakeTimers();
+      mocks.editMessageReplyMarkup.mockRejectedValue(new Error("network error"));
+      const p = highlightThenCollapse(42, 1, "Pick one", "Like it", "cq1", HIGHLIGHTED_ROWS);
+      await Promise.resolve();
+      await Promise.resolve();
+
+      await vi.advanceTimersByTimeAsync(200);
+      // Should not throw even though stage 1 failed
+      await expect(p).resolves.toBeUndefined();
+      // Stage 2 still ran
+      expect(mocks.editMessageText).toHaveBeenCalled();
+    });
+
+    it("callbackQueryId undefined: answerCallbackQuery not called, stage 1 and 2 still run", async () => {
+      vi.useFakeTimers();
+      const p = highlightThenCollapse(42, 1, "Pick one", "Like it", undefined, HIGHLIGHTED_ROWS);
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(mocks.answerCallbackQuery).not.toHaveBeenCalled();
+      expect(mocks.editMessageReplyMarkup).toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(200);
+      await p;
+      expect(mocks.editMessageText).toHaveBeenCalled();
+    });
+
+    it("stage 2 does not fire before the delay elapses (default 150 ms)", async () => {
+      vi.useFakeTimers();
+      const p = highlightThenCollapse(42, 1, "Pick one", "Like it", "cq1", HIGHLIGHTED_ROWS);
+      await Promise.resolve();
+      await Promise.resolve();
+
+      // Advance to just under the default 150 ms delay — stage 2 must not have fired
+      await vi.advanceTimersByTimeAsync(100);
+      expect(mocks.editMessageText).not.toHaveBeenCalled();
+
+      // Advance past the threshold — stage 2 fires
+      await vi.advanceTimersByTimeAsync(100);
+      await p;
+      expect(mocks.editMessageText).toHaveBeenCalledTimes(1);
+    });
+
+    it("custom delayMs overrides the default 150 ms", async () => {
+      vi.useFakeTimers();
+      const p = highlightThenCollapse(42, 1, "Pick one", "Like it", "cq1", HIGHLIGHTED_ROWS, 50);
+      await Promise.resolve();
+      await Promise.resolve();
+
+      await vi.advanceTimersByTimeAsync(60);
+      await p;
+      expect(mocks.editMessageText).toHaveBeenCalledTimes(1);
+    });
+
+    it("stage 2 reply_markup has empty inline_keyboard (not omitted)", async () => {
+      vi.useFakeTimers();
+      const p = highlightThenCollapse(42, 1, "Pick one", "Like it", "cq1", HIGHLIGHTED_ROWS);
+      await Promise.resolve();
+      await Promise.resolve();
+      await vi.advanceTimersByTimeAsync(200);
+      await p;
+
+      const callArgs = mocks.editMessageText.mock.calls[0] as [number, number, string, Record<string, unknown>];
+      const markup = callArgs[3].reply_markup as { inline_keyboard: unknown[][] };
+      expect(markup).toBeDefined();
+      expect(markup.inline_keyboard).toEqual([]);
     });
   });
 

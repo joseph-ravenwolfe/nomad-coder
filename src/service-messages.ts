@@ -55,7 +55,7 @@ export const SERVICE_MESSAGES = deepFreeze({
 
   ONBOARDING_BUTTONS_TEXT: {
     eventType: "onboarding_buttons" as const,
-    text: `Buttons over typing. action(type: "confirm/ok"), action(type: "confirm/ok-cancel"), action(type: "confirm/yn") for standard prompts. send(type: "question", choose: [...]) for custom options. Free-text ask only when needed. Hybrid (text + audio) for important updates. help('send') for full reference.`,
+    text: `Buttons over typing. action(type: "confirm/ok"), action(type: "confirm/ok-cancel"), action(type: "confirm/yn") for standard prompts. send(type: "question", choose: [...]) for custom options. Free-text ask only when needed. For voice+caption, use type: "text" with audio: "..." — not a separate type. help('send') for full reference.`,
   },
 
   // ── Governor change notifications ─────────────────────────────────────────
@@ -65,7 +65,7 @@ export const SERVICE_MESSAGES = deepFreeze({
     eventType: "governor_changed" as const,
     /** @param sid SID of the new governor, @param name name of the new governor */
     text: (sid: number, name: string) =>
-      `Governor is now SID ${sid} (${name}).`,
+      `**New governor:**\n**SID:** ${sid}\n**Name:** ${name}`,
   },
 
   // ── Governor promotion (after governor session closes) ───────────────────
@@ -75,7 +75,7 @@ export const SERVICE_MESSAGES = deepFreeze({
     eventType: "governor_promoted" as const,
     /** @param sessionName name of the session that closed */
     text: (sessionName: string) =>
-      `You are now the governor (${sessionName} closed). Single-session mode restored.`,
+      `**You are now the governor.**\n**Closed session:** ${sessionName}\nSingle-session mode restored.`,
   },
 
   /** @param sessionName name of the session that closed, multi-session variant */
@@ -83,7 +83,7 @@ export const SERVICE_MESSAGES = deepFreeze({
     eventType: "governor_promoted" as const,
     /** @param sessionName name of the session that closed */
     text: (sessionName: string) =>
-      `You are now the governor (${sessionName} closed). Ambiguous messages will be routed to you.`,
+      `**You are now the governor.**\n**Closed session:** ${sessionName}\nAmbiguous messages will be routed to you.`,
   },
 
   // ── Session lifecycle notifications ───────────────────────────────────────
@@ -93,7 +93,7 @@ export const SERVICE_MESSAGES = deepFreeze({
     eventType: "session_joined" as const,
     /** @param name display name of the joining session, @param sid SID of the joining session */
     text: (name: string, sid: number) =>
-      `${name} (SID ${sid}) joined. You are the governor — route ambiguous messages.`,
+      `**Session joined:**\n**Name:** ${name}\n**SID:** ${sid}\nYou are the governor — route ambiguous messages.`,
   },
 
   SESSION_CLOSED: {
@@ -103,7 +103,7 @@ export const SERVICE_MESSAGES = deepFreeze({
      * @param sid SID of the closed session
      */
     text: (sessionName: string, sid: number) =>
-      `${sessionName} (SID ${sid}) closed.`,
+      `**Session closed:**\n**Name:** ${sessionName}\n**SID:** ${sid}`,
   },
 
   /** @param name name of the closed session, @param newSid SID of the new governor, @param newName name of the new governor */
@@ -111,7 +111,7 @@ export const SERVICE_MESSAGES = deepFreeze({
     eventType: "session_closed_new_governor" as const,
     /** @param name name of the closed session, @param newSid SID of the new governor, @param newName name of the new governor */
     text: (name: string, newSid: number, newName: string) =>
-      `${name} closed. Governor is now SID ${newSid} (${newName}).`,
+      `**Session closed:** ${name}\n**New governor:**\n**SID:** ${newSid}\n**Name:** ${newName}`,
   },
 
   // ── Shutdown ──────────────────────────────────────────────────────────────
@@ -121,7 +121,24 @@ export const SERVICE_MESSAGES = deepFreeze({
     text: "⛔ Server shutting down. Your session will be invalidated on restart.",
   },
 
+  // ── Inter-agent hints ─────────────────────────────────────────────────────
+
+  COMPRESSION_HINT_FIRST_DM: {
+    eventType: "compression_hint_first_dm" as const,
+    text: "Inter-agent DMs use ultra-compression. Max density, drop articles/filler. See help('compression').",
+  },
+
+  COMPRESSION_HINT_FIRST_ROUTE: {
+    eventType: "compression_hint_first_route" as const,
+    text: "When routing messages, write any DM cover notes in ultra-compression — max density, drop filler. See help('compression').",
+  },
+
   // ── Behavior nudges ───────────────────────────────────────────────────────
+
+  NUDGE_REACTION_SEMANTICS: {
+    eventType: "behavior_nudge_reaction_semantics" as const,
+    text: "👌 = weakest ack (received). 👍 = strong ack (will do). 🫡 = auto-fired on voice. Reserve ❤️+ for meaning. See help('reactions').",
+  },
 
   NUDGE_FIRST_MESSAGE: {
     eventType: "behavior_nudge_first_message" as const,
@@ -148,6 +165,32 @@ export const SERVICE_MESSAGES = deepFreeze({
     text: `You've sent 10+ questions without buttons. Use action(type: "confirm/ok-cancel", ...), action(type: "confirm/yn", ...), or send(type: "question", choose: [...]) for any predictable-answer question.`,
   },
 
+  // ── Modality hints ────────────────────────────────────────────────────────
+
+  NUDGE_VOICE_MODALITY: {
+    eventType: "modality_hint_voice_received" as const,
+    text: "User sent voice — consider replying with voice or hybrid. Buttons first for yes/no choices. See help('modality').",
+  },
+
+  // ── Duplicate session detection ───────────────────────────────────────────
+
+  /**
+   * Alert sent to the governor when two callers present the same SID/suffix
+   * but different connection tokens. This strongly suggests two agent instances
+   * are sharing one session identity (e.g. via shared memory files).
+   *
+   * @param sid      The session SID being shared
+   * @param name     The session name
+   */
+  DUPLICATE_SESSION_DETECTED: {
+    eventType: "duplicate_session_detected" as const,
+    text: (sid: number, name: string) =>
+      `**Duplicate session detected:**\n**SID:** ${sid}\n**Name:** ${name}\n` +
+      `Two callers presented the same token but different connection tokens. ` +
+      `A second agent instance may be sharing this session identity. ` +
+      `Investigate — one caller may be consuming events intended for the other.`,
+  },
+
   // ── Presence / silent-work nudges ─────────────────────────────────────────
 
   NUDGE_PRESENCE_RUNG1: {
@@ -160,8 +203,8 @@ export const SERVICE_MESSAGES = deepFreeze({
   NUDGE_PRESENCE_RUNG2: {
     eventType: "behavior_nudge_presence_rung2" as const,
     text: (elapsedSeconds: number) =>
-      `Still silent after ${elapsedSeconds}s. Strongly consider starting a persistent animation ` +
-      `(preset: 'working' or 'thinking') or sending a brief status message. ` +
-      `The operator cannot distinguish working from stuck. help('presence')`,
+      `silence: ${elapsedSeconds}s since last dequeue; operator sees no progress. ` +
+      `Acknowledge with show-typing, a reaction, or a persistent animation ` +
+      `(preset: 'working' or 'thinking'). help('presence')`,
   },
 });

@@ -9,60 +9,62 @@ import {
   resolveAction,
   listCategories,
   listSubPaths,
-  type ActionHandler,
+  toActionHandler,
 } from "../action-registry.js";
 
-import { handleSetVoice } from "./set_voice.js";
-import { handleListSessions } from "./list_sessions.js";
-import { handleCloseSession } from "./close_session.js";
-import { handleSessionStart, handleSessionReconnect } from "./session_start.js";
-import { handleRenameSession } from "./rename_session.js";
-import { handleSessionIdle } from "./session_idle.js";
-import { handleEditMessage } from "./edit_message.js";
+import { handleSetVoice } from "./profile/voice.js";
+import { handleListSessions } from "./session/list.js";
+import { handleCloseSession } from "./session/close.js";
+import { handleSessionStart, handleSessionReconnect } from "./session/start.js";
+import { handleRenameSession } from "./session/rename.js";
+import { handleSessionIdle } from "./session/idle.js";
+import { handleSessionStatus } from "./session/status.js";
+import { handleEditMessage } from "./message/edit.js";
 
 // Phase 2 imports — message/*
-import { handleDeleteMessage } from "./delete_message.js";
-import { handlePinMessage } from "./pin_message.js";
-import { handleSetReaction, handleSetReactionPreset } from "./set_reaction.js";
-import { handleAnswerCallbackQuery } from "./answer_callback_query.js";
-import { handleRouteMessage } from "./route_message.js";
+import { handleDeleteMessage } from "./message/delete.js";
+import { handlePinMessage } from "./message/pin.js";
+import { handleSetReaction, handleSetReactionPreset } from "./react/set.js";
+import { handleAnswerCallbackQuery } from "./acknowledge/query.js";
+import { handleRouteMessage } from "./message/route.js";
 // Phase 2 imports — profile/*, reminder/*, etc.
-import { handleSetTopic } from "./set_topic.js";
-import { handleSaveProfile } from "./save_profile.js";
-import { handleLoadProfile } from "./load_profile.js";
-import { handleImportProfile } from "./import_profile.js";
-import { handleSetReminder } from "./set_reminder.js";
-import { handleCancelReminder } from "./cancel_reminder.js";
-import { handleListReminders } from "./list_reminders.js";
-import { handleSetDequeueDefault } from "./set_dequeue_default.js";
-import { handleSetDefaultAnimation } from "./set_default_animation.js";
-import { handleToggleLogging } from "./toggle_logging.js";
+import { handleSetTopic } from "./profile/topic.js";
+import { handleSaveProfile } from "./profile/save.js";
+import { handleLoadProfile } from "./profile/load.js";
+import { handleImportProfile } from "./profile/import.js";
+import { handleSetReminder } from "./reminder/set.js";
+import { handleCancelReminder } from "./reminder/cancel.js";
+import { handleListReminders } from "./reminder/list.js";
+import { handleDisableReminder } from "./reminder/disable.js";
+import { handleEnableReminder } from "./reminder/enable.js";
+import { handleSleepReminder } from "./reminder/sleep.js";
+import { handleSetDequeueDefault } from "./profile/dequeue-default.js";
+import { handleSetDefaultAnimation } from "./animation/default.js";
+import { handleToggleLogging } from "./logging/toggle.js";
 // Phase 2 imports — message/history, message/get
-import { handleGetChatHistory } from "./get_chat_history.js";
-import { handleGetChat } from "./get_chat.js";
-import { handleGetMessage } from "./get_message.js";
+import { handleGetChatHistory } from "./message/history.js";
+import { handleGetChat } from "./chat/info.js";
+import { handleGetMessage } from "./message/get.js";
 // Phase 2 imports — log/*
-import { handleGetLog } from "./get_log.js";
-import { handleListLogs } from "./list_logs.js";
-import { handleRollLog } from "./roll_log.js";
-import { handleDeleteLog } from "./delete_log.js";
-import { handleGetDebugLog, handleGetTraceLog } from "./get_debug_log.js";
+import { handleGetLog } from "./log/get.js";
+import { handleListLogs } from "./log/list.js";
+import { handleRollLog } from "./log/roll.js";
+import { handleDeleteLog } from "./log/delete.js";
+import { handleGetDebugLog, handleGetTraceLog } from "./log/debug.js";
 // Phase 2 imports — animation/*
-import { handleCancelAnimation } from "./cancel_animation.js";
+import { handleCancelAnimation } from "./animation/cancel.js";
 // Phase 2 imports — standalone
-import { handleShowTyping } from "./show_typing.js";
-import { handleConfirm } from "./confirm.js";
-import { handleApproveAgent } from "./approve_agent.js";
-import { handleShutdown } from "./shutdown.js";
-import { handleNotifyShutdownWarning } from "./notify_shutdown_warning.js";
-import { handleCloseSessionSignal } from "./close_session_signal.js";
-import { handleTranscribeVoice } from "./transcribe_voice.js";
-import { handleDownloadFile } from "./download_file.js";
-import { handleUpdateChecklist } from "./send_new_checklist.js";
-import { handleUpdateProgress } from "./update_progress.js";
-import { handleSetCommands } from "./set_commands.js";
-import { setTutorialEnabled } from "../session-manager.js";
-
+import { handleShowTyping } from "./show-typing/show-typing.js";
+import { handleConfirm } from "./confirm/handler.js";
+import { handleApproveAgent } from "./approve/agent.js";
+import { handleShutdown } from "./shutdown/handler.js";
+import { handleNotifyShutdownWarning } from "./shutdown/warn.js";
+import { handleCloseSessionSignal } from "./session/close-signal.js";
+import { handleTranscribeVoice } from "./transcribe/voice.js";
+import { handleDownloadFile } from "./download/file.js";
+import { handleUpdateChecklist } from "./checklist/update.js";
+import { handleUpdateProgress } from "./progress/update.js";
+import { handleSetCommands } from "./commands/set.js";
 type ToolResult = ReturnType<typeof toResult>;
 
 /** Returns the closest string in `candidates` to `input`, or null if no reasonable match. */
@@ -94,20 +96,21 @@ function levenshtein(a: string, b: string): number {
  * Idempotent — can safely be called multiple times (last write wins).
  */
 export function setupActionRegistry(): void {
-  registerAction("session/start", handleSessionStart as unknown as ActionHandler);
-  registerAction("session/reconnect", handleSessionReconnect as unknown as ActionHandler);
-  registerAction("session/close", handleCloseSession as unknown as ActionHandler);
-  registerAction("session/close/signal", handleCloseSessionSignal as unknown as ActionHandler, { governor: true });
-  registerAction("session/list", handleListSessions as unknown as ActionHandler);
-  registerAction("session/idle", handleSessionIdle as unknown as ActionHandler);
-  registerAction("session/rename", handleRenameSession as unknown as ActionHandler);
-  registerAction("profile/voice", handleSetVoice as unknown as ActionHandler);
-  registerAction("message/edit", handleEditMessage as unknown as ActionHandler);
+  registerAction("session/start", toActionHandler(handleSessionStart));
+  registerAction("session/reconnect", toActionHandler(handleSessionReconnect));
+  registerAction("session/close", toActionHandler(handleCloseSession));
+  registerAction("session/close/signal", toActionHandler(handleCloseSessionSignal), { governor: true });
+  registerAction("session/list", toActionHandler(handleListSessions));
+  registerAction("session/idle", toActionHandler(handleSessionIdle));
+  registerAction("session/rename", toActionHandler(handleRenameSession));
+  registerAction("session/status", toActionHandler(handleSessionStatus));
+  registerAction("profile/voice", toActionHandler(handleSetVoice));
+  registerAction("message/edit", toActionHandler(handleEditMessage));
 
   // message/*
-  registerAction("message/delete", handleDeleteMessage as unknown as ActionHandler);
-  registerAction("message/pin", handlePinMessage as unknown as ActionHandler);
-  registerAction("react", (async (args: Record<string, unknown>) => {
+  registerAction("message/delete", toActionHandler(handleDeleteMessage));
+  registerAction("message/pin", toActionHandler(handlePinMessage));
+  registerAction("react", toActionHandler(async (args: Record<string, unknown>) => {
     // Preset path: dispatch before single-emoji / array handling
     if (args.preset && typeof args.preset === "string" && !args.emoji && !args.reactions) {
       const _sid = requireAuth(args.token as number);
@@ -117,49 +120,52 @@ export function setupActionRegistry(): void {
       return handleSetReactionPreset(_sid, chatId, args.message_id as number, args.preset);
     }
     return handleSetReaction(args as Parameters<typeof handleSetReaction>[0]);
-  }) as unknown as ActionHandler);
-  registerAction("acknowledge", handleAnswerCallbackQuery as unknown as ActionHandler);
-  registerAction("message/route", handleRouteMessage as unknown as ActionHandler, { governor: true });
+  }));
+  registerAction("acknowledge", toActionHandler(handleAnswerCallbackQuery));
+  registerAction("message/route", toActionHandler(handleRouteMessage), { governor: true });
 
   // profile/*, reminder/*, logging/*, commands/*
-  registerAction("profile/topic", handleSetTopic as unknown as ActionHandler);
-  registerAction("profile/save", handleSaveProfile as unknown as ActionHandler);
-  registerAction("profile/load", handleLoadProfile as unknown as ActionHandler);
-  registerAction("profile/import", handleImportProfile as unknown as ActionHandler);
-  registerAction("reminder/set", handleSetReminder as unknown as ActionHandler);
-  registerAction("reminder/cancel", handleCancelReminder as unknown as ActionHandler);
-  registerAction("reminder/list", handleListReminders as unknown as ActionHandler);
-  registerAction("profile/dequeue-default", handleSetDequeueDefault as unknown as ActionHandler);
-  registerAction("animation/default", handleSetDefaultAnimation as unknown as ActionHandler);
-  registerAction("logging/toggle", handleToggleLogging as unknown as ActionHandler);
+  registerAction("profile/topic", toActionHandler(handleSetTopic));
+  registerAction("profile/save", toActionHandler(handleSaveProfile));
+  registerAction("profile/load", toActionHandler(handleLoadProfile));
+  registerAction("profile/import", toActionHandler(handleImportProfile));
+  registerAction("reminder/set", toActionHandler(handleSetReminder));
+  registerAction("reminder/cancel", toActionHandler(handleCancelReminder));
+  registerAction("reminder/list", toActionHandler(handleListReminders));
+  registerAction("reminder/disable", toActionHandler(handleDisableReminder));
+  registerAction("reminder/enable", toActionHandler(handleEnableReminder));
+  registerAction("reminder/sleep", toActionHandler(handleSleepReminder));
+  registerAction("profile/dequeue-default", toActionHandler(handleSetDequeueDefault));
+  registerAction("animation/default", toActionHandler(handleSetDefaultAnimation));
+  registerAction("logging/toggle", toActionHandler(handleToggleLogging));
 
   // message/history
-  registerAction("message/history", ((args: Record<string, unknown>) => {
+  registerAction("message/history", toActionHandler((args: Record<string, unknown>) => {
     if (args.count !== undefined || args.before_id !== undefined) {
       return handleGetChatHistory(args as Parameters<typeof handleGetChatHistory>[0]);
     }
     return handleGetChat(args as Parameters<typeof handleGetChat>[0]);
-  }) as unknown as ActionHandler);
-  registerAction("message/get", handleGetMessage as unknown as ActionHandler);
+  }));
+  registerAction("message/get", toActionHandler(handleGetMessage));
 
   // chat/*
-  registerAction("chat/info", handleGetChat as unknown as ActionHandler);
+  registerAction("chat/info", toActionHandler(handleGetChat));
 
   // log/* (governor-only)
-  registerAction("log/get", handleGetLog as unknown as ActionHandler, { governor: true });
-  registerAction("log/list", handleListLogs as unknown as ActionHandler, { governor: true });
-  registerAction("log/roll", handleRollLog as unknown as ActionHandler, { governor: true });
-  registerAction("log/delete", handleDeleteLog as unknown as ActionHandler, { governor: true });
-  registerAction("log/debug", handleGetDebugLog as unknown as ActionHandler, { governor: true });
-  registerAction("log/trace", handleGetTraceLog as unknown as ActionHandler, { governor: true });
+  registerAction("log/get", toActionHandler(handleGetLog), { governor: true });
+  registerAction("log/list", toActionHandler(handleListLogs), { governor: true });
+  registerAction("log/roll", toActionHandler(handleRollLog), { governor: true });
+  registerAction("log/delete", toActionHandler(handleDeleteLog), { governor: true });
+  registerAction("log/debug", toActionHandler(handleGetDebugLog), { governor: true });
+  registerAction("log/trace", toActionHandler(handleGetTraceLog), { governor: true });
   // animation/*
-  registerAction("animation/cancel", handleCancelAnimation as unknown as ActionHandler);
+  registerAction("animation/cancel", toActionHandler(handleCancelAnimation));
 
   // standalone
-  registerAction("show-typing", handleShowTyping as unknown as ActionHandler);
+  registerAction("show-typing", toActionHandler(handleShowTyping));
   // confirm/* presets (preset buttons, caller only needs to supply `text`)
   const makeConfirmHandler = (yesText: string, noText: string, yesStyle?: "success" | "primary" | "danger") =>
-    ((args: Record<string, unknown>) => handleConfirm({
+    toActionHandler((args: Record<string, unknown>) => handleConfirm({
       text: (args.text as string | undefined) ?? "",
       yes_text: yesText,
       no_text: noText,
@@ -169,45 +175,31 @@ export function setupActionRegistry(): void {
       timeout_seconds: (args.timeout_seconds as number | undefined) ?? 600,
       ignore_pending: args.ignore_pending as boolean | undefined,
       token: args.token as number,
-    }, undefined as unknown as AbortSignal)) as unknown as ActionHandler;
+    }, undefined as unknown as AbortSignal));
   registerAction("confirm/ok", makeConfirmHandler("OK", "", "primary"));
   registerAction("confirm/ok-cancel", makeConfirmHandler("OK", "Cancel", "primary"));
   registerAction("confirm/yn", makeConfirmHandler("🟢 Yes", "🔴 No"));
-  registerAction("approve", handleApproveAgent as unknown as ActionHandler, { governor: true });
-  registerAction("shutdown", handleShutdown as unknown as ActionHandler, { governor: true });
-  registerAction("shutdown/warn", handleNotifyShutdownWarning as unknown as ActionHandler, { governor: true });
-  registerAction("transcribe", handleTranscribeVoice as unknown as ActionHandler);
-  registerAction("download", handleDownloadFile as unknown as ActionHandler);
-  registerAction("checklist/update", handleUpdateChecklist as unknown as ActionHandler);
-  registerAction("progress/update", handleUpdateProgress as unknown as ActionHandler);
-  registerAction("commands/set", ((args: Record<string, unknown>) =>
+  registerAction("approve", toActionHandler(handleApproveAgent), { governor: true });
+  registerAction("shutdown", toActionHandler(handleShutdown), { governor: true });
+  registerAction("shutdown/warn", toActionHandler(handleNotifyShutdownWarning), { governor: true });
+  registerAction("transcribe", toActionHandler(handleTranscribeVoice));
+  registerAction("download", toActionHandler(handleDownloadFile));
+  registerAction("checklist/update", toActionHandler(handleUpdateChecklist));
+  registerAction("progress/update", toActionHandler(handleUpdateProgress));
+  registerAction("commands/set", toActionHandler((args: Record<string, unknown>) =>
     handleSetCommands({
       commands: (args.commands ?? []) as Parameters<typeof handleSetCommands>[0]["commands"],
       scope: args.scope as "chat" | "default" | undefined,
       token: args.token as number,
     })
-  ) as unknown as ActionHandler);
+  ));
 
-  // tutorial/*
-  registerAction("tutorial/on", ((args: Record<string, unknown>) => {
-    const _sid = requireAuth(args.token as number);
-    if (typeof _sid !== "number") return toError(_sid);
-    setTutorialEnabled(_sid, true);
-    return toResult({ message: "Tutorial mode enabled." });
-  }) as unknown as ActionHandler);
-  registerAction("tutorial/off", ((args: Record<string, unknown>) => {
-    const _sid = requireAuth(args.token as number);
-    if (typeof _sid !== "number") return toError(_sid);
-    setTutorialEnabled(_sid, false);
-    return toResult({ message: "Tutorial mode disabled." });
-  }) as unknown as ActionHandler);
 }
 
 const DESCRIPTION =
-  "Universal action dispatcher for v6 API. Uses `type` as a RESTful path " +
-  "to route to existing handler logic, supporting progressive discovery. " +
-  "Omit `type` to list all categories. Pass a category (e.g. `session`) " +
-  "to list sub-paths. Pass a full path (e.g. `session/list`) to execute. " +
+  "Universal action dispatcher. Omit `type` to list all categories. " +
+  "Pass a category (e.g. `session`) to list sub-paths. " +
+  "Pass a full path (e.g. `session/list`) to execute. " +
   "Use help(topic: 'action') for full documentation.";
 
 export function register(server: McpServer): void {
@@ -390,10 +382,18 @@ export function register(server: McpServer): void {
               text: z.string(),
               delay_seconds: z.number(),
               recurring: z.boolean().default(false),
+              trigger: z.enum(["time", "startup"]).optional(),
+              disabled: z.boolean().optional(),
             }),
           )
           .optional()
           .describe("profile/import: Reminders to register for this session."),
+        nametag_emoji: z
+          .string()
+          .min(1)
+          .max(10)
+          .optional()
+          .describe("profile/import: Custom emoji to replace the default 🤖 in the session name tag."),
         // reminder/set params
         trigger: z
           .enum(["time", "startup"])
@@ -413,7 +413,11 @@ export function register(server: McpServer): void {
         id: z
           .string()
           .optional()
-          .describe("reminder/set: Optional ID for dedup. reminder/cancel: Reminder ID to cancel."),
+          .describe("reminder/set: Optional ID for dedup. reminder/cancel, reminder/disable, reminder/enable, reminder/sleep: Reminder ID to operate on."),
+        until: z
+          .string()
+          .optional()
+          .describe("reminder/sleep: ISO-8601 datetime after which the reminder resumes firing (e.g. \"2026-06-01T09:00:00Z\")."),
         // profile/dequeue-default params
         timeout: z
           .number()

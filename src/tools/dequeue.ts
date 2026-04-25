@@ -6,9 +6,9 @@ import { requireAuth } from "../session-gate.js";
 import {
   type TimelineEvent,
 } from "../message-store.js";
-import { setActiveSession, touchSession, getDequeueDefault, setDequeueIdle, getSession } from "../session-manager.js";
+import { setActiveSession, touchSession, getDequeueDefault, setDequeueIdle, getSession, takeSilenceHint, checkConnectionToken } from "../session-manager.js";
 import { recordNonToolEvent } from "../trace-log.js";
-import { getSessionQueue, getMessageOwner, peekSessionCategories } from "../session-queue.js";
+import { getSessionQueue, getMessageOwner, peekSessionCategories, deliverServiceMessage } from "../session-queue.js";
 import { TOKEN_SCHEMA } from "./identity-schema.js";
 import {
   promoteDeferred,
@@ -17,6 +17,8 @@ import {
   getSoonestDeferredMs,
   buildReminderEvent,
 } from "../reminder-state.js";
+import { getGovernorSid } from "../routing-mode.js";
+import { SERVICE_MESSAGES } from "../service-messages.js";
 
 /** Defensive clamp for a single setTimeout call, kept below Node.js's ~2^31-1 ms overflow limit. */
 const MAX_SET_TIMEOUT_MS = 2_000_000_000;
@@ -60,7 +62,7 @@ function buildVoiceBacklogHint(batch: TimelineEvent[], sid: number): string | un
   const cats = peekSessionCategories(sid);
   const voiceCount = cats?.["voice"] ?? 0;
   if (voiceCount === 0) return undefined;
-  return `${voiceCount} voice msg pending — use the 'processing' reaction preset.`;
+  return `${voiceCount} voice msg pending — react with processing preset.`;
 }
 
 const DESCRIPTION =
@@ -69,6 +71,7 @@ const DESCRIPTION =
   "`{ empty: true }` for instant polls (max_wait: 0); " +
   "`{ error: \"session_closed\", message }` (isError: false) when the session queue is gone — stop looping. " +
   "pending > 0 → call again. Omit max_wait to use session default (action(type: 'profile/dequeue-default'), fallback 300 s); max explicit: 300 s. " +
+  "Pass connection_token (from session/start) to enable duplicate-session detection — the bridge alerts the governor if two callers share the same identity. " +
   "Call `help(topic: 'dequeue')` for details.";
 
 /**
@@ -99,7 +102,7 @@ export function register(server: McpServer) {
           .min(0, { message: "max_wait must be \u2265 0. Call help(topic: 'dequeue') for usage." })
           .max(300, { message: "max_wait must be \u2264 300 s. Use action(type: 'profile/dequeue-default') to configure longer defaults." })
           .optional()
-          .describe("Seconds to block when queue is empty. Omit to use your session default (set via action(type: 'profile/dequeue-default')); server fallback is 300 s. Pass 0 for an instant non-blocking poll (drain loops only). Values above the session default require force: true or action(type: 'profile/dequeue-default'). Max 300 s — use action(type: 'profile/dequeue-default') to configure persistent agents. You almost never need to set this — the session default handles blocking. Only exception: max_wait: 0 for drain loops."),
+          .describe("Seconds to block when queue is empty. Omit to use your session default (fallback 300 s). Pass 0 for an instant non-blocking poll (drain loops). Values above the session default require force: true. Use action(type: 'profile/dequeue-default') to raise your default."),
         timeout: z
           .number()
           .int()
@@ -112,14 +115,63 @@ export function register(server: McpServer) {
           .default(false)
           .describe("Pass true to allow a one-time override when max_wait exceeds your current session default. Only applies to values ≤ 300 s (the hard cap on max_wait). To wait longer than 300 s by default, use action(type: 'profile/dequeue-default') instead."),
         token: TOKEN_SCHEMA,
+        connection_token: z
+          .uuid()
+          .optional()
+          .describe("UUID returned by session/start. Pass on every dequeue call to enable duplicate-session detection. The bridge alerts the governor (without rejecting the call) if two agents share the same SID but present different connection tokens."),
+        response_format: z
+          .enum(["default", "compact"])
+          .optional()
+          .describe("Response format. \"compact\" only suppresses `empty: true` (inferrable from the caller's use of `max_wait: 0`); `timed_out: true` is always emitted regardless of compact mode. Defaults to \"default\"."),
       },
     },
-    async ({ max_wait, timeout: timeoutAlias, force, token }, { signal }) => {
+    async ({ max_wait, timeout: timeoutAlias, force, token, connection_token, response_format }, { signal }) => {
       // Resolve max_wait from primary param or deprecated `timeout` alias.
       const timeout = max_wait ?? timeoutAlias;
       const _sid = requireAuth(token);
       if (typeof _sid !== "number") return toError(_sid);
       const sid = _sid;
+
+      // Option A — Duplicate session detection:
+      // If the caller passes a connection_token, check it against the one stored
+      // at session/start. A mismatch means two agents are sharing the same SID/suffix
+      // (e.g. via shared memory files). We do NOT reject the call — both callers are
+      // allowed to proceed — but we alert the governor so the operator can investigate.
+      //
+      // Open design questions:
+      //   1. Rate-limiting: Should we throttle governor alerts to avoid flooding?
+      //      Currently we fire once per mismatch event. A per-session cooldown would
+      //      reduce noise during a runaway duplicate loop.
+      //   2. connection_token on reconnect: session/reconnect does NOT regenerate
+      //      the connection_token (it reuses the stored one). If a caller after reconnect
+      //      passes the old token, it will match. If they lost it, they omit it → "absent".
+      //      This is intentional to avoid false positives on reconnect.
+      //   3. Alert delivery: alerts go to the governor queue (in-process service message).
+      //      If no governor is set, the alert is logged via dlog (see else branch below).
+      //      A future improvement could deliver to all active sessions.
+      if (connection_token && sid > 0) {
+        const tokenStatus = checkConnectionToken(sid, connection_token);
+        if (tokenStatus === "mismatch") {
+          const sessionName = getSession(sid)?.name ?? "";
+          dlog("session", `duplicate session detected sid=${sid} name=${sessionName}`);
+          const governorSid = getGovernorSid();
+          if (governorSid > 0 && governorSid !== sid) {
+            deliverServiceMessage(
+              governorSid,
+              SERVICE_MESSAGES.DUPLICATE_SESSION_DETECTED.text(sid, sessionName),
+              SERVICE_MESSAGES.DUPLICATE_SESSION_DETECTED.eventType,
+              { sid, name: sessionName },
+            );
+          } else {
+            // No governor to alert (unset or is the duplicate itself) — record a
+            // debug trace so the mismatch is observable even without a governor.
+            dlog(
+              "session",
+              `duplicate session mismatch with no alertable governor — sid=${sid} name=${sessionName} governorSid=${governorSid}`,
+            );
+          }
+        }
+      }
 
       // Gate: reject timeout values above the session default unless force is set
       const sessionDefault = getDequeueDefault(sid);
@@ -186,22 +238,38 @@ export function register(server: McpServer) {
         return (q as { waitForEnqueueSince(v: number): Promise<void> }).waitForEnqueueSince(v);
       }
 
+      /** Build a content batch result, attaching any pending hints. */
+      function buildBatchResult(events: TimelineEvent[]): Record<string, unknown> {
+        const pending = pendingCountAny();
+        const result: Record<string, unknown> = { updates: compactBatch(events, sid) };
+        if (pending > 0) result.pending = pending;
+        const hints: string[] = [];
+        const silenceHint = takeSilenceHint(sid);
+        if (silenceHint !== undefined) hints.push(silenceHint);
+        const voiceHint = buildVoiceBacklogHint(events, sid);
+        if (voiceHint !== undefined) hints.push(voiceHint);
+        // Pending-queue nudge: when more messages are waiting, suggest the
+        // processing preset so the operator knows the agent sees the backlog.
+        // TODO: honor a profile flag (e.g. ProfileData.suppress_pending_hint)
+        // to let agents opt out once that flag is introduced in profile-store.ts.
+        if (pending > 0) hints.push(`pending=${pending}; use processing preset.`);
+        if (hints.length > 0) result.hint = hints.join(" ");
+        return result;
+      }
+
       // Try immediate batch dequeue
       let batch = dequeueBatchAny();
       if (batch.length > 0) {
         for (const evt of batch) ackVoice(evt);
-        const pending = pendingCountAny();
-        const result: Record<string, unknown> = { updates: compactBatch(batch, sid) };
-        if (pending > 0) result.pending = pending;
-        const hint = buildVoiceBacklogHint(batch, sid);
-        if (hint) result.hint = hint;
+        const result = buildBatchResult(batch);
         resyncActiveSession();
         dlog("queue", `dequeue returning sid=${sid} batch=${batch.length} payloadLen=${JSON.stringify(result).length}`);
         return toResult(result);
       }
 
       if (effectiveTimeout === 0) {
-        return toResult({ empty: true, pending: pendingCountAny() });
+        const compact = response_format === "compact";
+        return toResult({ ...(compact ? {} : { empty: true }), pending: pendingCountAny() });
       }
 
       // Block until something arrives or timeout expires.
@@ -229,8 +297,15 @@ export function register(server: McpServer) {
               recordNonToolEvent("reminder_fire", sid, sessionName, reminder.text);
             }
             resyncActiveSession();
-            const reminderResult: Record<string, unknown> = { updates: fired.map(buildReminderEvent), pending: pendingCountAny() };
+            const reminderPending = pendingCountAny();
+            const reminderResult: Record<string, unknown> = {
+              updates: fired.map(buildReminderEvent),
+              ...(reminderPending > 0 ? { pending: reminderPending } : {}),
+            };
             dlog("queue", `dequeue returning sid=${sid} batch=${fired.length} payloadLen=${JSON.stringify(reminderResult).length}`);
+            // response_format is not applied here: the reminder response only contains
+            // `updates` (real event data) and optionally `pending` (when > 0), neither
+            // of which are compact-suppressible fields.
             return toResult(reminderResult);
           }
 
@@ -252,11 +327,7 @@ export function register(server: McpServer) {
             batch = dequeueBatchAny();
             if (batch.length > 0) {
               for (const evt of batch) ackVoice(evt);
-              const pending = pendingCountAny();
-              const result: Record<string, unknown> = { updates: compactBatch(batch, sid) };
-              if (pending > 0) result.pending = pending;
-              const hint = buildVoiceBacklogHint(batch, sid);
-              if (hint) result.hint = hint;
+              const result = buildBatchResult(batch);
               resyncActiveSession();
               dlog("queue", `dequeue returning sid=${sid} batch=${batch.length} payloadLen=${JSON.stringify(result).length}`);
               return toResult(result);
@@ -276,11 +347,7 @@ export function register(server: McpServer) {
           batch = dequeueBatchAny();
           if (batch.length > 0) {
             for (const evt of batch) ackVoice(evt);
-            const pending = pendingCountAny();
-            const result: Record<string, unknown> = { updates: compactBatch(batch, sid) };
-            if (pending > 0) result.pending = pending;
-            const hint = buildVoiceBacklogHint(batch, sid);
-            if (hint) result.hint = hint;
+            const result = buildBatchResult(batch);
             resyncActiveSession();
             dlog("queue", `dequeue returning sid=${sid} batch=${batch.length} payloadLen=${JSON.stringify(result).length}`);
             return toResult(result);
@@ -288,7 +355,8 @@ export function register(server: McpServer) {
         }
 
         resyncActiveSession();
-        return toResult({ timed_out: true, pending: pendingCountAny() });
+        const pending = pendingCountAny();
+        return toResult({ timed_out: true, ...(pending > 0 ? { pending } : {}) });
       } finally {
         // Note: if two concurrent dequeue calls share the same sid (unusual but
         // possible), the second finally will clear the idle flag while the first

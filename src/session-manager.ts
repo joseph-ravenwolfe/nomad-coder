@@ -1,4 +1,4 @@
-import { randomInt } from "node:crypto";
+import { randomInt, randomUUID } from "node:crypto";
 import { dlog } from "./debug-log.js";
 import { recordNonToolEvent } from "./trace-log.js";
 
@@ -20,8 +20,16 @@ export interface Session {
   reauthDialogMsgId?: number;
   dequeueDefault?: number; // per-session timeout default, undefined = use server default (300)
   dequeueIdleAt?: number; // timestamp when session entered dequeue blocking wait; undefined = not idle
-  tutorialEnabled?: boolean;   // undefined = true (on by default)
-  tutorialSeenTools?: Set<string>;
+  pendingEnvelopeHint?: string;
+  silenceThresholdS?: number;
+  firstUseHintsSeen?: Set<string>;
+  nametag_emoji?: string;
+  /**
+   * Connection token assigned at session/start. Used for duplicate-session
+   * detection: if two callers present the same SID/suffix but different
+   * connection tokens, the bridge alerts the governor (Option A).
+   */
+  connectionToken: string;
 }
 
 /** Public view returned by `listSessions` — no token suffix. */
@@ -39,6 +47,7 @@ export interface SessionCreateResult {
   name: string;
   color: string;
   sessionsActive: number;
+  connectionToken: string;
 }
 
 // ── State ──────────────────────────────────────────────────
@@ -153,6 +162,7 @@ export function createSession(name = "", colorHint?: string, forceColor = false)
     );
   }
   const color = assignColor(colorHint, forceColor);
+  const connectionToken = randomUUID();
   const session: Session = {
     sid,
     suffix,
@@ -161,11 +171,12 @@ export function createSession(name = "", colorHint?: string, forceColor = false)
     createdAt: new Date().toISOString(),
     lastPollAt: undefined,
     healthy: true,
+    connectionToken,
   };
   _sessions.set(sid, session);
   dlog("session", `created sid=${sid} name=${JSON.stringify(name)} color=${color} total=${_sessions.size}`);
   recordNonToolEvent("session_create", sid, name);
-  return { sid, suffix, name, color, sessionsActive: _sessions.size };
+  return { sid, suffix, name, color, sessionsActive: _sessions.size, connectionToken };
 }
 
 export function getSession(sid: number): Session | undefined {
@@ -175,6 +186,38 @@ export function getSession(sid: number): Session | undefined {
 export function validateSession(sid: number, suffix: number): boolean {
   const session = _sessions.get(sid);
   return session !== undefined && session.suffix === suffix;
+}
+
+/**
+ * Return the connection token for a session, or undefined if the session
+ * does not exist. Connection tokens are assigned at session/start and used
+ * for duplicate-session detection (Option A).
+ */
+export function getConnectionToken(sid: number): string | undefined {
+  return _sessions.get(sid)?.connectionToken;
+}
+
+/**
+ * Check whether a presented connection token matches the one stored for the
+ * given session. Returns:
+ *   - "match"    — token matches; this is the expected caller
+ *   - "mismatch" — token present but does not match; duplicate session detected
+ *   - "absent"   — no token presented; legacy caller or caller that did not
+ *                  save their connection token (non-fatal; allow through)
+ *
+ * Open design question: should we also issue a mismatch alert when the caller
+ * presents a token but the session has no stored token (e.g. after a reconnect
+ * that does not regenerate the token)? Currently treated as "match" to avoid
+ * false positives.
+ */
+export function checkConnectionToken(
+  sid: number,
+  presented: string | undefined,
+): "match" | "mismatch" | "absent" {
+  if (presented === undefined) return "absent";
+  const stored = _sessions.get(sid)?.connectionToken;
+  if (!stored) return "match"; // no stored token → cannot verify, allow through
+  return presented === stored ? "match" : "mismatch";
 }
 
 export function closeSession(sid: number): boolean {
@@ -231,6 +274,11 @@ export function getUnhealthySessions(thresholdMs: number): SessionInfo[] {
     .map(({ sid, name, color, createdAt }) => ({ sid, name, color, createdAt }));
 }
 
+// ── Silence Detection ─────────────────────────────────────
+
+const SILENCE_THRESHOLD_DEFAULT_S = 30;
+const SILENCE_THRESHOLD_FLOOR_S = 15;
+
 // ── Dequeue Default ───────────────────────────────────────
 
 const DEFAULT_DEQUEUE_TIMEOUT = 300;
@@ -252,6 +300,42 @@ export function getDequeueDefault(sid: number): number {
 export function setDequeueDefault(sid: number, timeout: number): void {
   const session = _sessions.get(sid);
   if (session) session.dequeueDefault = timeout;
+}
+
+/** Set a pending envelope hint to be included on the next dequeue response for this session. */
+export function setSilenceHint(sid: number, hint: string): void {
+  const s = _sessions.get(sid);
+  if (s) s.pendingEnvelopeHint = hint;
+}
+
+/**
+ * Consume and return the pending envelope hint for this session (if any).
+ * Clears the hint so it is only included once.
+ */
+export function takeSilenceHint(sid: number): string | undefined {
+  const s = _sessions.get(sid);
+  if (!s) return undefined;
+  const hint = s.pendingEnvelopeHint;
+  s.pendingEnvelopeHint = undefined;
+  return hint;
+}
+
+/**
+ * Return the per-session silence-detection threshold in seconds.
+ * Returns the session default (30 s) if none has been set or session doesn't exist.
+ */
+export function getSilenceThreshold(sid: number): number {
+  return _sessions.get(sid)?.silenceThresholdS ?? SILENCE_THRESHOLD_DEFAULT_S;
+}
+
+/**
+ * Set the per-session silence-detection threshold.
+ * Clamped to a minimum of 15 s (SILENCE_THRESHOLD_FLOOR_S).
+ * No-op if the session does not exist.
+ */
+export function setSilenceThreshold(sid: number, seconds: number): void {
+  const s = _sessions.get(sid);
+  if (s) s.silenceThresholdS = Math.max(SILENCE_THRESHOLD_FLOOR_S, Math.floor(seconds));
 }
 
 // ── Active Session Context ─────────────────────────────────
@@ -370,31 +454,12 @@ export function setSessionColor(sid: number, color: string): string | null {
   return color;
 }
 
-// ── Tutorial Mode ──────────────────────────────────────────
 
-/** Return true if tutorial mode is enabled for the session (default: true). */
-export function isTutorialEnabled(sid: number): boolean {
-  const session = _sessions.get(sid);
-  if (!session) return false;
-  return session.tutorialEnabled !== false;
-}
+// ── First-Use Hints ────────────────────────────────────────
 
-/** Enable or disable tutorial mode for a session. */
-export function setTutorialEnabled(sid: number, enabled: boolean): void {
+export function getOrInitHintsSeen(sid: number): Set<string> | null {
   const session = _sessions.get(sid);
-  if (session) session.tutorialEnabled = enabled;
-}
-
-/**
- * Mark a tool as seen for tutorial purposes.
- * Returns true if this is the first time the tool has been seen (hint should be shown),
- * false if the tool has already been seen (skip hint).
- */
-export function markTutorialToolSeen(sid: number, toolKey: string): boolean {
-  const session = _sessions.get(sid);
-  if (!session) return false;
-  if (!session.tutorialSeenTools) session.tutorialSeenTools = new Set();
-  if (session.tutorialSeenTools.has(toolKey)) return false;
-  session.tutorialSeenTools.add(toolKey);
-  return true;
+  if (!session) return null;
+  if (!session.firstUseHintsSeen) session.firstUseHintsSeen = new Set();
+  return session.firstUseHintsSeen;
 }

@@ -4,8 +4,10 @@ import { fileURLToPath } from "url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { runInSessionContext } from "./session-context.js";
 import { getActiveSession, getSession } from "./session-manager.js";
+import { markFirstUseHintSeen } from "./first-use-hints.js";
+import { SERVICE_MESSAGES } from "./service-messages.js";
 import { runInTokenHintContext } from "./tools/identity-schema.js";
-import { invokePreToolHook } from "./tool-hooks.js";
+import { invokePreToolHook, FAIL_CLOSED_TOOLS } from "./tool-hooks.js";
 import { checkUnknownParams, injectWarningIntoResult } from "./unknown-param-warning.js";
 import { toError } from "./telegram.js";
 import { recordToolCall } from "./trace-log.js";
@@ -73,6 +75,10 @@ export function dispatchBehaviorTracking(
     btRecordAnimation(sid); recordPresenceSignal(sid);
   } else if (name === "set_reaction" || (name === "action" && cleanArgs.type === "react")) {
     btRecordReaction(sid); recordPresenceSignal(sid);
+    // Part B: reaction semantics first-call nudge (task 15-745)
+    if (markFirstUseHintSeen(sid, "reaction_semantics")) {
+      deliverServiceMessage(sid, SERVICE_MESSAGES.NUDGE_REACTION_SEMANTICS);
+    }
   } else if (name === "send") {
     const isDm = cleanArgs.type === "dm";
     if (!isDm) {
@@ -114,6 +120,17 @@ export function dispatchBehaviorTracking(
               (u as Record<string, unknown>).from === "user",
           );
           btRecordDequeue(sid, hasUserContent);
+          // One-time voice modality hint (task 15-714)
+          const hasUserVoice = updates.some(
+            (u: unknown) =>
+              typeof u === "object" && u !== null &&
+              (u as Record<string, unknown>).from === "user" &&
+              typeof (u as Record<string, unknown>).content === "object" &&
+              ((u as Record<string, unknown>).content as Record<string, unknown>).type === "voice",
+          );
+          if (hasUserVoice && markFirstUseHintSeen(sid, "modality_hint_voice")) {
+            deliverServiceMessage(sid, SERVICE_MESSAGES.NUDGE_VOICE_MODALITY);
+          }
         }
       }
     } catch { /* ignore parse errors */ }
@@ -179,21 +196,21 @@ export function createServer(): McpServer {
           // fail safe by treating it as blocked.
           const sessionName = (sid > 0 ? getSession(sid)?.name : undefined) ?? "";
 
-          let hookResult: { allowed: boolean; reason?: string };
-          try {
-            hookResult = await invokePreToolHook(name, cleanArgs);
-          } catch (err) {
-            // Hook threw — treat as blocked to fail safe
-            const reason = err instanceof Error ? err.message : "Hook error";
-            logBlockedToolCall(name, reason);
-            recordToolCall(name, cleanArgs, sid, sessionName, "blocked", "HOOK_ERROR");
-            return toError({ code: "BLOCKED", message: `Pre-tool hook error: ${reason}` });
-          }
+          const hookResult = await invokePreToolHook(name, cleanArgs);
           if (!hookResult.allowed) {
-            const reason = hookResult.reason ?? "Blocked by pre-tool hook";
-            logBlockedToolCall(name, reason);
-            recordToolCall(name, cleanArgs, sid, sessionName, "blocked", "BLOCKED");
-            return toError({ code: "BLOCKED", message: reason });
+            if (hookResult.hookError && !FAIL_CLOSED_TOOLS.has(name)) {
+              // Hook error on a fail-open tool — log and allow the call to proceed.
+              // Not sent to logBlockedToolCall: the call is not blocked; the error
+              // is an infrastructure anomaly, not a policy denial.
+              process.stderr.write(
+                `[hook:error] ${normalizeLogField(name)} — hook error on fail-open tool; proceeding\n`
+              );
+            } else {
+              const reason = hookResult.reason ?? "Blocked by pre-tool hook";
+              logBlockedToolCall(name, reason);
+              recordToolCall(name, cleanArgs, sid, sessionName, "blocked", "BLOCKED");
+              return toError({ code: "BLOCKED", message: reason });
+            }
           }
 
           let callResult: unknown;

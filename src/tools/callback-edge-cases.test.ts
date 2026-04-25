@@ -53,9 +53,9 @@ import { resetRoutingModeForTest } from "../routing-mode.js";
 import { resetDmPermissionsForTest } from "../dm-permissions.js";
 import { runInSessionContext } from "../session-context.js";
 
-import { register as registerConfirm } from "./confirm.js";
-import { register as registerChoose } from "./choose.js";
-import { register as registerSendChoice } from "./send_choice.js";
+import { register as registerConfirm } from "./confirm/handler.js";
+import { register as registerChoose } from "./send/choose.js";
+import { register as registerSendChoice } from "./send/choice.js";
 import { register as registerDequeueUpdate } from "./dequeue.js";
 
 // ---------------------------------------------------------------------------
@@ -218,10 +218,48 @@ describe("callback edge-cases — rapid clicks and expired queries", () => {
   });
 
   // -------------------------------------------------------------------------
+  // SC-4p: send_choice persistent — second click still fires hook (multi-tap)
+  // -------------------------------------------------------------------------
+
+  it("SC-4p: send_choice persistent mode — second tap fires hook again (multi-tap works)", async () => {
+    const sendResult = await runInSessionContext(sid, () =>
+      handlers.send_choice({
+        text: "Control panel:",
+        options: [{ label: "Option A", value: "a" }, { label: "Option B", value: "b" }],
+        persistent: true,
+        token,
+      }),
+    );
+    expect(isError(sendResult)).toBe(false);
+    expect(parseResult(sendResult).message_id).toBe(5);
+
+    // First press — hook fires ackAndEditSelection (keyboard stays visible with highlight)
+    recordInbound(cbUpdate(5, "a", "qid1"));
+    await new Promise<void>((r) => { setTimeout(r, 20); });
+
+    expect(mocks.answerCallbackQuery).toHaveBeenCalledTimes(1);
+    expect(mocks.answerCallbackQuery).toHaveBeenCalledWith("qid1");
+    expect(mocks.editMessageText).toHaveBeenCalledTimes(1);
+    // No keyboard collapse in persistent mode
+    expect(mocks.editMessageReplyMarkup).not.toHaveBeenCalled();
+
+    // Second press — hook must still be alive (persistent registration)
+    recordInbound(cbUpdate(5, "b", "qid2"));
+    await new Promise<void>((r) => { setTimeout(r, 20); });
+
+    // Hook fired again: both presses acked and keyboard updated
+    expect(mocks.answerCallbackQuery).toHaveBeenCalledTimes(2);
+    expect(mocks.answerCallbackQuery).toHaveBeenCalledWith("qid2");
+    expect(mocks.editMessageText).toHaveBeenCalledTimes(2);
+  });
+
+  // -------------------------------------------------------------------------
   // SC-4: send_choice — second click after hook consumed
   // -------------------------------------------------------------------------
 
   it("SC-4: send_choice second click after hook consumed — keyboard only removed once, second callback queues for dequeue", async () => {
+    vi.useFakeTimers();
+
     const sendResult = await runInSessionContext(sid, () =>
       handlers.send_choice({
         text: "Pick an option:",
@@ -232,24 +270,40 @@ describe("callback edge-cases — rapid clicks and expired queries", () => {
     expect(isError(sendResult)).toBe(false);
     expect(parseResult(sendResult).message_id).toBe(5);
 
-    // First click — one-shot hook fires: callback answered and keyboard removed
+    // First click — one-shot hook fires two-stage highlight-then-collapse:
+    // stage 1 (immediate): answerCallbackQuery + editMessageReplyMarkup with highlight
+    // stage 2 (~150 ms later): editMessageText with empty keyboard + selection suffix
     recordInbound(cbUpdate(5, "a", "qid1"));
-    await new Promise<void>((r) => { setTimeout(r, 20); }); // let hook settle
+    // Flush microtasks for stage 1
+    await Promise.resolve();
+    await Promise.resolve();
 
     expect(mocks.answerCallbackQuery).toHaveBeenCalledTimes(1);
     expect(mocks.answerCallbackQuery).toHaveBeenCalledWith("qid1");
+    // Stage 1 complete: editMessageReplyMarkup called with highlighted keyboard
+    expect(mocks.editMessageReplyMarkup).toHaveBeenCalledTimes(1);
+    // Stage 2 not yet: timer hasn't fired
+    expect(mocks.editMessageText).not.toHaveBeenCalled();
+
+    // Advance past collapse delay (150 ms) — stage 2 fires
+    await vi.advanceTimersByTimeAsync(200);
     expect(mocks.editMessageText).toHaveBeenCalledTimes(1);
 
     // Second click — hook already consumed; no additional ack or keyboard removal
     recordInbound(cbUpdate(5, "a", "qid2"));
-    await new Promise<void>((r) => { setTimeout(r, 20); });
+    await vi.advanceTimersByTimeAsync(200);
 
     // Keyboard NOT removed a second time
     expect(mocks.editMessageText).toHaveBeenCalledTimes(1);
     // answerCallbackQuery NOT called again (no hook to fire it)
     expect(mocks.answerCallbackQuery).toHaveBeenCalledTimes(1);
 
-    // Second callback appears in dequeue as an unhandled event
+    vi.useRealTimers();
+    // Flush microtasks from fake-timer resolution before proceeding
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // Both callbacks appear in dequeue — both were routed to the session queue
     const dqResult = await runInSessionContext(sid, () =>
       handlers.dequeue({ timeout: 0, token }),
     );
@@ -260,7 +314,8 @@ describe("callback edge-cases — rapid clicks and expired queries", () => {
 
     const cbEvents = updates.filter((e) => e.event === "callback");
     const qids = cbEvents.map((e) => (e.content as Record<string, unknown>).qid);
-    // The second (hook-less) click is present in the queue for the agent to process
+    // Both clicks are present in the queue for the agent to process
+    expect(qids).toContain("qid1");
     expect(qids).toContain("qid2");
   });
 });

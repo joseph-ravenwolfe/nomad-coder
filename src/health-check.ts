@@ -78,7 +78,7 @@ async function sendGovernorPrompt(
   if (typeof chatId !== "number") return;
 
   const text =
-    `⚠️ *${markdownToV2(governorName)}* \\(primary\\) appears unresponsive\\.\n` +
+    `🟡 *${markdownToV2(governorName)}* \\(primary\\) appears unresponsive\\.\n` +
     `Next available session: *${markdownToV2(nextName)}*`;
 
   const keyboard = [
@@ -165,7 +165,24 @@ async function runHealthCheck(thresholdMs: number): Promise<void> {
       // Session has polled again — it's healthy again.
       _flaggedSids.delete(sid);
       const session = getSession(sid);
-      const name = session?.name ?? `Session ${sid}`;
+
+      // Session was closed (not recovered) — clean up tracking but don't post back-online.
+      if (!session) {
+        const warningMsgId = _unresponsiveMsgIds.get(sid);
+        _unresponsiveMsgIds.delete(sid);
+        if (warningMsgId !== undefined) {
+          const chatId = resolveChat();
+          if (typeof chatId === "number") {
+            void getRawApi().deleteMessage(chatId, warningMsgId).catch(() => {});
+          }
+        }
+        _backOnlineMsgIds.delete(sid);
+        clearOnceOnSend(sid);
+        dlog("health", `session closed (not recovered) sid=${sid} — back-online suppressed`);
+        continue;
+      }
+
+      const name = session.name;
 
       // Delete the "unresponsive" warning if we tracked its message_id
       const warningMsgId = _unresponsiveMsgIds.get(sid);
@@ -229,13 +246,13 @@ async function runHealthCheck(thresholdMs: number): Promise<void> {
           });
         } else {
           const msgId = await sendServiceMessage(
-            `⚠️ ${session.name} (primary) appears unresponsive and no other session is available.`,
+            `🟡 ${session.name} (primary) appears unresponsive and no other session is available.`,
           ).catch(() => undefined);
           if (msgId !== undefined) _unresponsiveMsgIds.set(session.sid, msgId);
         }
       } else {
         const msgId = await sendServiceMessage(
-          `⚠️ ${session.name} appears unresponsive.`,
+          `🟡 ${session.name} appears unresponsive.`,
         ).catch(() => undefined);
         if (msgId !== undefined) _unresponsiveMsgIds.set(session.sid, msgId);
       }

@@ -3,7 +3,7 @@
  *
  * Writes to stderr when enabled (visible in MCP client logs).
  * Stores entries in a bounded in-memory ring buffer queryable
- * via the /debug built-in command or dump_session_record.
+ * via the /debug built-in command.
  *
  * Enable via:
  *   - TELEGRAM_MCP_DEBUG=1 env var (enables at startup)
@@ -32,7 +32,8 @@ export type DebugCategory =
   | "service"
   | "animation"
   | "tool"
-  | "health";
+  | "health"
+  | "async-send";
 
 export interface DebugEntry {
   id: number;           // auto-incrementing sequence number
