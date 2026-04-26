@@ -28,10 +28,10 @@ disastrous.
 
 - Hardcoded API keys, tokens, passwords, or secrets
 - Bot tokens (Telegram or otherwise)
-- Internal hostnames (`*.cortex.lan`, IP addresses, LXC IDs)
+- Internal hostnames (private workspace hostnames, IP addresses, LXC IDs)
 - Operator PII (names, emails, usernames beyond public GitHub profile)
 - File paths containing usernames or private directory structures
-- References to `cortex.lan` workspace internals
+- References to private workspace internals
 - Session tokens, PINs, or authentication material in logs/comments
 
 ### High (fix before merge)
@@ -51,7 +51,7 @@ disastrous.
 
 1. **Automated scan:** `grep -rn` for patterns:
    - IP addresses: `\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b`
-   - Hostnames: `cortex\.lan|\.cortex\.|lxc[- ]?\d{3}|vm[- ]?\d{3}`
+   - Hostnames: internal domain names, LXC/VM identifiers specific to your infrastructure
    - Secrets: `token|secret|password|api[_-]?key|bearer`
    - Paths: `D:\\|C:\\|/home/|/Users/`
    - PII: operator names, emails (check git log too)
