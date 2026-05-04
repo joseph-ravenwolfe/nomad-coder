@@ -27,10 +27,16 @@ import type { ReminderEvent } from "./reminder-state.js";
  * agents — without it, an agent has no way to know a new event arrived
  * short of long-polling dequeue.
  *
+ * Heartbeat content is `"tick\n"` (5 bytes) — non-empty so it survives
+ * any line filter the agent's watcher might apply (Monitor and friends
+ * commonly drop empty lines). The exact text doesn't matter; agents
+ * react to *any* line by calling dequeue({max_wait: 0}). The atomicity
+ * guarantee on POSIX appendFileSync holds well below PIPE_BUF (4 KB).
+ *
  * The append is best-effort: file-write errors must NOT block event
  * delivery. The event is in the queue regardless. Errors are logged and
  * swallowed (e.g., the cache dir was deleted by an admin, the FS is
- * full, etc.). Single-byte append is atomic on POSIX (under PIPE_BUF).
+ * full, etc.).
  */
 function enqueueAndPing(
   sid: number,
@@ -41,7 +47,7 @@ function enqueueAndPing(
   const watchFile = getSession(sid)?.watchFile;
   if (watchFile) {
     try {
-      appendFileSync(watchFile, "\n");
+      appendFileSync(watchFile, "tick\n");
     } catch (err) {
       process.stderr.write(
         `[heartbeat] write failed sid=${sid} file=${watchFile} err=${(err as Error).message}\n`,

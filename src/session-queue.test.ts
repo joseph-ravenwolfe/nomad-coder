@@ -478,9 +478,10 @@ describe("session-queue", () => {
 
   // ── v8 heartbeat side-effect ────────────────────────────────
   describe("heartbeat write", () => {
-    it("appends a single byte to the session's watch file on each enqueue", async () => {
+    it("appends a 'tick\\n' heartbeat line to the session's watch file on each enqueue", async () => {
       const { createSession, unlinkWatchFile, getSession } = await import("./session-manager.js");
-      const { statSync, existsSync } = await import("node:fs");
+      const { statSync, existsSync, readFileSync } = await import("node:fs");
+      const HEARTBEAT = "tick\n";
       const session = createSession("Worker");
       try {
         createSessionQueue(session.sid);
@@ -493,11 +494,13 @@ describe("session-queue", () => {
         expect(statSync(wf!).size).toBe(0);
 
         routeToSession(makeEvent({ id: 1001 }));
-        expect(statSync(wf!).size).toBe(1);
+        expect(statSync(wf!).size).toBe(HEARTBEAT.length);
+        expect(readFileSync(wf!, "utf8")).toBe(HEARTBEAT);
 
         routeToSession(makeEvent({ id: 1002 }));
         routeToSession(makeEvent({ id: 1003 }));
-        expect(statSync(wf!).size).toBe(3);
+        expect(statSync(wf!).size).toBe(HEARTBEAT.length * 3);
+        expect(readFileSync(wf!, "utf8")).toBe(HEARTBEAT.repeat(3));
       } finally {
         unlinkWatchFile(session.watchFile);
         removeSessionQueue(session.sid);
