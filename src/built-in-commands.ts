@@ -678,7 +678,7 @@ async function handleVoiceCommand(): Promise<void> {
     try {
       const msg = await api.sendMessage(
         chatId,
-        "🔇 TTS is not configured. Set `TTS_HOST` or `OPENAI_API_KEY` to enable voice.",
+        "🔇 TTS is not configured. Set `ELEVENLABS_API_KEY`, `TTS_HOST`, or `OPENAI_API_KEY` to enable voice.",
         { parse_mode: "Markdown" },
       );
       markInternalMessage(msg.message_id);
@@ -871,9 +871,9 @@ async function buildVoicePanel(
     lines.push("");
     lines.push(
       "_No voices found — TTS still works with the " +
-      "built\\-in voice\\. Point `TTS\\_HOST` at a " +
-      "[Kokoro](https://github.com/hexgrad/kokoro) " +
-      "server for 25\\+ natural voices\\._"
+      "built\\-in voice\\. Set `ELEVENLABS\\_API\\_KEY` for " +
+      "ElevenLabs voices, or point `TTS\\_HOST` at a " +
+      "[Kokoro](https://github.com/hexgrad/kokoro) server\\._"
     );
   } else {
     buildWizardStep(voices, keyboard, lines, step, effective);

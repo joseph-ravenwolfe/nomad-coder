@@ -291,11 +291,26 @@ WHISPER_CACHE_DIR=/path/to/cache            # optional — cache model files her
 
 | Priority | Env var | Provider |
 | --- | --- | --- |
-| 1 | `TTS_HOST` | Any OpenAI-compatible `/v1/audio/speech` endpoint (Kokoro, Ollama, etc.) |
-| 2 | `OPENAI_API_KEY` | api.openai.com |
-| 3 | *(neither)* | Bundled ONNX model — zero config, lower quality |
+| 1 | `ELEVENLABS_API_KEY` | ElevenLabs (`api.elevenlabs.io`) — recommended |
+| 2 | `TTS_HOST` | Any OpenAI-compatible `/v1/audio/speech` endpoint (Kokoro, Ollama, etc.) |
+| 3 | `OPENAI_API_KEY` | api.openai.com |
+| 4 | *(none)* | Bundled ONNX model — zero config, lower quality |
 
-**Kokoro is the recommended local TTS option** — high-quality output, 25+ voices, runs in Docker with no API key.
+#### ElevenLabs (recommended)
+
+High-quality voices, large curated catalog, no local server. Set the API key (`xi-api-key` from your ElevenLabs account):
+
+```env
+ELEVENLABS_API_KEY=sk_...                  # required
+ELEVENLABS_VOICE_ID=21m00Tcm4TlvDq8ikWAM   # optional — default voice when no per-session override (Rachel)
+ELEVENLABS_MODEL_ID=eleven_multilingual_v2 # optional — try eleven_turbo_v2_5 for ~50% lower latency
+```
+
+ElevenLabs voices are identified by 22-char `voice_id`s (e.g. `21m00Tcm4TlvDq8ikWAM`). Send `/voice` in your Telegram chat to browse your personal + workspace voices and the curated premade catalog interactively. Speed is clamped to ElevenLabs' supported range `[0.7, 1.2]`.
+
+#### Kokoro (local, free)
+
+Run a local Kokoro server when you want a self-hosted setup with no per-request cost:
 
 ```bash
 docker run -d --name kokoro -p 8880:8880 ghcr.io/hexgrad/kokoro-onnx-server:latest
@@ -313,7 +328,7 @@ Send `/voice` in your Telegram chat to browse and preview all available voices i
 
 ### Per-Session Voice Override
 
-Agents can set a per-session TTS voice with `action(type: "profile/voice")`, overriding the global default without affecting other sessions. Pass an empty string to clear the override and revert to the global default.
+Agents can set a per-session TTS voice with `action(type: "profile/voice")`, overriding the global default without affecting other sessions. The accepted format depends on the active provider — ElevenLabs takes a 22-char `voice_id`; OpenAI/Kokoro take a voice name. Pass an empty string to clear the override and revert to the global default.
 
 ---
 

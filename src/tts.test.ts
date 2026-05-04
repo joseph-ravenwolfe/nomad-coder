@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach, type Mock } from "vitest";
-import { isTtsEnabled, stripForTts, normalizeCapsForTts, synthesizeToOgg, fetchVoiceList, TTS_LIMIT, _resetLocalPipeline } from "./tts.js";
+import { isTtsEnabled, stripForTts, normalizeCapsForTts, synthesizeToOgg, fetchVoiceList, TTS_LIMIT, _resetLocalPipeline, _resetElevenSpeedWarning } from "./tts.js";
 
 // Mock @huggingface/transformers so no model is downloaded during tests
 vi.mock("@huggingface/transformers", () => ({
@@ -750,5 +750,280 @@ describe("fetchVoiceList", () => {
     vi.stubGlobal("fetch", mockFetch);
     await fetchVoiceList();
     expect(mockFetch.mock.calls[0][0]).toBe("http://kokoro.local/v1/audio/voices");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ElevenLabs provider
+// ---------------------------------------------------------------------------
+
+describe("synthesizeToOgg (ElevenLabs provider)", () => {
+  beforeEach(() => {
+    _resetElevenSpeedWarning();
+  });
+
+  afterEach(() => {
+    delete process.env.ELEVENLABS_API_KEY;
+    delete process.env.ELEVENLABS_VOICE_ID;
+    delete process.env.ELEVENLABS_MODEL_ID;
+    // Make sure no fallback provider env vars leak in either direction
+    delete process.env.TTS_HOST;
+    delete process.env.OPENAI_API_KEY;
+    vi.unstubAllGlobals();
+  });
+
+  /** Build a minimal valid PCM-16 LE buffer (4 samples). */
+  function fakePcmResponse(): { arrayBuffer: () => Promise<ArrayBuffer>; ok: true } {
+    // 4 int16 samples LE: [100, -200, 0, 32000]
+    const buf = Buffer.from([100, 0, 0x38, 0xff, 0, 0, 0x00, 0x7d]);
+    const arr = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+    return { ok: true, arrayBuffer: () => Promise.resolve(arr) };
+  }
+
+  it("routes to ElevenLabs when ELEVENLABS_API_KEY is set, even with TTS_HOST also set", async () => {
+    process.env.ELEVENLABS_API_KEY = "sk_eleven_test";
+    process.env.TTS_HOST = "http://kokoro.local"; // would otherwise win
+
+    const { pcmToOggOpus } = await import("./ogg-opus-encoder.js");
+    vi.mocked(pcmToOggOpus).mockResolvedValue(Buffer.from("eleven-ogg"));
+
+    const mockFetch = vi.fn().mockResolvedValue(fakePcmResponse());
+    vi.stubGlobal("fetch", mockFetch);
+
+    const result = await synthesizeToOgg("hello", "voice123abcvoice123abcv");
+
+    expect(result).toEqual(Buffer.from("eleven-ogg"));
+    const [url, opts] = mockFetch.mock.calls[0];
+    expect(url).toBe(
+      "https://api.elevenlabs.io/v1/text-to-speech/voice123abcvoice123abcv?output_format=pcm_16000"
+    );
+    expect(opts.headers["xi-api-key"]).toBe("sk_eleven_test");
+    expect(opts.headers["Content-Type"]).toBe("application/json");
+    const body = JSON.parse(opts.body);
+    expect(body.text).toBe("hello");
+    expect(body.model_id).toBe("eleven_multilingual_v2");
+    expect(body.voice_settings.speed).toBe(1.0);
+  });
+
+  it("uses ELEVENLABS_VOICE_ID when no voice arg is passed", async () => {
+    process.env.ELEVENLABS_API_KEY = "sk_eleven_test";
+    process.env.ELEVENLABS_VOICE_ID = "envVoiceId";
+
+    const { pcmToOggOpus } = await import("./ogg-opus-encoder.js");
+    vi.mocked(pcmToOggOpus).mockResolvedValue(Buffer.from("ogg"));
+    const mockFetch = vi.fn().mockResolvedValue(fakePcmResponse());
+    vi.stubGlobal("fetch", mockFetch);
+
+    await synthesizeToOgg("hi");
+
+    const [url] = mockFetch.mock.calls[0];
+    expect(url).toContain("/v1/text-to-speech/envVoiceId");
+  });
+
+  it("falls back to hardcoded Rachel when no voice arg and no ELEVENLABS_VOICE_ID", async () => {
+    process.env.ELEVENLABS_API_KEY = "sk_eleven_test";
+
+    const { pcmToOggOpus } = await import("./ogg-opus-encoder.js");
+    vi.mocked(pcmToOggOpus).mockResolvedValue(Buffer.from("ogg"));
+    const mockFetch = vi.fn().mockResolvedValue(fakePcmResponse());
+    vi.stubGlobal("fetch", mockFetch);
+
+    await synthesizeToOgg("hi");
+
+    const [url] = mockFetch.mock.calls[0];
+    expect(url).toContain("/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM");
+  });
+
+  it("uses ELEVENLABS_MODEL_ID override when set", async () => {
+    process.env.ELEVENLABS_API_KEY = "sk_eleven_test";
+    process.env.ELEVENLABS_MODEL_ID = "eleven_turbo_v2_5";
+
+    const { pcmToOggOpus } = await import("./ogg-opus-encoder.js");
+    vi.mocked(pcmToOggOpus).mockResolvedValue(Buffer.from("ogg"));
+    const mockFetch = vi.fn().mockResolvedValue(fakePcmResponse());
+    vi.stubGlobal("fetch", mockFetch);
+
+    await synthesizeToOgg("hi");
+
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.model_id).toBe("eleven_turbo_v2_5");
+  });
+
+  it("clamps speed below 0.7 and above 1.2 silently (with one stderr warning)", async () => {
+    process.env.ELEVENLABS_API_KEY = "sk_eleven_test";
+
+    const { pcmToOggOpus } = await import("./ogg-opus-encoder.js");
+    vi.mocked(pcmToOggOpus).mockResolvedValue(Buffer.from("ogg"));
+    const mockFetch = vi.fn().mockResolvedValue(fakePcmResponse());
+    vi.stubGlobal("fetch", mockFetch);
+
+    const stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+    await synthesizeToOgg("a", undefined, 4.0);
+    await synthesizeToOgg("b", undefined, 0.1);
+    await synthesizeToOgg("c", undefined, 1.0); // in-range — no warning
+
+    const speeds = mockFetch.mock.calls.map(c => JSON.parse((c[1] as { body: string }).body).voice_settings.speed);
+    expect(speeds).toEqual([1.2, 0.7, 1.0]);
+    // Exactly one clamp warning (the second clamp is silenced)
+    const clampWarnings = stderrSpy.mock.calls.filter(c => String(c[0]).includes("speed clamped"));
+    expect(clampWarnings).toHaveLength(1);
+
+    stderrSpy.mockRestore();
+  });
+
+  it("converts PCM-16 LE bytes to Float32 [-1, 1] before encoding", async () => {
+    process.env.ELEVENLABS_API_KEY = "sk_eleven_test";
+
+    const { pcmToOggOpus } = await import("./ogg-opus-encoder.js");
+    vi.mocked(pcmToOggOpus).mockClear();
+    vi.mocked(pcmToOggOpus).mockResolvedValue(Buffer.from("ogg"));
+
+    // 2 samples: [16384, -16384] in LE bytes
+    const pcm = Buffer.from([0x00, 0x40, 0x00, 0xc0]);
+    const arr = pcm.buffer.slice(pcm.byteOffset, pcm.byteOffset + pcm.byteLength);
+
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      arrayBuffer: () => Promise.resolve(arr),
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    await synthesizeToOgg("hi");
+
+    expect(pcmToOggOpus).toHaveBeenCalledTimes(1);
+    const [floatArr, sampleRate] = vi.mocked(pcmToOggOpus).mock.calls[0];
+    expect(sampleRate).toBe(16000);
+    expect(floatArr).toBeInstanceOf(Float32Array);
+    expect(floatArr.length).toBe(2);
+    // 16384 / 32768 = 0.5; -16384 / 32768 = -0.5
+    expect(floatArr[0]).toBeCloseTo(0.5, 4);
+    expect(floatArr[1]).toBeCloseTo(-0.5, 4);
+  });
+
+  it("throws a clear 401 message when API key is invalid", async () => {
+    process.env.ELEVENLABS_API_KEY = "sk_bad";
+
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      text: () => Promise.resolve("invalid api key"),
+    }));
+    // Silence stderr error log during this expected-failure case
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+    await expect(synthesizeToOgg("hi")).rejects.toThrow("ElevenLabs auth failed");
+  });
+
+  it("throws an unknown-voice error on 422", async () => {
+    process.env.ELEVENLABS_API_KEY = "sk_eleven_test";
+
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: false,
+      status: 422,
+      text: () => Promise.resolve('{"detail": "voice_not_found"}'),
+    }));
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+    await expect(synthesizeToOgg("hi", "fake-voice")).rejects.toThrow("ElevenLabs validation error");
+  });
+
+  it("does NOT route to ElevenLabs when ELEVENLABS_API_KEY is unset", async () => {
+    // Defensive — TTS_HOST should win
+    process.env.TTS_HOST = "http://kokoro.local";
+
+    const { default: decode } = await import("audio-decode");
+    const { pcmToOggOpus } = await import("./ogg-opus-encoder.js");
+    vi.mocked(decode).mockResolvedValue({ sampleRate: 24000, channelData: [new Float32Array(1)] });
+    vi.mocked(pcmToOggOpus).mockResolvedValue(Buffer.alloc(4));
+
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)),
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    await synthesizeToOgg("hi");
+
+    const [url] = mockFetch.mock.calls[0];
+    expect(url).toBe("http://kokoro.local/v1/audio/speech"); // not the ElevenLabs URL
+  });
+});
+
+describe("fetchVoiceList (ElevenLabs)", () => {
+  afterEach(() => {
+    delete process.env.ELEVENLABS_API_KEY;
+    delete process.env.TTS_HOST;
+    vi.unstubAllGlobals();
+  });
+
+  it("returns merged personal+premade voices, deduped by voice_id, when ELEVENLABS_API_KEY is set", async () => {
+    process.env.ELEVENLABS_API_KEY = "sk_eleven_test";
+    process.env.TTS_HOST = "http://kokoro.local"; // ignored
+
+    const personalResp = {
+      voices: [
+        {
+          voice_id: "VID_PERSONAL_A",
+          name: "MyClonedVoice",
+          labels: { gender: "female" },
+          verified_languages: [{ language: "English" }],
+        },
+        {
+          voice_id: "VID_SHARED_X", // also appears in premade — should de-dup
+          name: "Rachel",
+        },
+      ],
+    };
+    const premadeResp = {
+      voices: [
+        { voice_id: "VID_SHARED_X", name: "Rachel" },
+        { voice_id: "VID_PREMADE_B", name: "Adam", labels: { gender: "male" } },
+      ],
+    };
+
+    const mockFetch = vi.fn()
+      .mockImplementationOnce(() => Promise.resolve({ ok: true, json: () => Promise.resolve(personalResp) }))
+      .mockImplementationOnce(() => Promise.resolve({ ok: true, json: () => Promise.resolve(premadeResp) }));
+    vi.stubGlobal("fetch", mockFetch);
+
+    const result = await fetchVoiceList();
+
+    expect(result).toEqual([
+      {
+        name: "VID_PERSONAL_A",
+        description: "MyClonedVoice",
+        language: "English",
+        gender: "female",
+      },
+      { name: "VID_SHARED_X", description: "Rachel" },
+      { name: "VID_PREMADE_B", description: "Adam", gender: "male" },
+    ]);
+
+    // Confirm both endpoints were hit with xi-api-key and the right query params
+    const calls = mockFetch.mock.calls.map(c => c[0] as string);
+    expect(calls.some(u => u.includes("voice_type=non-community"))).toBe(true);
+    expect(calls.some(u => u.includes("category=premade"))).toBe(true);
+    for (const c of mockFetch.mock.calls) {
+      expect((c[1] as { headers: Record<string, string> }).headers["xi-api-key"]).toBe("sk_eleven_test");
+    }
+  });
+
+  it("returns empty array when ElevenLabs returns non-ok for both queries", async () => {
+    process.env.ELEVENLABS_API_KEY = "sk_eleven_test";
+
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 503 }));
+
+    const result = await fetchVoiceList();
+    expect(result).toEqual([]);
+  });
+
+  it("returns empty array when ElevenLabs fetch throws on both queries", async () => {
+    process.env.ELEVENLABS_API_KEY = "sk_eleven_test";
+
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network error")));
+
+    const result = await fetchVoiceList();
+    expect(result).toEqual([]);
   });
 });

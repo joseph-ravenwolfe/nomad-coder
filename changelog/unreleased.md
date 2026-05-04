@@ -11,6 +11,7 @@
 
 ### Added
 
+- **ElevenLabs as the primary TTS provider.** New highest-priority branch in `synthesizeToOgg()` (and `fetchVoiceList()`) selected by `ELEVENLABS_API_KEY`. Existing OpenAI-compatible (`TTS_HOST`), OpenAI direct (`OPENAI_API_KEY`), and local ONNX fallbacks remain intact and continue to handle absent / failed ElevenLabs configuration. New env vars: `ELEVENLABS_API_KEY` (required to enable), `ELEVENLABS_VOICE_ID` (optional default voice — fallback to Rachel `21m00Tcm4TlvDq8ikWAM`), `ELEVENLABS_MODEL_ID` (optional, default `eleven_multilingual_v2`). Audio path: ElevenLabs returns `pcm_16000` (raw 16-bit LE mono @ 16 kHz) → existing `pcmToOggOpus()` encoder → Telegram `sendVoice`. Speed is clamped to ElevenLabs' supported range `[0.7, 1.2]` with a one-time stderr warning per process. `/voice` panel populates from ElevenLabs `/v2/voices` (personal + workspace + premade), deduped by `voice_id`. The per-session `voice` profile field stores a `voice_id` directly when ElevenLabs is active.
 - New module `src/request-context.ts`: `AsyncLocalStorage`-based request-scoped context that propagates the MCP HTTP session ID to tool handlers (e.g., `session/start` reads it via `getCurrentHttpSessionId()` and binds the bridge session to the transport).
 - `getWatchFilePath(sid)`, `unlinkWatchFile(path)`, `findSessionsByHttpId(httpSessionId)` exports on `session-manager`.
 - New tests: heartbeat file allocation, deletion, idempotent unlink, HTTP-ID lookup, file-write side effect of every enqueue path.

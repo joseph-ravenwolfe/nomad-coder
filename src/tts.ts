@@ -1,7 +1,15 @@
 /**
  * Text-to-speech synthesis module.
  *
- * Provider is selected automatically from environment variables:
+ * Provider is selected automatically from environment variables, in priority order:
+ *
+ *   ELEVENLABS_API_KEY set — ElevenLabs (https://api.elevenlabs.io). Highest priority.
+ *                            Env vars:
+ *                              ELEVENLABS_API_KEY  (required — your `xi-api-key`)
+ *                              ELEVENLABS_VOICE_ID (optional — fallback voice_id when
+ *                                                   no voice arg / config default;
+ *                                                   default: 21m00Tcm4TlvDq8ikWAM Rachel)
+ *                              ELEVENLABS_MODEL_ID (optional — default: eleven_multilingual_v2)
  *
  *   TTS_HOST set       — Any OpenAI-compatible /v1/audio/speech server.
  *                        No API key required unless the server demands one.
@@ -19,7 +27,7 @@
  *                          TTS_VOICE      (default: alloy)
  *                          TTS_MODEL      (default: tts-1)
  *
- *   Neither set        — Free local provider. Uses @huggingface/transformers (ONNX).
+ *   None of the above  — Free local provider. Uses @huggingface/transformers (ONNX).
  *                        Model is downloaded once on first use and cached locally.
  *                        Env vars:
  *                          TTS_MODEL_LOCAL  (default: Xenova/mms-tts-eng)
@@ -153,6 +161,213 @@ export function normalizeCapsForTts(text: string): string {
   return text.replace(RE_ALL_CAPS_UNDERSCORE, (match) =>
     `"${match.replace(/_/g, " ").toLowerCase()}"`
   );
+}
+
+// ---------------------------------------------------------------------------
+// ElevenLabs provider (ELEVENLABS_API_KEY)
+// ---------------------------------------------------------------------------
+
+const ELEVENLABS_BASE = "https://api.elevenlabs.io";
+const ELEVENLABS_DEFAULT_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"; // Rachel — stable stock voice
+const ELEVENLABS_DEFAULT_MODEL_ID = "eleven_multilingual_v2";
+const ELEVENLABS_SPEED_MIN = 0.7;
+const ELEVENLABS_SPEED_MAX = 1.2;
+
+/** One-time per-process clamp warning to keep stderr quiet. */
+let _elevenSpeedWarned = false;
+
+/**
+ * Clamp the user's requested speed to ElevenLabs' supported range [0.7, 1.2].
+ * Returns 1.0 if speed is undefined. Logs a one-time stderr warning if a value
+ * was clamped so the operator notices but stderr doesn't get spammed.
+ */
+function clampElevenSpeed(speed: number | undefined): number {
+  if (speed === undefined) return 1.0;
+  if (speed < ELEVENLABS_SPEED_MIN || speed > ELEVENLABS_SPEED_MAX) {
+    if (!_elevenSpeedWarned) {
+      _elevenSpeedWarned = true;
+      process.stderr.write(
+        `[tts] ElevenLabs speed clamped to [${ELEVENLABS_SPEED_MIN}, ${ELEVENLABS_SPEED_MAX}]. ` +
+        `Requested ${speed} — silenced for the rest of this process.\n`,
+      );
+    }
+    return Math.max(ELEVENLABS_SPEED_MIN, Math.min(ELEVENLABS_SPEED_MAX, speed));
+  }
+  return speed;
+}
+
+/** @internal Test-only: reset the clamp warning flag. */
+export function _resetElevenSpeedWarning(): void {
+  _elevenSpeedWarned = false;
+}
+
+/**
+ * Resolve the ElevenLabs voice_id to use for this synthesis request.
+ *
+ * Priority:
+ *   1. function arg `voice` (per-session override or config default, already resolved
+ *      upstream in send.ts)
+ *   2. `process.env.ELEVENLABS_VOICE_ID`
+ *   3. Hardcoded `ELEVENLABS_DEFAULT_VOICE_ID` (Rachel)
+ */
+function resolveElevenVoiceId(voice: string | undefined): string {
+  if (voice && voice.trim().length > 0) return voice;
+  const envVoice = process.env.ELEVENLABS_VOICE_ID;
+  if (envVoice && envVoice.trim().length > 0) return envVoice;
+  return ELEVENLABS_DEFAULT_VOICE_ID;
+}
+
+/**
+ * Decode ElevenLabs `pcm_16000` response (raw signed 16-bit LE mono @ 16 kHz)
+ * into the Float32Array format that `pcmToOggOpus` expects.
+ *
+ * The buffer is assumed to be a multiple of 2 bytes; any trailing odd byte is
+ * ignored (defensive — should never happen with a well-formed PCM response).
+ */
+function pcm16LEToFloat32(buf: Buffer): Float32Array {
+  const sampleCount = Math.floor(buf.byteLength / 2);
+  const out = new Float32Array(sampleCount);
+  for (let i = 0; i < sampleCount; i++) {
+    const sample = buf.readInt16LE(i * 2);
+    // 32768 keeps positive samples in [0, 1) and negative samples in [-1, 0)
+    out[i] = sample / 32768;
+  }
+  return out;
+}
+
+/**
+ * Synthesize text via ElevenLabs API and return an OGG/Opus buffer.
+ *
+ * Requests `output_format=pcm_16000` so the bytes route through the existing
+ * `pcmToOggOpus()` encoder — same audio path as the local provider, no codec
+ * surprises.
+ *
+ * @throws if the API key is invalid, the voice_id is unknown (422), or any
+ *         network/server failure occurs. Errors never include the API key.
+ */
+async function synthesizeElevenLabsToOgg(
+  text: string,
+  voice?: string,
+  speed?: number,
+): Promise<Buffer> {
+  const apiKey = process.env.ELEVENLABS_API_KEY;
+  if (!apiKey) {
+    // Caller should have routed away from this function — defensive.
+    throw new Error("ElevenLabs synthesis called without ELEVENLABS_API_KEY.");
+  }
+
+  const voiceId = resolveElevenVoiceId(voice);
+  const modelId = process.env.ELEVENLABS_MODEL_ID ?? ELEVENLABS_DEFAULT_MODEL_ID;
+  const resolvedSpeed = clampElevenSpeed(speed);
+
+  const url = `${ELEVENLABS_BASE}/v1/text-to-speech/${encodeURIComponent(voiceId)}?output_format=pcm_16000`;
+  const body = {
+    text,
+    model_id: modelId,
+    voice_settings: {
+      stability: 0.5,
+      similarity_boost: 0.75,
+      speed: resolvedSpeed,
+    },
+  };
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "xi-api-key": apiKey,
+      "Content-Type": "application/json",
+      Accept: "application/octet-stream",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    // Read up to a small slice of the body for diagnostics, but never include
+    // the API key (we never logged it; the response body cannot reveal it).
+    const errorBody = await res.text().catch(() => "(no body)");
+    process.stderr.write(`[tts] ElevenLabs error ${res.status}: ${errorBody.slice(0, 500)}\n`);
+    if (res.status === 401) {
+      throw new Error("ElevenLabs auth failed (401). Check ELEVENLABS_API_KEY.");
+    }
+    if (res.status === 422) {
+      throw new Error(`ElevenLabs validation error (422). Likely an unknown voice_id. ${errorBody.slice(0, 200)}`);
+    }
+    throw new Error(`ElevenLabs returned ${res.status}.`);
+  }
+
+  const audioBuf = Buffer.from(await res.arrayBuffer());
+  const float32 = pcm16LEToFloat32(audioBuf);
+  const { pcmToOggOpus } = await import("./ogg-opus-encoder.js");
+  return pcmToOggOpus(float32, 16000);
+}
+
+/**
+ * Fetch voices from ElevenLabs and return as VoiceEntry[].
+ *
+ * Pulls personal+workspace+default voices (`voice_type=non-community`) AND
+ * the curated premade catalog (`category=premade`) in parallel, dedups by
+ * voice_id, and caps the result to keep the /voice panel responsive.
+ *
+ * Each VoiceEntry stores:
+ *   - `name`        ← ElevenLabs `voice_id` (used as the API identifier)
+ *   - `description` ← ElevenLabs `name`     (used as the panel label)
+ *   - `language`    ← `verified_languages[0].language` if present
+ *   - `gender`      ← `labels.gender` if present
+ */
+async function fetchElevenLabsVoices(): Promise<VoiceEntry[]> {
+  const apiKey = process.env.ELEVENLABS_API_KEY;
+  if (!apiKey) return [];
+
+  interface ElevenVoice {
+    voice_id?: string;
+    name?: string;
+    labels?: Record<string, string>;
+    verified_languages?: Array<{ language?: string }>;
+  }
+  interface ElevenVoicesResponse {
+    voices?: ElevenVoice[];
+    has_more?: boolean;
+    next_page_token?: string | null;
+  }
+
+  const fetchPage = async (params: Record<string, string>): Promise<ElevenVoice[]> => {
+    const qs = new URLSearchParams({ ...params, page_size: "100" });
+    try {
+      const res = await fetch(`${ELEVENLABS_BASE}/v2/voices?${qs.toString()}`, {
+        method: "GET",
+        headers: { "xi-api-key": apiKey, Accept: "application/json" },
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!res.ok) return [];
+      const body = (await res.json()) as ElevenVoicesResponse;
+      return body.voices ?? [];
+    } catch {
+      return [];
+    }
+  };
+
+  const [personal, premade] = await Promise.all([
+    fetchPage({ voice_type: "non-community" }),
+    fetchPage({ category: "premade" }),
+  ]);
+
+  const seen = new Set<string>();
+  const merged: VoiceEntry[] = [];
+  // Personal/workspace first (so favorites surface above the stock catalog),
+  // then premade. Within each bucket, preserve API order.
+  for (const v of [...personal, ...premade]) {
+    const id = v.voice_id;
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    const entry: VoiceEntry = { name: id };
+    if (v.name && v.name !== id) entry.description = v.name;
+    const lang = v.verified_languages?.[0]?.language;
+    if (typeof lang === "string") entry.language = lang;
+    if (v.labels && typeof v.labels.gender === "string") entry.gender = v.labels.gender;
+    merged.push(entry);
+  }
+
+  return merged;
 }
 
 // ---------------------------------------------------------------------------
@@ -290,6 +505,10 @@ export async function synthesizeToOgg(
 ): Promise<Buffer> {
   validateTtsInput(text);
 
+  if (process.env.ELEVENLABS_API_KEY) {
+    return synthesizeElevenLabsToOgg(text, voice, speed);
+  }
+
   const ttsHost = process.env.TTS_HOST?.replace(RE_TRAILING_SLASH, "");
   if (ttsHost) return synthesizeHttpToOgg(text, ttsHost, process.env.OPENAI_API_KEY ?? null, voice, speed);
 
@@ -304,16 +523,21 @@ export async function synthesizeToOgg(
 // ---------------------------------------------------------------------------
 
 /**
- * Attempts to fetch available voices from the TTS server.
+ * Attempts to fetch available voices from the active TTS provider.
  *
- * Tries `GET {TTS_HOST}/v1/audio/voices` first (common for
- * Kokoro and similar OpenAI-compatible servers). Falls back to
- * `TTS_VOICES_URL` env var if the default endpoint fails.
+ * Provider precedence matches `synthesizeToOgg`:
+ *   - ELEVENLABS_API_KEY → ElevenLabs `/v2/voices` (personal + premade)
+ *   - TTS_HOST           → `GET {TTS_HOST}/v1/audio/voices` (Kokoro / OpenAI-compat)
+ *                          or `TTS_VOICES_URL` override
  *
- * Returns an array of VoiceEntry objects, or an empty array
- * if no listing is available.
+ * Returns an array of VoiceEntry objects, or an empty array if no listing is
+ * available for the active provider.
  */
 export async function fetchVoiceList(): Promise<VoiceEntry[]> {
+  if (process.env.ELEVENLABS_API_KEY) {
+    return fetchElevenLabsVoices();
+  }
+
   const ttsHost = process.env.TTS_HOST?.replace(RE_TRAILING_SLASH, "");
   if (!ttsHost) return [];
 

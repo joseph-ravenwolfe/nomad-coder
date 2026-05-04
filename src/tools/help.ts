@@ -113,7 +113,7 @@ const TOOL_INDEX: Record<string, string> = {
   transcribe_voice: "Transcribe a Telegram voice message to text via STT.",
   set_commands: "Register bot commands visible in the Telegram command menu.",
   set_topic: "Set a topic prefix appended to outgoing messages.",
-  set_voice: "Configure session TTS voice and speed. Applied automatically when audio is used in send/confirm/choose.",
+  set_voice: "Configure session TTS voice (ElevenLabs voice_id or OpenAI/Kokoro voice name) and speed. Applied automatically when audio is used in send/confirm/choose.",
   set_reminder: "Schedule a future reminder event delivered via dequeue.",
   cancel_reminder: "Cancel a scheduled reminder by ID.",
   list_reminders: "List all pending reminders for the current session.",
