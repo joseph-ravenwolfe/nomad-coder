@@ -131,7 +131,7 @@ export function closeSessionById(sid: number): { closed: boolean; sid: number } 
       setGovernorSid(next.sid);
       const label = next.name || `Session ${next.sid}`;
       sendServiceMessage(
-        `⚠️ Governor session closed. 🤖 ${label} promoted to governor.`,
+        `⚠️ Governor session closed. *${label}* promoted to governor.`,
       ).catch(() => {});
       // Notify the promoted governor
       deliverServiceMessage(

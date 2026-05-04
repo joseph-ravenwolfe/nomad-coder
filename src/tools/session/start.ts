@@ -72,7 +72,7 @@ async function requestApproval(
 ): Promise<{ approved: boolean; color?: string; forceColor?: boolean }> {
   const label = reconnect ? "Session reconnecting:" : "New session requesting access:";
   const reconnectHint = reconnect ? `\nThe agent may have a saved token — approve only if token recovery failed\\.` : "";
-  const text = `🤖 *${label}* ${markdownToV2(name)}\nPick a color to approve, or deny:${reconnectHint}`;
+  const text = `*${label}* ${markdownToV2(name)}\nPick a color to approve, or deny:${reconnectHint}`;
   const availableColors = getAvailableColors(colorHint);
   if (checkAndConsumeAutoApprove()) {
     return { approved: true, color: colorHint ?? availableColors[0], forceColor: true };
@@ -353,7 +353,7 @@ export async function handleSessionStart({ name, color }: { name: string; color?
           // sessions) can reply-to-address this session. The new v8 format
           // already includes the bold name in the body, so we pass
           // _skipHeader: true to suppress the proxy's auto-prefix
-          // (avoids the redundant "🟨 🤖 Worker\n💻 Worker connected ..." stutter).
+          // (avoids the redundant "🟨 Worker\n💻 Worker connected ..." stutter).
           // MarkdownV2: parens must be backslash-escaped.
           const _announcement = await Promise.resolve(
             runInSessionContext(session.sid, () =>

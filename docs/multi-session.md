@@ -154,9 +154,11 @@ worker sessions see only their own dequeue stream.
 
 ## Session Color Tags
 
-Each session is assigned a **color square emoji** from the rainbow palette (🟦 🟩 🟨 🟧 🟥 🟪). In multi-session mode, the color prefix always appears before the `🤖` robot emoji in every outbound message.
+Each session is assigned a **color square emoji** from the rainbow palette (🟦 🟩 🟨 🟧 🟥 🟪). In multi-session mode, the color square is the visual identity for each session and prefixes every outbound message.
 
-**Example:** `🟦 🤖 \`Scout\`` (instead of `🤖 \`Scout\``)
+**Example:** `🟦 \`Scout\`` (single-session: no prefix at all)
+
+A session may *optionally* set a `nametag_emoji` (e.g. `🦊`) via profile import to render as `🟦 🦊 \`Scout\``. By default, no extra emoji is rendered alongside the color.
 
 ### Palette
 

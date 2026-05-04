@@ -14,7 +14,7 @@ This document describes the out-of-box experience for multi-session Telegram Bri
 
 1. Agent calls `action(type: "session/start", name: "Worker")`
 2. **Approval gate:** Operator receives a Telegram `confirm` prompt:
-   `🤖 New session requesting access: Worker — ✅ Approve / ❌ Deny`
+   `New session requesting access: Worker — ✅ Approve / ❌ Deny`
 3. On approval: Token returned
 
 ### Automatic effects (zero config)
@@ -24,7 +24,7 @@ These happen immediately, with no operator or agent action required:
 | What | How |
 | --- | --- |
 | Routing → governor | `setRoutingMode("governor", 1)` — SID 1 becomes governor |
-| Name tags on messages | Outbound proxy prepends `🤖 Name` to all bot messages |
+| Name tags on messages | Outbound proxy prepends `<color> Name` to all bot messages |
 | Ambiguous → governor | Fresh messages (no reply-to) route to governor's queue |
 | Targeted → owner | Reply-to messages route to the session that sent the original |
 | Both sessions notified | Internal broadcast: "Multi-session active, routing: governor" |
@@ -34,7 +34,7 @@ These happen immediately, with no operator or agent action required:
 
 ### Targeted (reply-to)
 
-User replies to a message sent by 🤖 Worker → routed to Worker's session queue. Worker dequeues with `routing: "targeted"`.
+User replies to a message sent by Worker → routed to Worker's session queue. Worker dequeues with `routing: "targeted"`.
 
 ### Ambiguous (no reply-to)
 

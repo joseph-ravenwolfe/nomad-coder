@@ -451,7 +451,7 @@ When 2+ agent sessions are active simultaneously, additional rules apply.
 
 `action(type: "session/start")` returns a `sid` (session ID), your session `name` (if set), a `discarded` count, and a `fellow_sessions` list of co-active agents (empty array in single-session).
 
-Your outbound messages automatically include a `🤖 YourName` header line — you do not need to add it manually.
+In multi-session mode, your outbound messages automatically include a `<color> YourName` header line (e.g. `🟦 \`Scout\``) — you do not need to add it manually. Single-session mode adds no prefix.
 
 ### Routing modes
 

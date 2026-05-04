@@ -400,7 +400,7 @@ export function register(server: McpServer): void {
           .min(1)
           .max(10)
           .optional()
-          .describe("profile/import: Custom emoji to replace the default 🤖 in the session name tag."),
+          .describe("profile/import: Optional emoji to inject between the session color square and the name in the multi-session nametag prefix. Default: no emoji (color + name)."),
         // reminder/set params
         trigger: z
           .enum(["time", "startup"])

@@ -71,7 +71,7 @@ export function register(server: McpServer) {
           )
           .optional()
           .describe("Reminders to register for this session."),
-        nametag_emoji: z.string().min(1).max(10).optional().describe("Custom emoji to replace the default 🤖 in the session name tag."),
+        nametag_emoji: z.string().min(1).max(10).optional().describe("Optional emoji injected between the session color square and the name in the multi-session nametag prefix. Default: no emoji (color + name)."),
         token: TOKEN_SCHEMA,
       },
     },

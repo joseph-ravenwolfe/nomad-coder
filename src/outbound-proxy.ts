@@ -26,8 +26,13 @@ import { escapeHtml, escapeV2 } from "./markdown.js";
 // ---------------------------------------------------------------------------
 
 /**
- * Returns the `{emoji} {name}\n` header when 2+ sessions are active,
- * where emoji defaults to 🤖 if no nametag_emoji is set on the session.
+ * Returns the `{color} {emoji?} {name}\n` header when 2+ sessions are active.
+ * The emoji segment is OPTIONAL — only rendered when the session explicitly
+ * set `nametag_emoji` (via profile import). Default is no emoji at all,
+ * which gives a clean `🟦 Worker\n` prefix using the session color square as
+ * the visual identity. This replaced the v7 default of 🤖, which felt
+ * redundant alongside the color and the bridge's own 💻 system messages.
+ *
  * Returns `""` when fewer than 2 sessions are active or the session has no name.
  * Uses parse-mode specific formatting for the name portion.
  */
@@ -37,20 +42,21 @@ export function buildHeader(parseMode?: string): { plain: string; formatted: str
   const session = sid > 0 ? getSession(sid) : undefined;
   const name = session?.name || (sid > 0 ? `Session ${sid}` : "");
   if (!name) return { plain: "", formatted: "" };
-  const emoji = session?.nametag_emoji ?? "🤖";
+  const emoji = session?.nametag_emoji ?? "";
+  const emojiPrefix = emoji ? `${emoji} ` : "";
   const colorPrefix = session?.color ? `${session.color} ` : "";
-  const plain = `${colorPrefix}${emoji} ${name}\n`;
+  const plain = `${colorPrefix}${emojiPrefix}${name}\n`;
 
   let formatted: string;
   if (parseMode === "MarkdownV2") {
-    formatted = `${colorPrefix}${emoji} \`${escapeV2(name)}\`\n`;
+    formatted = `${colorPrefix}${emojiPrefix}\`${escapeV2(name)}\`\n`;
   } else if (parseMode === "HTML") {
-    formatted = `${colorPrefix}${emoji} <code>${escapeHtml(name)}</code>\n`;
+    formatted = `${colorPrefix}${emojiPrefix}<code>${escapeHtml(name)}</code>\n`;
   } else {
     // Markdown (legacy) or no parse_mode — use backtick formatting.
     // The caller is responsible for setting parse_mode: "Markdown" when
     // no parse_mode was originally provided (see sendMessage proxy).
-    formatted = `${colorPrefix}${emoji} \`${name}\`\n`;
+    formatted = `${colorPrefix}${emojiPrefix}\`${name}\`\n`;
   }
 
   return { plain, formatted };
@@ -243,7 +249,7 @@ export function createOutboundProxy(realApi: Api): Api {
           const skipHeader = cleanOpts?._skipHeader === true;
           if (cleanOpts) delete cleanOpts._skipHeader;
 
-          // Session header — prepend "🤖 Name\n" in multi-session mode
+          // Session header — prepend "🟦 Name\n" in multi-session mode (color + name)
           let parseMode = cleanOpts?.parse_mode as string | undefined;
           const { plain: headerPlain, formatted: headerFormatted } = buildHeader(parseMode);
           const finalText = headerFormatted && !skipHeader ? headerFormatted + text : text;

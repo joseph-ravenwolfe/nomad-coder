@@ -24,8 +24,8 @@ responses. The system handles the rest.
 
 ### What the operator sees
 
-- **Session join:** A service message: `🤖 Worker has joined.`
-- **Message headers:** Every agent message has a `🤖 Name` prefix when 2+ sessions are active. One glance tells you who's talking.
+- **Session join:** A service message: `💻 Worker has joined.`
+- **Message headers:** Every agent message has a `<color> Name` prefix when 2+ sessions are active. One glance tells you who's talking.
 - **Topics:** Agents set topics (e.g. `Refactoring animation state`). Combined with the name header, the operator always knows who is doing what.
 - **Reply targeting:** Reply to any agent's message to talk directly to that agent. No governor triage needed — it's a targeted message.
 - **New messages (no reply):** The operator just sends normally. The system routes it to the right agent. If the governor can't determine who it's for, it handles it or asks.
@@ -45,10 +45,10 @@ responses. The system handles the rest.
 
 When the second session joins:
 
-1. Operator sees an approval request: `🤖 [Name] wants to join. ✓ Approve / ✗ Deny`
+1. Operator sees an approval request: `[Name] wants to join. ✓ Approve / ✗ Deny`
 2. On approval, the system activates governor mode automatically.
 3. SID 1 (the first session) becomes governor — it has the most context.
-4. All existing sessions receive a DM: `📢 🤖 [Name] has joined. You'll coordinate incoming messages.`
+4. All existing sessions receive a DM: `📢 [Name] has joined. You'll coordinate incoming messages.`
 5. The joining session starts its work.
 
 ### 2 → N Sessions
