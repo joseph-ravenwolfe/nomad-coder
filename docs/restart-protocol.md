@@ -1,103 +1,78 @@
-# Bounce / Restart Protocol
+# Bridge Restart Protocol (v8)
 
 ## Overview
 
-The bridge supports two restart modes:
+The bridge does NOT persist session state across process restarts. When the
+bridge restarts (planned shutdown, crash, launchd kickstart, etc.), every
+in-memory session is gone, every HTTP transport is closed, and every agent's
+MCP client receives a connection drop.
 
-| Mode | State file | Reconnect approval |
-|------|------------|--------------------|
-| **Planned bounce** | `session-state.json` with `plannedBounce: true` | Skipped — token accepted automatically |
-| **Unplanned crash** | File absent or `plannedBounce: false` | Required — operator must approve via dialog |
+There is no separate "reconnect" verb. Recovery is uniform:
 
----
+1. Agent's MCP client re-establishes the HTTP transport on its next request
+   (or the agent process exits, in which case `cc` reconnects on next launch).
+2. Agent calls `action(type: "session/start", name: "<same name>")`.
+3. Bridge has no record of any session — returns `action: "fresh"` with a new
+   token, sid, and watch_file.
 
-## Planned Bounce
-
-A planned bounce is triggered by `action(type: "session/bounce", ...)` or by calling `elegantShutdown(planned: true)`.
-
-### What happens
-
-1. `markPlannedBounce()` writes `session-state.json` with `plannedBounce: true` and the current session list.
-2. All active sessions receive a service message:
-   > ⚡ Server bouncing for fast restart. Session state saved. Wait ~30s then probe.
-3. The server shuts down cleanly.
-4. On restart, `restoreSessions()` reads `session-state.json`, restores session state, sets `plannedBounce` flag in memory, and clears the flag from the file.
-5. Agents reconnect with their saved token — no approval dialog is shown.
-
-### Agent reconnect procedure (planned bounce)
-
-```
-# Step 1: Probe — no token needed
-action(type: "session/list")
-# → { sids: [1, 2, 3] }
-
-# Step 2: If your SID is present, reconnect with your saved token
-action(type: "session/reconnect", token: <saved_token>, name: "<your_name>")
-# → { token, sid, pin, action: "reconnected", ... }
-
-# Step 3: Resume dequeue loop as normal
-```
-
-If the probe returns `{ sids: [] }` or your SID is absent, the bridge restarted fresh — use `session/start` instead.
+The agent should treat its previous token as invalid the moment a request
+fails with `AUTH_FAILED` or its MCP client reports a transport disconnect.
 
 ---
 
-## Unplanned Crash
+## Why no persistence?
 
-If the bridge crashes without a planned bounce, `session-state.json` either does not exist or contains `plannedBounce: false`. The session queue is empty and SIDs are gone.
+In v7, the bridge persisted session metadata to `session-state.json` and tried
+to restore SIDs across restarts. That added a "planned bounce" mode with a
+state file and a special-cased reconnect path that skipped operator approval.
 
-### Agent recovery procedure (unplanned crash)
+In v8 we deleted that. The reasoning:
 
-```
-# Probe first — no token needed
-action(type: "session/list")
-# → { sids: [] }  (empty — fresh restart)
-
-# Start a new session
-action(type: "session/start", name: "<your_name>")
-```
+- HTTP-tied lifetime means a bridge restart always kills the agent's MCP
+  transport, which means the agent's existing token is dead anyway.
+- Restoring SIDs across restart created a parallel code path that was rarely
+  exercised correctly and produced confusing edge cases (mismatched HTTP
+  UUIDs, stale watch files, governor reassignment races).
+- Same-transport recovery (the `action: "recovered"` path in `session/start`)
+  handles the *intra-transport* recovery case that actually mattered:
+  compaction wiping the agent's token while the MCP client stays connected.
 
 ---
 
-## Unauthenticated SID Probe
+## Same-transport recovery (NOT a restart concern)
 
-`list_sessions` accepts an optional token. When called without a token it returns only the list of active SIDs:
+`session/start` is idempotent on same-transport: if a same-named session is
+already bound to the calling HTTP transport, the bridge returns its token
+with `action: "recovered"` instead of creating a new one. This handles
+"compaction wiped my token" without requiring the bridge to restart or
+operator approval.
+
+This is unrelated to bridge restart — it's purely about the agent's working
+memory inside a single HTTP transport lifetime. See `docs/help/session/start.md`.
+
+---
+
+## Inter-restart probe
+
+If you want to know whether the bridge is alive after a perceived disconnect:
 
 ```
 action(type: "session/list")
-# → { sids: [1, 2] }
+# → { sids: [...] }  (any active SIDs, including yours if any)
 ```
 
-No auth is required. This is safe to call immediately after a restart to determine which reconnect path to take.
-
----
-
-## State File
-
-Location: `session-state.json` at the project root (next to `mcp-config.json`).
-
-Schema:
-
-```json
-{
-  "nextId": 3,
-  "sessions": [
-    { "sid": 1, "pin": 123456, "name": "Governor", "color": "🟦", "createdAt": "..." },
-    { "sid": 2, "pin": 654321, "name": "Worker",   "color": "🟩", "createdAt": "..." }
-  ],
-  "plannedBounce": true
-}
-```
-
-The `plannedBounce` field is cleared (set to `false`) immediately after being read on startup so a second restart without a new bounce does not incorrectly skip approval.
+`session/list` accepts an optional token; called without one it returns the
+SID list only — safe as a liveness probe.
 
 ---
 
 ## Implementation Notes
 
-- `bounce-state.ts` — in-memory flag (`isPlannedBounce()`, `setPlannedBounce()`)
-- `session-manager.ts` — `persistSessions()`, `restoreSessions()`, `markPlannedBounce()`
-- `shutdown.ts` — calls `markPlannedBounce()` at the start of `elegantShutdown(planned: true)`
-- `index.ts` — calls `restoreSessions()` after `loadConfig()`, sets the in-memory flag
-- `tools/list_sessions.ts` — token is optional; unauthenticated path returns `{ sids: [...] }`
-- `tools/session_start.ts` — `handleSessionReconnect` skips approval when `isPlannedBounce()` is true
+- HTTP transport lifecycle owned by `src/http-transport-registry.ts` and
+  the streamable-http handler in `src/index.ts`.
+- `transport.onclose` calls `findSessionsByHttpId()` and `closeSessionById()`
+  to tear down any bridge sessions bound to the closing transport.
+- `session/start` checks `getCurrentHttpSessionId()` and falls back to the
+  same-transport idempotency path when an existing same-named session matches
+  the caller's HTTP UUID.
+- No `session-state.json`, no `markPlannedBounce()`, no `restoreSessions()`.

@@ -106,7 +106,7 @@ The bridge ships profiles for named agent roles (Worker, Curator, Overseer) with
 
 **Startup**: `action(type: "session/start")` is always the first call. It returns `sid`, `sessions_active`, `discarded` count, and a `fellow_sessions` list. If `sessions_active > 1`, the session should set a topic immediately. An optional profile load follows, then a drain-then-block dequeue loop.
 
-**Reconnect**: on transport disconnect, sessions can be reclaimed within a timeout window using `action(type: "session/reconnect", name: "...")`. After reconnect, call `action(type: "message/history", count: 20)` to catch up on missed messages.
+**Recovery**: as of v8 there is no separate reconnect verb. If an agent loses its token (e.g. context compaction wipes it), it simply calls `action(type: "session/start", name: "<same name>")` again — the bridge recognizes the HTTP transport (which the OS process holds, beyond the LLM context window) and returns the existing token with `action: "recovered"`. Queued messages from the lapse are preserved in `pending`. Call `action(type: "message/history", count: 20)` to catch up on transcript context if needed.
 
 **Clean shutdown** (single session): call `action(type: "shutdown")` — flushes queues, rolls the session log, notifies connected agents, exits the process.
 

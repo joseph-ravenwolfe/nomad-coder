@@ -42,7 +42,7 @@ export function requireAuth(
   if (!validateSession(sid, suffix)) {
     return {
       code: "AUTH_FAILED",
-      message: "Invalid token. Double-check you have the right token. If this happened mid-session, your session may have closed or restarted — call action(type: 'session/reconnect', name: '<your name>') to re-request.",
+      message: "Invalid token. Double-check you have the right token. If this happened mid-session (e.g. compaction wiped your memory), call action(type: 'session/start', name: '<your name>') with the same name — the bridge recognizes your HTTP transport and returns your existing token (action: 'recovered').",
     };
   }
   _authHook?.(sid);

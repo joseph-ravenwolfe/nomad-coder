@@ -16,7 +16,7 @@ import { startPoller, stopPoller, drainPendingUpdates, waitForPollerExit } from 
 import { startSilenceDetector } from "./silence-detector.js";
 import { startHealthCheck } from "./health-check.js";
 import { setAuthHook } from "./session-gate.js";
-import { touchSession, getSessionReauthDialogMsgId, clearSessionReauthDialogMsgId, findSessionsByHttpId } from "./session-manager.js";
+import { touchSession, findSessionsByHttpId } from "./session-manager.js";
 import { closeSessionById } from "./session-teardown.js";
 import { runWithHttpContext } from "./request-context.js";
 import { createOutboundProxy } from "./outbound-proxy.js";
@@ -286,14 +286,6 @@ startSilenceDetector();
 startHealthCheck();
 setAuthHook((sid: number) => {
   touchSession(sid);
-  const reauthMsgId = getSessionReauthDialogMsgId(sid);
-  if (reauthMsgId !== undefined) {
-    clearSessionReauthDialogMsgId(sid);
-    const chatId = resolveChat();
-    if (typeof chatId === "number") {
-      getApi().deleteMessage(chatId, reauthMsgId).catch(() => {});
-    }
-  }
 });
 process.stderr.write("[info] health check started\n");
 

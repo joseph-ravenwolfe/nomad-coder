@@ -4,9 +4,8 @@ import { getApi, toResult, toError, resolveChat } from "../../telegram.js";
 import { markdownToV2 } from "../../markdown.js";
 import type { TimelineEvent } from "../../message-store.js";
 import { dequeue, registerCallbackHook, clearCallbackHook } from "../../message-store.js";
-import { createSession, closeSession, setActiveSession, listSessions, activeSessionCount, getSession, getAvailableColors, COLOR_PALETTE, setSessionAnnouncementMessage, getSessionAnnouncementMessage, setSessionReauthDialogMsgId, clearSessionReauthDialogMsgId } from "../../session-manager.js";
+import { createSession, closeSession, setActiveSession, listSessions, activeSessionCount, getSession, getAvailableColors, COLOR_PALETTE, setSessionAnnouncementMessage, getSessionAnnouncementMessage } from "../../session-manager.js";
 import { getCurrentHttpSessionId } from "../../request-context.js";
-import { isHttpSessionLive } from "../../http-transport-registry.js";
 import { createSessionQueue, removeSessionQueue, deliverServiceMessage, trackMessageOwner, deliverReminderEvent, getSessionQueue } from "../../session-queue.js";
 import { setGovernorSid, getGovernorSid } from "../../routing-mode.js";
 import { SERVICE_MESSAGES } from "../../service-messages.js";
@@ -22,8 +21,6 @@ const APPROVAL_TIMEOUT_MS = 120_000;
 const APPROVAL_NO = "approve_no";
 
 const APPROVE_PREFIX = "approve_";
-const RECONNECT_YES = "reconnect_yes";
-const RECONNECT_NO = "reconnect_no";
 const TOGGLE_DELEGATION = "approve_toggle_delegation";
 
 /**
@@ -161,64 +158,14 @@ async function requestApproval(
   return decision;
 }
 
-/**
- * Show a simple Approve/Deny dialog for a session reconnect request.
- * Returns true if the operator approves, false on denial or timeout.
- */
-async function requestReconnectApproval(chatId: number, name: string, sid: number): Promise<boolean> {
-  if (checkAndConsumeAutoApprove()) return true;
-  const text = `🤖 *Session reconnecting:* ${markdownToV2(name)}`;
-  const sent = await getApi().sendMessage(chatId, text, {
-    parse_mode: "MarkdownV2",
-    reply_markup: {
-      inline_keyboard: [
-        [
-          { text: "✅ Approve", callback_data: RECONNECT_YES, style: "primary" },
-          { text: "⛔ Deny", callback_data: RECONNECT_NO, style: "danger" },
-        ],
-      ],
-    },
-  } as Record<string, unknown>);
-  const msgId: number = sent.message_id;
-  setSessionReauthDialogMsgId(sid, msgId);
-
-  const approved = await new Promise<boolean>((resolve) => {
-    const timer = setTimeout(() => {
-      clearCallbackHook(msgId);
-      resolve(false);
-    }, APPROVAL_TIMEOUT_MS);
-
-    registerCallbackHook(msgId, (evt: TimelineEvent) => {
-      clearTimeout(timer);
-      const data: string = evt.content.data ?? "";
-      const qid = evt.content.qid;
-      if (qid) getApi().answerCallbackQuery(qid).catch(() => {});
-      resolve(data === RECONNECT_YES);
-    });
-  });
-
-  if (approved) {
-    clearSessionReauthDialogMsgId(sid);  // clear first, prevent double-delete race
-    await getApi().deleteMessage(chatId, msgId).catch(() => {});
-  } else {
-    await getApi()
-      .editMessageText(
-        chatId,
-        msgId,
-        `🤖 *Session reconnect denied:* ${markdownToV2(name)} ✗`,
-        { parse_mode: "MarkdownV2", reply_markup: { inline_keyboard: [] } },
-      )
-      .catch(() => {});
-    clearSessionReauthDialogMsgId(sid);
-  }
-
-  return approved;
-}
-
 const DESCRIPTION =
   "Call once at the start of every session. Creates a fresh session " +
   "with a unique ID and token. Fresh sessions auto-drain pending messages. " +
-  "If you lost your token (context loss, crash), use action(type: 'session/reconnect', ...) instead. " +
+  "If you lost your token (e.g. after compaction wiped it from working memory), " +
+  "just call this again with the same name — the bridge recognizes your HTTP " +
+  "transport and returns your existing token (action: 'recovered'). No operator " +
+  "approval needed; queued messages are preserved (pending > 0 if any landed " +
+  "during the lapse). " +
   "Returns { token, sid, suffix, sessions_active, action, pending }. " +
   "Call help() first to load the API guide, then call action(type: 'session/start', ...) to join.";
 
@@ -248,23 +195,63 @@ export async function handleSessionStart({ name, color }: { name: string; color?
         });
       }
 
-      // Name collision guard: reject if a session with the same name exists.
-      // In v8 (HTTP-tied liveness), the operator's preferred remedy is to start
-      // a parallel session with a unique name — NOT to call session/reconnect.
-      // Reconnect is a last-resort path for re-attaching when the original
-      // agent is gone; with auto-cleanup on transport.onclose, fresh `cc`
-      // sessions should always create a new bridge session.
+      // Name collision handling. Two outcomes:
+      //
+      // (a) SAME-TRANSPORT IDEMPOTENT RECOVERY: if the existing session was
+      //     created on the same MCP HTTP transport that's making this call,
+      //     it's the same agent re-asking — almost certainly because compaction
+      //     wiped its working memory and it lost its token. Silently return
+      //     the existing session's token, sid, watch_file, etc. with
+      //     `action: "recovered"` and `pending: <queue size>` (no drain — the
+      //     agent will dequeue normally and pick up anything that landed
+      //     during the lapse). No operator approval, no chat noise.
+      //
+      // (b) DIFFERENT-TRANSPORT COLLISION: a parallel `cc` is trying to claim
+      //     a name owned by a live agent. Refuse with NAME_CONFLICT and
+      //     suggest a unique-suffix name. The HTTP UUID survives compaction
+      //     (it's held by the OS process's MCP client, not by the LLM
+      //     context), so this guard reliably distinguishes "same agent
+      //     forgot" from "different agent intruding."
+      const currentHttpId = getCurrentHttpSessionId();
       if (effectiveName) {
-        const existing = listSessions().find(
+        const existingSummary = listSessions().find(
           s => s.name.toLowerCase() === effectiveName.toLowerCase(),
         );
-        if (existing) {
+        if (existingSummary) {
+          const existing = getSession(existingSummary.sid);
+          if (
+            existing &&
+            // Both undefined (stdio) OR both the same UUID → same agent
+            existing.httpSessionId === currentHttpId
+          ) {
+            // (a) Same-transport idempotent recovery.
+            const queue = getSessionQueue(existing.sid);
+            const pending = queue?.pendingCount() ?? 0;
+            const recoveredToken = existing.sid * 1_000_000 + existing.suffix;
+            const fellow = listSessions().filter(s => s.sid !== existing.sid);
+            process.stderr.write(
+              `[session/start] same-transport recovery sid=${existing.sid} name=${existing.name} pending=${pending}\n`,
+            );
+            const recovered: Record<string, unknown> = {
+              token: recoveredToken,
+              sid: existing.sid,
+              suffix: existing.suffix,
+              sessions_active: activeSessionCount(),
+              action: "recovered",
+              pending,
+              discarded: 0,
+              fellow_sessions: fellow,
+              connection_token: existing.connectionToken,
+              ...(existing.watchFile !== undefined && { watch_file: existing.watchFile }),
+            };
+            return toResult(recovered);
+          }
+          // (b) Different-transport collision.
           return toError({
             code: "NAME_CONFLICT",
             message:
-              `Session name '${existing.name}' is already in use by an active session (SID ${existing.sid}). ` +
-              `Pick a unique name (e.g. '${effectiveName}2', '${effectiveName}3', ...) and retry session/start. ` +
-              `Do NOT call session/reconnect — that path is for re-attaching after a crash, not for starting a parallel session in the same project.`,
+              `Session name '${existingSummary.name}' is already in use by an active session (SID ${existingSummary.sid}) on a different agent. ` +
+              `Pick a unique name (e.g. '${effectiveName}2', '${effectiveName}3', ...) and retry session/start.`,
           });
         }
       }
@@ -446,155 +433,6 @@ export async function handleSessionStart({ name, color }: { name: string; color?
         setActiveSession(0);
         return toError(err);
       }
-}
-
-export async function handleSessionReconnect({ name }: { name: string }) {
-  const chatId = resolveChat();
-  if (typeof chatId !== "number") return toError(chatId);
-
-  const trimmedName = name.trim();
-  if (!trimmedName) {
-    return toError({
-      code: "NAME_REQUIRED",
-      message: "A session name is required for reconnect. Pass the name of the session you wish to reclaim.",
-    });
-  }
-
-  const existing = listSessions().find(
-    s => s.name.toLowerCase() === trimmedName.toLowerCase(),
-  );
-
-  if (!existing) {
-    return toError({
-      code: "SESSION_NOT_FOUND",
-      message: `No active session named "${trimmedName}" found. If your session closed, start a new one with action(type: 'session/start', ...).`,
-    });
-  }
-
-  // Get full session object (listSessions omits token suffix)
-  const fullSession = getSession(existing.sid);
-  if (!fullSession) {
-    return toError({
-      code: "SESSION_NOT_FOUND",
-      message:
-        `Session "${existing.name}" (SID ${existing.sid}) closed before reconnect completed. ` +
-        `Call action(type: 'session/start', ...) with a fresh name to create a new session.`,
-    });
-  }
-
-  // Liveness guard: refuse if the existing session is bound to a different
-  // live HTTP transport. In v8, every bridge session is pinned to the MCP
-  // HTTP UUID it was created on; if that UUID is still in the transport
-  // registry AND it differs from the current request's UUID, then the
-  // original agent is still online and owns this session. Reconnect is for
-  // re-attaching when the original agent is gone — not for hijacking.
-  // The caller should pick a unique name and call session/start instead.
-  const currentHttpId = getCurrentHttpSessionId();
-  const existingHttpId = fullSession.httpSessionId;
-  if (
-    existingHttpId &&
-    existingHttpId !== currentHttpId &&
-    isHttpSessionLive(existingHttpId)
-  ) {
-    return toError({
-      code: "SESSION_OWNED_BY_LIVE_AGENT",
-      message:
-        `Session '${existing.name}' (SID ${existing.sid}) is already bound to a different live agent. ` +
-        `Reconnect is only for re-attaching when the original agent has crashed or disconnected. ` +
-        `If you are a parallel session in the same project, pick a unique name (e.g. '${existing.name}2') and call session/start instead.`,
-    });
-  }
-
-  // Reconnect flow: show the simple Approve/Deny dialog.
-  const approved = await runInSessionContext(0, () =>
-    requestReconnectApproval(chatId, existing.name, existing.sid),
-  );
-  if (!approved) {
-    return toError({
-      code: "SESSION_DENIED",
-      message: `Session reconnect for "${existing.name}" was denied by the operator. Check memory for a previously saved token — if found, use that token directly without calling action(type: 'session/reconnect', ...) again.`,
-      hint: "Wipe your stored session token before exiting. If your loop guard re-prompts, do NOT call session/start -- wipe the token, then exit.",
-    });
-  }
-
-  // Reset health markers; preserve queued messages for the reconnecting session
-  fullSession.lastPollAt = undefined;
-  fullSession.healthy = true;
-  // Re-pin the bridge session to the current HTTP transport so the next
-  // onclose for THIS connection (rather than the abandoned one) drives
-  // auto-cleanup. Without this, a successful reconnect would leave the
-  // session bound to a dead UUID and orphan it from the HTTP-tied lifetime.
-  if (currentHttpId) fullSession.httpSessionId = currentHttpId;
-  const pending = getSessionQueue(existing.sid)?.pendingCount() ?? 0;
-  setActiveSession(existing.sid);
-
-  // Deliver service messages
-  const allSessions = listSessions();
-  const reconSessActive = activeSessionCount();
-  if (allSessions.length === 1) {
-    deliverServiceMessage(
-      existing.sid,
-      `Reconnect authorized. You are SID ${existing.sid}. ` +
-        `You are the only active session.`,
-      "session_orientation",
-      { sid: existing.sid, name: existing.name },
-    );
-  } else {
-    const governorSid = getGovernorSid();
-    const governorSession = allSessions.find(s => s.sid === governorSid);
-    const governorLabel = governorSession
-      ? `'${governorSession.name}' (SID ${governorSid})`
-      : `SID ${governorSid}`;
-    // TODO: reconnect path below still uses hardcoded inline strings — extract to SERVICE_MESSAGES pair (not in scope of this task)
-    for (const fellow of allSessions.filter(s => s.sid !== existing.sid)) {
-      const isGovernorFellow = fellow.sid === governorSid;
-      const text = isGovernorFellow
-        ? `${existing.name} (SID ${existing.sid}) reconnected. You are the governor — route ambiguous messages.`
-        : `${existing.name} (SID ${existing.sid}) reconnected. Ambiguous messages go to ${governorLabel}.`;
-      deliverServiceMessage(
-        fellow.sid,
-        text,
-        SERVICE_MESSAGES.SESSION_JOINED.eventType,
-        {
-          sid: existing.sid,
-          name: existing.name,
-          governor_sid: governorSid,
-          reconnect: true,
-        },
-      );
-    }
-    const isGovernorReconnect = existing.sid === governorSid;
-    const roleNote = isGovernorReconnect
-      ? `You are the governor (SID ${existing.sid}). ` +
-        `Ambiguous messages will be routed to you. ` +
-        `Call help(topic: 'guide') for trust and routing guidance.`
-      : `You are SID ${existing.sid}. ${governorLabel} is your first escalation ` +
-        `point. Ambiguous messages go to them. ` +
-        `Call help(topic: 'guide') for trust and routing guidance.`;
-    deliverServiceMessage(
-      existing.sid,
-      `Reconnect authorized. Session state preserved. ${roleNote}`,
-      "session_orientation",
-      { sid: existing.sid, name: existing.name, governor_sid: governorSid },
-    );
-  }
-
-  void refreshGovernorCommand();
-
-  // Fire startup reminders for the reconnecting session
-  const reconStartupFired = runInSessionContext(existing.sid, () => fireStartupReminders(existing.sid));
-  for (const r of reconStartupFired) {
-    deliverReminderEvent(existing.sid, buildReminderEvent(r));
-  }
-
-  const reconToken = fullSession.sid * 1_000_000 + fullSession.suffix;
-  return toResult({
-    token: reconToken,
-    sid: fullSession.sid,
-    sessions_active: reconSessActive,
-    action: "reconnected",
-    pending,
-  });
 }
 
 export function register(server: McpServer) {

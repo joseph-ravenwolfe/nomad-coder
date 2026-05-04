@@ -15,7 +15,7 @@ import {
 import { handleSetVoice } from "./profile/voice.js";
 import { handleListSessions } from "./session/list.js";
 import { handleCloseSession } from "./session/close.js";
-import { handleSessionStart, handleSessionReconnect } from "./session/start.js";
+import { handleSessionStart } from "./session/start.js";
 import { handleRenameSession } from "./session/rename.js";
 import { handleSessionIdle } from "./session/idle.js";
 import { handleSessionStatus } from "./session/status.js";
@@ -98,7 +98,6 @@ function levenshtein(a: string, b: string): number {
  */
 export function setupActionRegistry(): void {
   registerAction("session/start", toActionHandler(handleSessionStart));
-  registerAction("session/reconnect", toActionHandler(handleSessionReconnect));
   registerAction("session/close", toActionHandler(handleCloseSession));
   registerAction("session/close/signal", toActionHandler(handleCloseSessionSignal), { governor: true });
   registerAction("session/list", toActionHandler(handleListSessions));
@@ -227,15 +226,16 @@ export function register(server: McpServer): void {
         // Auth token — required for most paths; see exceptions below
         token: TOKEN_SCHEMA.optional().describe(
           "Session token from action(type: 'session/start'). " +
-          "Token-optional paths: `session/start`, `session/reconnect`, and `session/list` (unauthenticated probe returns SIDs only). " +
+          "Token-optional paths: `session/start` and `session/list` (unauthenticated probe returns SIDs only). " +
           "Omitting `type` (discovery/category listing) also requires no token. " +
-          "All other paths require a valid token.",
+          "All other paths require a valid token. " +
+          "Note: if your token is lost (e.g. after compaction), call session/start again with the same name — the bridge recognizes your HTTP transport and returns the existing token (action: 'recovered').",
         ),
-        // session/start and session/reconnect params
+        // session/start params
         name: z
           .string()
           .default("")
-          .describe("session/start, session/reconnect: Human-friendly session name."),
+          .describe("session/start: Human-friendly session name."),
         color: z
           .string()
           .optional()

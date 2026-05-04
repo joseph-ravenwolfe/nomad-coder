@@ -428,7 +428,7 @@ When the server shuts down, every active session receives a `service_message` ev
 3. Governor watches `dequeue` for `session_closed` events; once all non-governor sessions have closed (or after a grace period), proceed
 4. Governor calls `action(type: "shutdown")` — returns `{ shutting_down: true }` immediately; actual shutdown runs asynchronously
 5. Governor calls `dequeue(max_wait: 60)` one final time — receives a `shutdown` service event confirming exit; stops looping
-6. Governor waits for the MCP host to relaunch, then reconnects via `action(type: "session/reconnect", ...)`
+6. Governor waits for the MCP host to relaunch, then bootstraps a new session via `action(type: "session/start", ...)` — same-transport recovery is automatic if the prior session is still bound to the same HTTP UUID
 
 ⚠️ **`action(type: "session/close")` must NOT be called by the governor before `action(type: "shutdown")`.** It disconnects the session but leaves the server running.
 

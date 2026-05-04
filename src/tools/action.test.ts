@@ -19,7 +19,6 @@ const mocks = vi.hoisted(() => ({
   handleListSessions: vi.fn(),
   handleCloseSession: vi.fn(),
   handleSessionStart: vi.fn(),
-  handleSessionReconnect: vi.fn(),
   handleRenameSession: vi.fn(),
   handleEditMessage: vi.fn(),
   // Phase 2 handler stubs
@@ -99,7 +98,6 @@ vi.mock("./session/close.js", () => ({
 
 vi.mock("./session/start.js", () => ({
   handleSessionStart: mocks.handleSessionStart,
-  handleSessionReconnect: mocks.handleSessionReconnect,
   register: vi.fn(),
 }));
 

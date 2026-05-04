@@ -160,10 +160,11 @@ export function register(server: McpServer) {
       //   1. Rate-limiting: Should we throttle governor alerts to avoid flooding?
       //      Currently we fire once per mismatch event. A per-session cooldown would
       //      reduce noise during a runaway duplicate loop.
-      //   2. connection_token on reconnect: session/reconnect does NOT regenerate
-      //      the connection_token (it reuses the stored one). If a caller after reconnect
-      //      passes the old token, it will match. If they lost it, they omit it → "absent".
-      //      This is intentional to avoid false positives on reconnect.
+      //   2. connection_token on same-transport recovery: session/start's idempotent
+      //      "recovered" path returns the SAME stored connection_token (it doesn't
+      //      regenerate). If the caller previously stored it and re-presents it, it
+      //      matches; if compaction wiped both the token and connection_token, the
+      //      caller omits it → "absent" (no alert, since "absent" is allowed).
       //   3. Alert delivery: alerts go to the governor queue (in-process service message).
       //      If no governor is set, the alert is logged via dlog (see else branch below).
       //      A future improvement could deliver to all active sessions.

@@ -6,18 +6,13 @@
  * registry is the canonical source of truth for "is HTTP session X still
  * connected right now?".
  *
- * Two consumers:
- *   1. `index.ts` — owns the lifecycle: `set()` on init, `delete()` on close,
- *      and routes inbound requests via `get()`.
- *   2. `session/start.ts` (handleSessionReconnect) — uses
- *      `isHttpSessionLive()` to refuse a reconnect when the existing bridge
- *      session is already bound to a *different* live HTTP transport
- *      (i.e., a parallel `cc` session is online and owns it). Reconnect is
- *      strictly for re-attaching when the original agent is gone.
+ * Owned by `index.ts`: `set()` on init, `delete()` on close, `get()` on
+ * inbound request routing.
  *
- * Extracted into its own module to avoid a circular import between
- * `src/index.ts` (entry point that wires tools) and `src/tools/session/start.ts`
- * (which now needs the liveness probe).
+ * `isHttpSessionLive()` is exposed for code paths that need to distinguish
+ * "the original agent is still here" from "abandoned binding from a previous
+ * connection" — currently used as a diagnostic; the same-transport
+ * idempotency check in `session/start.ts` does its own UUID compare.
  */
 
 import type { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -26,8 +21,7 @@ export const httpTransports = new Map<string, StreamableHTTPServerTransport>();
 
 /**
  * Returns true iff there is a live `StreamableHTTPServerTransport` registered
- * under the given HTTP session UUID. Used by `handleSessionReconnect` to
- * detect "another agent is still online" before allowing a reconnect.
+ * under the given HTTP session UUID.
  */
 export function isHttpSessionLive(httpSessionId: string | undefined): boolean {
   if (!httpSessionId) return false;
