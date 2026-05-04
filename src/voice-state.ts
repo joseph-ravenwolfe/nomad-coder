@@ -10,6 +10,7 @@
  */
 
 import { getCallerSid } from "./session-context.js";
+import { getConfiguredVoices } from "./config.js";
 
 const _voices = new Map<number, string | null>();
 const _speeds = new Map<number, number | null>();
@@ -53,6 +54,41 @@ export function clearSessionSpeed(): void {
  */
 export function getSessionSpeedFor(sid: number): number | null {
   return _speeds.get(sid) ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// Auto-rotation for new sessions
+// ---------------------------------------------------------------------------
+
+/**
+ * Direct sid setter — bypasses `getCallerSid()` AsyncLocalStorage so the
+ * caller can assign a voice to a brand-new session that has not yet entered a
+ * request context. Used by `createSession()` to seed the rotated voice.
+ */
+export function setSessionVoiceForSid(sid: number, voice: string): void {
+  const trimmed = voice.trim();
+  _voices.set(sid, trimmed.length > 0 ? trimmed : null);
+}
+
+/**
+ * Pick a voice from the operator's curated `voices` list (mcp-config.json)
+ * for a newly created session, rotating deterministically by sid:
+ *
+ *   voice index = (sid - 1) modulo voices.length
+ *
+ * - With one voice, every session gets that voice.
+ * - With N voices, sessions cycle through them as they join (sid=1 → voice 0,
+ *   sid=2 → voice 1, …, sid=N+1 → voice 0).
+ *
+ * Returns `null` when no curated voices are configured — the resolution chain
+ * then falls through to `getDefaultVoice()` and the provider default.
+ */
+export function pickRotationVoice(sid: number): string | null {
+  const voices = getConfiguredVoices();
+  if (voices.length === 0) return null;
+  const idx = ((sid - 1) % voices.length + voices.length) % voices.length; // safe mod for sid ≤ 0
+  const entry = voices[idx];
+  return entry?.name ?? null;
 }
 
 /** For testing only: resets all voice state so env is clean between tests. */

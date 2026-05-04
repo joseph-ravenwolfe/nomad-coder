@@ -326,9 +326,34 @@ Kokoro voices follow a `{prefix}_{name}` pattern — `af_` (American female), `a
 
 Send `/voice` in your Telegram chat to browse and preview all available voices interactively.
 
+### Curated voices and auto-rotation
+
+When `mcp-config.json` contains a `voices` array, two things happen:
+
+1. The Telegram `/voice` panel shows that exact list (the dynamic ElevenLabs / Kokoro fetch is skipped).
+2. Each newly-created session is automatically assigned a voice from the list, rotating deterministically by session ID:
+   `voice index = (sid - 1) mod voices.length`. With one voice, every session gets that voice. With N voices, sessions cycle as they join (sid=1 → voice 0, sid=2 → voice 1, …, sid=N+1 → voice 0).
+
+Example `mcp-config.json`:
+
+```json
+{
+  "defaultVoice": "cgSgspJ2msm6clMCkdW9",
+  "voices": [
+    { "name": "cgSgspJ2msm6clMCkdW9", "description": "Jessica" },
+    { "name": "21m00Tcm4TlvDq8ikWAM", "description": "Rachel" },
+    { "name": "29vD33N1CtxCmqQRPOHJ", "description": "Drew" }
+  ]
+}
+```
+
+The `name` field stores the provider's voice identifier (ElevenLabs `voice_id` or OpenAI/Kokoro voice name); `description` is the human-readable label rendered in the panel and in stderr logs.
+
+When the `voices` array is empty or missing, no rotation happens and the resolution chain falls through to `defaultVoice`, then to provider-level defaults.
+
 ### Per-Session Voice Override
 
-Agents can set a per-session TTS voice with `action(type: "profile/voice")`, overriding the global default without affecting other sessions. The accepted format depends on the active provider — ElevenLabs takes a 22-char `voice_id`; OpenAI/Kokoro take a voice name. Pass an empty string to clear the override and revert to the global default.
+Agents can set a per-session TTS voice with `action(type: "profile/voice")`, overriding both the rotated voice and the global default for that session only — other sessions are unaffected. The accepted format depends on the active provider — ElevenLabs takes a 22-char `voice_id`; OpenAI/Kokoro take a voice name. Pass an empty string to clear the override and revert to the rotation / global default.
 
 ---
 

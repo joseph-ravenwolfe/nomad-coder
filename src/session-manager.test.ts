@@ -88,6 +88,42 @@ describe("createSession", () => {
   });
 });
 
+describe("voice rotation on createSession", () => {
+  it("auto-assigns the curated voice list, rotating across sids", async () => {
+    const config = await import("./config.js");
+    const { getSessionVoiceFor, resetVoiceStateForTest } = await import("./voice-state.js");
+    resetVoiceStateForTest();
+    const spy = vi.spyOn(config, "getConfiguredVoices").mockReturnValue([
+      { name: "VID_A", description: "Jessica" },
+      { name: "VID_B", description: "Rachel" },
+    ]);
+
+    const a = createSession();
+    const b = createSession();
+    const c = createSession();
+
+    expect(getSessionVoiceFor(a.sid)).toBe("VID_A");
+    expect(getSessionVoiceFor(b.sid)).toBe("VID_B");
+    expect(getSessionVoiceFor(c.sid)).toBe("VID_A"); // wraps
+
+    spy.mockRestore();
+    resetVoiceStateForTest();
+  });
+
+  it("does not assign a voice when the curated voices list is empty", async () => {
+    const config = await import("./config.js");
+    const { getSessionVoiceFor, resetVoiceStateForTest } = await import("./voice-state.js");
+    resetVoiceStateForTest();
+    const spy = vi.spyOn(config, "getConfiguredVoices").mockReturnValue([]);
+
+    const s = createSession();
+    expect(getSessionVoiceFor(s.sid)).toBeNull();
+
+    spy.mockRestore();
+    resetVoiceStateForTest();
+  });
+});
+
 describe("color assignment", () => {
   it("auto-assigns palette colors in order", () => {
     const s1 = createSession("A");

@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { dlog } from "./debug-log.js";
 import { recordNonToolEvent } from "./trace-log.js";
+import { pickRotationVoice, setSessionVoiceForSid } from "./voice-state.js";
 
 // ── Watch file (heartbeat) location ────────────────────────
 //
@@ -246,6 +247,16 @@ export function createSession(
     httpSessionId,
   };
   _sessions.set(sid, session);
+
+  // Auto-rotate the operator's curated voice list (mcp-config.json `voices`)
+  // across newly-created sessions. No-op when the voices array is empty —
+  // the resolution chain then falls through to defaultVoice + provider default.
+  const rotated = pickRotationVoice(sid);
+  if (rotated) {
+    setSessionVoiceForSid(sid, rotated);
+    dlog("session", `voice rotation sid=${sid} → ${rotated}`);
+  }
+
   dlog("session", `created sid=${sid} name=${JSON.stringify(name)} color=${color} total=${_sessions.size}`);
   recordNonToolEvent("session_create", sid, name);
   return {
