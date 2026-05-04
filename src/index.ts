@@ -29,6 +29,7 @@ import { cleanupStalePins } from "./startup-token-cleanup.js";
 import { resolveHttpPort } from "./cli-args.js";
 import { enableLogging, isLoggingEnabled, rollLog, logEvent as logLocalEvent, flushCurrentLog } from "./local-log.js";
 import { attachEventRoute } from "./event-endpoint.js";
+import { httpTransports } from "./http-transport-registry.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(join(__dirname, "..", "package.json"), "utf-8")) as { name: string; version: string };
@@ -66,7 +67,6 @@ if (process.env.STT_HOST && !process.env.STT_HOST.startsWith("https://")) {
 }
 
 let _shuttingDown = false;
-const httpTransports = new Map<string, StreamableHTTPServerTransport>();
 
 for (const sig of ["SIGTERM", "SIGINT"] as const) {
   process.on(sig, () => {

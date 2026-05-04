@@ -6,6 +6,7 @@ import type { TimelineEvent } from "../../message-store.js";
 import { dequeue, registerCallbackHook, clearCallbackHook } from "../../message-store.js";
 import { createSession, closeSession, setActiveSession, listSessions, activeSessionCount, getSession, getAvailableColors, COLOR_PALETTE, setSessionAnnouncementMessage, getSessionAnnouncementMessage, setSessionReauthDialogMsgId, clearSessionReauthDialogMsgId } from "../../session-manager.js";
 import { getCurrentHttpSessionId } from "../../request-context.js";
+import { isHttpSessionLive } from "../../http-transport-registry.js";
 import { createSessionQueue, removeSessionQueue, deliverServiceMessage, trackMessageOwner, deliverReminderEvent, getSessionQueue } from "../../session-queue.js";
 import { setGovernorSid, getGovernorSid } from "../../routing-mode.js";
 import { SERVICE_MESSAGES } from "../../service-messages.js";
@@ -247,7 +248,12 @@ export async function handleSessionStart({ name, color }: { name: string; color?
         });
       }
 
-      // Name collision guard: reject if a session with the same name exists
+      // Name collision guard: reject if a session with the same name exists.
+      // In v8 (HTTP-tied liveness), the operator's preferred remedy is to start
+      // a parallel session with a unique name — NOT to call session/reconnect.
+      // Reconnect is a last-resort path for re-attaching when the original
+      // agent is gone; with auto-cleanup on transport.onclose, fresh `cc`
+      // sessions should always create a new bridge session.
       if (effectiveName) {
         const existing = listSessions().find(
           s => s.name.toLowerCase() === effectiveName.toLowerCase(),
@@ -256,8 +262,9 @@ export async function handleSessionStart({ name, color }: { name: string; color?
           return toError({
             code: "NAME_CONFLICT",
             message:
-              `Session '${existing.name}' already exists (SID ${existing.sid}). ` +
-              `You are already online. Find your token in session memory and call dequeue(token: <token>). That's it. If token recovery fails, call action(type: 'session/reconnect', name: '<name>') as a last resort.`,
+              `Session name '${existing.name}' is already in use by an active session (SID ${existing.sid}). ` +
+              `Pick a unique name (e.g. '${effectiveName}2', '${effectiveName}3', ...) and retry session/start. ` +
+              `Do NOT call session/reconnect — that path is for re-attaching after a crash, not for starting a parallel session in the same project.`,
           });
         }
       }
@@ -464,6 +471,29 @@ export async function handleSessionReconnect({ name }: { name: string }) {
     });
   }
 
+  // Liveness guard: refuse if the existing session is bound to a different
+  // live HTTP transport. In v8, every bridge session is pinned to the MCP
+  // HTTP UUID it was created on; if that UUID is still in the transport
+  // registry AND it differs from the current request's UUID, then the
+  // original agent is still online and owns this session. Reconnect is for
+  // re-attaching when the original agent is gone — not for hijacking.
+  // The caller should pick a unique name and call session/start instead.
+  const currentHttpId = getCurrentHttpSessionId();
+  const existingHttpId = fullSession.httpSessionId;
+  if (
+    existingHttpId &&
+    existingHttpId !== currentHttpId &&
+    isHttpSessionLive(existingHttpId)
+  ) {
+    return toError({
+      code: "SESSION_OWNED_BY_LIVE_AGENT",
+      message:
+        `Session '${existing.name}' (SID ${existing.sid}) is already bound to a different live agent. ` +
+        `Reconnect is only for re-attaching when the original agent has crashed or disconnected. ` +
+        `If you are a parallel session in the same project, pick a unique name (e.g. '${existing.name}2') and call session/start instead.`,
+    });
+  }
+
   // Reconnect flow: show the simple Approve/Deny dialog.
   const approved = await runInSessionContext(0, () =>
     requestReconnectApproval(chatId, existing.name, existing.sid),
@@ -479,6 +509,11 @@ export async function handleSessionReconnect({ name }: { name: string }) {
   // Reset health markers; preserve queued messages for the reconnecting session
   fullSession.lastPollAt = undefined;
   fullSession.healthy = true;
+  // Re-pin the bridge session to the current HTTP transport so the next
+  // onclose for THIS connection (rather than the abandoned one) drives
+  // auto-cleanup. Without this, a successful reconnect would leave the
+  // session bound to a dead UUID and orphan it from the HTTP-tied lifetime.
+  if (currentHttpId) fullSession.httpSessionId = currentHttpId;
   const pending = getSessionQueue(existing.sid)?.pendingCount() ?? 0;
   setActiveSession(existing.sid);
 
