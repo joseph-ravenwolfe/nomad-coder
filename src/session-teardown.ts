@@ -114,19 +114,17 @@ export function closeSessionById(sid: number): { closed: boolean; sid: number } 
         { closed_sid: sid, closed_name: sessionName, new_governor_sid: last.sid },
       );
     } else {
-      // Closed session was not the governor: governor remains unchanged
-      sendServiceMessage(
-        "ℹ️ Session closed. Single-session mode restored.",
-      ).catch(() => {});
+      // Closed session was not the governor: governor remains unchanged.
+      // No operator-facing notification — the disconnect message above
+      // already covers it. The internal DM still goes to the surviving
+      // session so it knows multi-session UX is no longer needed.
       deliverDirectMessage(0, last.sid, "📢 Single-session mode restored.");
     }
   } else if (wasGovernor) {
     if (remaining.length === 0) {
       // Last session (was governor): reset routing
       setGovernorSid(0);
-      sendServiceMessage(
-        "⚠️ Governor session closed. No sessions remain.",
-      ).catch(() => {});
+      sendServiceMessage("💻 No Sessions Remain").catch(() => {});
     } else {
       // Governor closes with 2+ remaining: promote lowest-SID
       const next = remaining[0];

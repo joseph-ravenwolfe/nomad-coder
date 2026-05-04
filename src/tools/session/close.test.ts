@@ -188,8 +188,10 @@ describe("close_session tool", () => {
     await call({ token: 1123456 });
 
     expect(mocks.setGovernorSid).toHaveBeenCalledWith(0);
+    // v8: 1→0 governor close emits "💻 No Sessions Remain" (compact replacement
+    // for the old "⚠️ Governor session closed. No sessions remain." line).
     expect(mocks.sendServiceMessage).toHaveBeenCalledWith(
-      expect.stringContaining("Governor session closed"),
+      expect.stringContaining("No Sessions Remain"),
     );
   });
 
@@ -237,7 +239,7 @@ describe("close_session tool", () => {
 
     expect(mocks.setGovernorSid).toHaveBeenCalledWith(0);
     expect(mocks.sendServiceMessage).toHaveBeenCalledWith(
-      expect.stringContaining("Governor session closed"),
+      expect.stringContaining("No Sessions Remain"),
     );
   });
 
@@ -310,9 +312,11 @@ describe("close_session tool", () => {
 
     // Governor (sid 1) must remain — setGovernorSid must NOT be called
     expect(mocks.setGovernorSid).not.toHaveBeenCalled();
-    expect(mocks.sendServiceMessage).toHaveBeenCalledWith(
-      expect.stringContaining("Single-session mode restored"),
-    );
+    // v8: no operator-facing "Single-session mode restored" notification on
+    // non-governor close. The disconnect message above already covers it; the
+    // surviving session still gets a DM (covered in the next test).
+    const operatorTexts = mocks.sendServiceMessage.mock.calls.map((c: unknown[]) => String(c[0]));
+    expect(operatorTexts.some((t: string) => t.includes("Single-session mode restored"))).toBe(false);
   });
 
   it("notifies remaining session via DM when dropping from 2 to 1", async () => {

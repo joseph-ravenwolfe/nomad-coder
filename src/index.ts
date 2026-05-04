@@ -95,7 +95,7 @@ for (const sig of ["SIGTERM", "SIGINT"] as const) {
       } else if (isLoggingEnabled()) {
         try { rollLog(); } catch { /* best effort */ }
       }
-      await sendServiceMessage("🔴 Offline").catch((e: unknown) => {
+      await sendServiceMessage("💻 Telegram Bridge Offline").catch((e: unknown) => {
         process.stderr.write(`[shutdown] sendServiceMessage error: ${String(e)}\n`);
       });
     })();
@@ -301,5 +301,4 @@ process.stderr.write("[info] health check started\n");
 void cleanupStalePins().catch(() => {});
 
 // Best-effort startup notification — bypasses proxy (operational, not agent content)
-const localLogStatus = isLoggingEnabled() ? "`Logging enabled`" : "Logging disabled";
-void sendServiceMessage(`🟢 Online\n${localLogStatus}\n/logging to change settings`).catch(() => {});
+void sendServiceMessage("💻 Telegram Bridge Online").catch(() => {});

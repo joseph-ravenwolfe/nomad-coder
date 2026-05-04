@@ -251,8 +251,14 @@ export function getRawApi(): Api {
 }
 
 /**
- * Sends a formatted service message (📦 header + status line) via the raw API,
- * bypassing the outbound proxy so it never appears in the message store.
+ * Sends a bare service message via the raw API, bypassing the outbound proxy
+ * so it never appears in the message store. The status string is sent as-is
+ * with `parse_mode: "Markdown"` (so callers can use `*bold*`).
+ *
+ * As of v8 the previous `📦 *Telegram Bridge MCP*\n\n${status}` header has
+ * been removed — operator-facing messages now stand alone with their own
+ * leading emoji (e.g., `💻 *X* has disconnected.`).
+ *
  * Returns the message_id on success, or undefined if the chat is not configured.
  */
 export async function sendServiceMessage(status: string): Promise<number | undefined> {
@@ -264,7 +270,7 @@ export async function sendServiceMessage(status: string): Promise<number | undef
   process.stderr.write(`[service-msg] sending: ${status}\n`);
   const msg = await getRawApi().sendMessage(
     chatId,
-    `📦 *Telegram Bridge MCP*\n\n${status}`,
+    status,
     { parse_mode: "Markdown" },
   );
   process.stderr.write(`[service-msg] sent: ${status}\n`);
