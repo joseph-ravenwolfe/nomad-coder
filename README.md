@@ -53,7 +53,7 @@
 ```bash
 git clone https://github.com/electrified-cortex/Telegram-Bridge-MCP.git
 cd Telegram-Bridge-MCP
-pnpm install && pnpm build
+npm install && npm run build
 ```
 
 ### 2. Create a bot
@@ -69,7 +69,7 @@ Copy the token it gives you.
 ### 3. Pair interactively
 
 ```bash
-pnpm pair
+npm run pair
 ```
 
 The wizard prompts for your bot token and Telegram user ID, writes a `.env` file, and verifies connectivity.
@@ -86,7 +86,7 @@ See [`docs/setup.md`](docs/setup.md) for per-client config snippets (VS Code, Cl
 
 | Transport | Entry Point | Best For |
 | --- | --- | --- |
-| **Streamable HTTP** | `pnpm start -- --http` | Multiple clients sharing one server (recommended) |
+| **Streamable HTTP** | `npm start -- --http` | Multiple clients sharing one server (recommended) |
 | **stdio** | `node dist/index.js` | Single client, no persistent server |
 | **Launcher bridge** | `node dist/launcher.js` | Auto-starts HTTP if needed, bridges stdio ↔ HTTP |
 
@@ -343,7 +343,7 @@ Five resources are available to any connected client — no tool call required:
 ghcr.io/electrified-cortex/telegram-bridge-mcp:latest
 ```
 
-> **Before running Docker:** Create your `.env` file first by running `pnpm pair` on a machine with Node.js, or copy `.env.example` and fill it in manually.
+> **Before running Docker:** Create your `.env` file first by running `npm run pair` on a machine with Node.js, or copy `.env.example` and fill it in manually.
 
 **Streamable HTTP (recommended)** — run as a long-lived service:
 
@@ -382,11 +382,11 @@ The cache volume persists Whisper and TTS model weights across container restart
 ## Development
 
 ```bash
-pnpm build      # Compile TypeScript
-pnpm dev        # Watch mode
-pnpm test       # Run tests
-pnpm coverage   # Coverage report
-pnpm pair       # Re-run pairing wizard
+npm run build     # Compile TypeScript
+npm run dev       # Watch mode
+npm test          # Run tests
+npm run coverage  # Coverage report
+npm run pair      # Re-run pairing wizard
 ```
 
 ---

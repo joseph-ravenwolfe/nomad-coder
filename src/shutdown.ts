@@ -77,7 +77,7 @@ export async function postShutdownAnnouncement(
     `⛔ *Bridge shutting down*\n` +
     `Initiated by: ${who}\n` +
     `Action: ${sessionPart}\n` +
-    `Next state: bridge offline until \`pnpm start\``;
+    `Next state: bridge offline until \`npm start\``;
   await sendServiceMessage(text).catch((err: unknown) => {
     process.stderr.write(`[shutdown] announcement failed (non-blocking): ${String(err)}\n`);
   });

@@ -1,6 +1,27 @@
 import { randomInt, randomUUID } from "node:crypto";
+import { mkdirSync, writeFileSync, unlinkSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { dlog } from "./debug-log.js";
 import { recordNonToolEvent } from "./trace-log.js";
+
+// ── Watch file (heartbeat) location ────────────────────────
+//
+// Each session gets a per-session "watch file" the bridge appends to whenever
+// a new event lands in that session's queue. Agents follow this file via
+// `tail -F` (Claude Code's Monitor tool) and call dequeue({max_wait:0}) on
+// each new line, replacing the old long-poll dequeue pattern.
+
+function getCacheDir(): string {
+  const xdg = process.env.XDG_CACHE_HOME;
+  const base = xdg && xdg.length > 0 ? xdg : join(homedir(), ".cache");
+  return join(base, "telegram-bridge-mcp", "sessions");
+}
+
+/** Absolute path to the heartbeat file for a given session ID. */
+export function getWatchFilePath(sid: number): string {
+  return join(getCacheDir(), `${sid}.events`);
+}
 
 // ── Types ──────────────────────────────────────────────────
 
@@ -36,6 +57,21 @@ export interface Session {
    * "compacted" notify (one-shot per compaction cycle).
    */
   hasCompacted?: boolean;
+  /**
+   * Absolute path to the per-session heartbeat file. The bridge appends a
+   * single newline per inbound event so an agent watching the file via
+   * `tail -F` (Claude Code's Monitor tool) can wake up only when there's
+   * something to drain. Populated by `createSession`; unlinked by
+   * `closeSession` callers in `session-teardown`.
+   */
+  watchFile?: string;
+  /**
+   * MCP HTTP transport session ID this bridge session is bound to.
+   * When the streamable-http transport closes (Claude Code exits), the
+   * onclose handler in `index.ts` looks up bridge sessions by this field
+   * and closes them automatically. See `closeSessionsByHttpId`.
+   */
+  httpSessionId?: string;
 }
 
 /** Public view returned by `listSessions` — no token suffix. */
@@ -54,6 +90,14 @@ export interface SessionCreateResult {
   color: string;
   sessionsActive: number;
   connectionToken: string;
+  /**
+   * Absolute path to the per-session heartbeat file. Surface this in the
+   * `session/start` MCP response so agents can wire `Monitor` (Claude Code's
+   * file-watcher tool) to wake on new events instead of long-polling
+   * `dequeue`. May be undefined if file-system allocation failed; agents
+   * should fall back to dequeue long-poll in that case.
+   */
+  watchFile?: string;
 }
 
 // ── State ──────────────────────────────────────────────────
@@ -152,7 +196,12 @@ export function getAvailableColors(hint?: string): string[] {
   return sorted;
 }
 
-export function createSession(name = "", colorHint?: string, forceColor = false): SessionCreateResult {
+export function createSession(
+  name = "",
+  colorHint?: string,
+  forceColor = false,
+  httpSessionId?: string,
+): SessionCreateResult {
   const sid = _nextId++;
   const usedSuffixes = new Set([..._sessions.values()].map((s) => s.suffix));
   let suffix: number;
@@ -169,6 +218,22 @@ export function createSession(name = "", colorHint?: string, forceColor = false)
   }
   const color = assignColor(colorHint, forceColor);
   const connectionToken = randomUUID();
+
+  // Allocate the per-session heartbeat file.
+  // Cache dir is created idempotently; file is truncated to handle the case
+  // where a previous run died with stale content for this SID.
+  const watchFile = getWatchFilePath(sid);
+  try {
+    mkdirSync(getCacheDir(), { recursive: true });
+    writeFileSync(watchFile, "", { flag: "w" });
+  } catch (err) {
+    // Watch-file allocation failure is non-fatal: the session can still
+    // operate via dequeue long-poll. Log and continue.
+    process.stderr.write(
+      `[session-manager] watch file alloc failed sid=${sid} file=${watchFile} err=${(err as Error).message}\n`,
+    );
+  }
+
   const session: Session = {
     sid,
     suffix,
@@ -178,11 +243,51 @@ export function createSession(name = "", colorHint?: string, forceColor = false)
     lastPollAt: undefined,
     healthy: true,
     connectionToken,
+    watchFile,
+    httpSessionId,
   };
   _sessions.set(sid, session);
   dlog("session", `created sid=${sid} name=${JSON.stringify(name)} color=${color} total=${_sessions.size}`);
   recordNonToolEvent("session_create", sid, name);
-  return { sid, suffix, name, color, sessionsActive: _sessions.size, connectionToken };
+  return {
+    sid,
+    suffix,
+    name,
+    color,
+    sessionsActive: _sessions.size,
+    connectionToken,
+    watchFile: session.watchFile,
+  };
+}
+
+/**
+ * Best-effort delete of a session's watch file. Called from
+ * `closeSessionById` in `session-teardown.ts`. Idempotent — ENOENT is fine.
+ */
+export function unlinkWatchFile(watchFile: string | undefined): void {
+  if (!watchFile) return;
+  try {
+    unlinkSync(watchFile);
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code !== "ENOENT") {
+      process.stderr.write(
+        `[session-manager] watch file unlink failed file=${watchFile} err=${(err as Error).message}\n`,
+      );
+    }
+  }
+}
+
+/**
+ * Return the SIDs of every session bound to the given MCP HTTP transport.
+ * Used by the streamable-http transport's `onclose` handler in `index.ts`
+ * to auto-close bridge sessions when the underlying MCP connection drops
+ * (e.g., the Claude Code process exits).
+ */
+export function findSessionsByHttpId(httpSessionId: string): number[] {
+  return [..._sessions.values()]
+    .filter(s => s.httpSessionId === httpSessionId)
+    .map(s => s.sid);
 }
 
 export function getSession(sid: number): Session | undefined {

@@ -1,51 +1,75 @@
 # Agent Guide: Telegram Bridge MCP
 
-**`dequeue` is the sole tool for receiving updates.** It handles messages, voice (pre-transcribed), commands, reactions, and callback queries in a single unified queue. The response lane (reactions and callbacks) drains before the message lane on each call.
+**Receiving updates: file watcher + drain.** Each session gets a per-session
+heartbeat file (`watch_file` returned by `session/start`). The bridge appends
+one byte to that file every time a new event lands in your session's queue.
+Use Claude Code's `Monitor` tool with `tail -F <watch_file>` to wake up only
+when there's something to drain — then call `dequeue({max_wait: 0})` to pull
+events. No long-poll, no blocking turn, no idle cost.
 
-### `dequeue` loop pattern
+The response lane (reactions and callbacks) drains before the message lane
+on each `dequeue` call.
 
-`dequeue` has two distinct modes:
+### Bootstrap
+
+On `session/start`, capture both `token` and `watch_file` from the response.
+Then arm the watcher:
+
+```js
+const { token, watch_file } = (await action({type: "session/start", name: "Worker"})).result;
+
+Monitor({
+  command: `tail -F ${watch_file}`,
+  description: "Telegram inbox: drain on each line",
+  persistent: true,
+});
+
+// Drain any backlog that arrived during boot
+let r;
+while (!(r = await dequeue({token, max_wait: 0})).empty) handle(r.updates);
+```
+
+After this, do nothing — no spinner-locking dequeue. Each new event arrives
+as a `Monitor` notification (one stdout line = one new-event signal). On
+each notification, drain:
+
+```js
+let r;
+while (!(r = await dequeue({token, max_wait: 0})).empty) handle(r.updates);
+```
+
+### `dequeue` modes
 
 | Mode | Call | Behavior |
 | --- | --- | --- |
-| **Block** (normal loop) | `dequeue()` — no args | Waits up to 300 s for the next update. Returns `{ timed_out: true }` on timeout — call again immediately. |
-| **Instant poll** (drain) | `dequeue(max_wait: 0)` | Returns immediately — an update if one exists, or `{ empty: true }`. |
-| **Shorter wait** | `dequeue(max_wait: 60)` | Waits up to 60 s — only for shutdown sequences or specific short-lived events. |
+| **Drain** (normal use) | `dequeue({token, max_wait: 0})` | Returns immediately — an update if one exists, or `{ empty: true }`. The Monitor pattern uses this exclusively. |
+| **Block** (legacy) | `dequeue({token})` — no `max_wait` | Waits up to 300 s. Retained for backward compat with v7 agents. New agents should use Monitor + drain. |
 
-Normal drain-then-block sequence:
-
-```text
-1. drain: call dequeue(max_wait: 0) until empty: true — handles any backlog
-2. block: call dequeue()           — waits up to 300 s for the next task
-3. On update: handle it, then go to step 1
-```
-
-`pending` (included when more updates are queued) tells you how many items are still waiting. When `pending > 0`, skip straight to another `dequeue(max_wait: 0)` instead of blocking.
+`pending` (included when more updates are queued) tells you how many items
+are still waiting. After a Monitor notification, drain in a tight loop
+(`max_wait: 0`) until `empty: true` — the file is a doorbell, not a queue,
+so multiple events may arrive before you next drain.
 
 ### Compact mode (`response_format: "compact"`)
 
-Pass `response_format: "compact"` to any `dequeue` call to reduce token usage (~445 tokens/session saved). In compact mode, certain always-inferrable fields are omitted:
+Pass `response_format: "compact"` to any `dequeue` call to reduce token
+usage (~445 tokens/session saved). In compact mode, certain always-inferrable
+fields are omitted:
 
-- **Empty poll result:** `empty: true` is suppressed. Infer empty from the *absence* of an `updates` key.
-- **Timeout:** `timed_out: true` is **always** emitted (never suppressed) — so a `timed_out` key still signals the timeout case reliably.
+- **Empty poll result:** `empty: true` is suppressed. Infer empty from the
+  *absence* of an `updates` key.
+- **Timeout:** `timed_out: true` is **always** emitted when it occurs (block
+  mode only — n/a in the Monitor pattern).
 
-Compact mode drain-then-block pattern:
+`response_format` defaults to `"default"` — no existing calls are affected
+unless you opt in.
 
-```text
-Default:  if (result.empty) { /* empty */ } else if (result.timed_out) { /* timeout */ } else { /* process result.updates */ }
-Compact:  if (!result.updates) { /* empty — no updates key means empty poll */ } else if (result.timed_out) { /* timeout — always present */ } else { /* process result.updates */ }
-```
+### What about timeouts?
 
-`response_format` defaults to `"default"` — no existing calls are affected unless you opt in.
-
-### Handling a full timeout
-
-When `dequeue()` returns `{ timed_out: true }` after a full blocking wait (not a `max_wait: 0` drain poll), 5 minutes have passed with no activity. Do not silently loop:
-
-1. Send a brief `send(type: "notification")` checking in (e.g. "Still listening — are you there?").
-2. Continue the `dequeue` loop as normal.
-
-Do **not** check in after `max_wait: 0` drain polls — those are expected to return immediately.
+In the Monitor pattern there are no `dequeue` timeouts to handle — `max_wait: 0`
+returns immediately. Idle sessions sit silent (the Monitor watcher is the only
+thing alive in the background). Don't send check-in chatter on no activity;
+the heartbeat file *is* the liveness mechanism.
 
 ### Looking up prior messages
 

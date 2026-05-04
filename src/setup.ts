@@ -1,7 +1,7 @@
 /**
  * Telegram Bridge MCP — Pairing Setup Script
  *
- * Usage: pnpm pair   (or: node dist/setup.js)
+ * Usage: npm run pair   (or: node dist/setup.js)
  *
  * 1. Reads BOT_TOKEN from environment / .env
  * 2. Verifies the token with getMe()
@@ -74,7 +74,7 @@ async function main() {
     console.error(red("  ✗ BOT_TOKEN is not set."));
     console.error("    Create a bot with @BotFather, then either:");
     console.error("      • Add  BOT_TOKEN=<token>  to a .env file in this directory");
-    console.error("      • Or set it as an environment variable before running pnpm pair");
+    console.error("      • Or set it as an environment variable before running npm run pair");
     process.exit(1);
   }
 
@@ -189,7 +189,7 @@ async function main() {
         printConfig("Claude Desktop (claude_desktop_config.json → mcpServers)");
         printConfig("Claude Code (.mcp.json in project root → mcpServers)");
 
-        console.log("    • Or run  " + bold("pnpm start") + "  to start the server manually.");
+        console.log("    • Or run  " + bold("npm start") + "  to start the server manually.");
         console.log("");
 
         // Send confirmation back to the user
@@ -208,7 +208,7 @@ async function main() {
         if (wrongAttempts >= MAX_WRONG_ATTEMPTS) {
           clearInterval(countdownInterval);
           console.log(red(`\n  ✗ ${MAX_WRONG_ATTEMPTS} incorrect attempts — pairing aborted for security.`));
-          console.log("    Run  pnpm pair  again to get a new code.");
+          console.log("    Run  npm run pair  again to get a new code.");
           process.exit(1);
         }
         console.log(yellow(`  ✗ Wrong message (attempt ${wrongAttempts}/${MAX_WRONG_ATTEMPTS}). Expected the pairing code.`));
@@ -219,7 +219,7 @@ async function main() {
   clearInterval(countdownInterval);
   process.stdout.write("\r" + " ".repeat(40) + "\r");
   console.log(red("  ✗ Timed out — pairing code expired after 30 seconds."));
-  console.log("    Run  pnpm pair  again to get a new code.");
+  console.log("    Run  npm run pair  again to get a new code.");
   process.exit(1);
 }
 

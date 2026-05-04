@@ -3,17 +3,17 @@
 ## Build Command
 
 ```
-pnpm build
+npm run build
 ```
 
 ## Lint Command
 
 ```
-pnpm lint
+npm run lint
 ```
 
 ## Test Command
 
 ```
-pnpm test
+npm test
 ```

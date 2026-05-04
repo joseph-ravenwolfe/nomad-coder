@@ -475,4 +475,33 @@ describe("session-queue", () => {
       expect(getMessageOwner(100)).toBe(0);
     });
   });
+
+  // ── v8 heartbeat side-effect ────────────────────────────────
+  describe("heartbeat write", () => {
+    it("appends a single byte to the session's watch file on each enqueue", async () => {
+      const { createSession, unlinkWatchFile, getSession } = await import("./session-manager.js");
+      const { statSync, existsSync } = await import("node:fs");
+      const session = createSession("Worker");
+      try {
+        createSessionQueue(session.sid);
+        // Make this session the governor so ambiguous events route to it
+        // (the route path goes through enqueueAndPing → file write).
+        setGovernorSid(session.sid);
+        const wf = getSession(session.sid)?.watchFile;
+        expect(wf).toBeDefined();
+        expect(existsSync(wf!)).toBe(true);
+        expect(statSync(wf!).size).toBe(0);
+
+        routeToSession(makeEvent({ id: 1001 }));
+        expect(statSync(wf!).size).toBe(1);
+
+        routeToSession(makeEvent({ id: 1002 }));
+        routeToSession(makeEvent({ id: 1003 }));
+        expect(statSync(wf!).size).toBe(3);
+      } finally {
+        unlinkWatchFile(session.watchFile);
+        removeSessionQueue(session.sid);
+      }
+    });
+  });
 });

@@ -368,7 +368,7 @@ export function createServer(): McpServer {
   server.registerResource(
     "setup-guide",
     "telegram-bridge-mcp://setup-guide",
-    { mimeType: "text/markdown", description: "Step-by-step guide to creating a Telegram bot and running pnpm pair to configure this MCP server." },
+    { mimeType: "text/markdown", description: "Step-by-step guide to creating a Telegram bot and running npm run pair to configure this MCP server." },
     () => ({
       contents: [
         {

@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { existsSync, statSync } from "node:fs";
 import {
   createSession,
   getSession,
@@ -21,6 +22,9 @@ import {
   setHasCompacted,
   clearHasCompacted,
   getHasCompacted,
+  getWatchFilePath,
+  unlinkWatchFile,
+  findSessionsByHttpId,
 } from "./session-manager.js";
 
 interface SessionWithoutSuffix {
@@ -636,4 +640,62 @@ describe("hasCompacted helpers", () => {
   });
 });
 
+// ── v8 watch-file behavior ─────────────────────────────────
+
+describe("watch file (v8 heartbeat)", () => {
+  it("getWatchFilePath returns a path under the cache dir", () => {
+    const path = getWatchFilePath(42);
+    // Should end with the conventional suffix, regardless of XDG settings
+    expect(path).toMatch(/telegram-bridge-mcp\/sessions\/42\.events$/);
+  });
+
+  it("createSession populates session.watchFile and creates the file empty", () => {
+    const result = createSession("Worker");
+    expect(result.watchFile).toBeDefined();
+    const session = getSession(result.sid);
+    expect(session?.watchFile).toBe(result.watchFile);
+    expect(existsSync(result.watchFile!)).toBe(true);
+    expect(statSync(result.watchFile!).size).toBe(0);
+    // cleanup
+    unlinkWatchFile(result.watchFile);
+  });
+
+  it("createSession stores httpSessionId when provided", () => {
+    const result = createSession("Worker", undefined, false, "http-uuid-123");
+    expect(getSession(result.sid)?.httpSessionId).toBe("http-uuid-123");
+    unlinkWatchFile(result.watchFile);
+  });
+
+  it("createSession accepts undefined httpSessionId (stdio transport)", () => {
+    const result = createSession("Worker");
+    expect(getSession(result.sid)?.httpSessionId).toBeUndefined();
+    unlinkWatchFile(result.watchFile);
+  });
+
+  it("unlinkWatchFile is idempotent — second call after file is gone is fine", () => {
+    const result = createSession("Worker");
+    unlinkWatchFile(result.watchFile);
+    expect(existsSync(result.watchFile!)).toBe(false);
+    // Second call must not throw
+    expect(() => unlinkWatchFile(result.watchFile)).not.toThrow();
+  });
+
+  it("unlinkWatchFile is a no-op for undefined", () => {
+    expect(() => unlinkWatchFile(undefined)).not.toThrow();
+  });
+
+  it("findSessionsByHttpId returns SIDs of all sessions bound to the given HTTP UUID", () => {
+    const a = createSession("A", undefined, false, "http-1");
+    const b = createSession("B", undefined, false, "http-1");
+    const c = createSession("C", undefined, false, "http-2");
+    const d = createSession("D"); // no httpSessionId
+
+    const matches = findSessionsByHttpId("http-1").sort();
+    expect(matches).toEqual([a.sid, b.sid].sort());
+    expect(findSessionsByHttpId("http-2")).toEqual([c.sid]);
+    expect(findSessionsByHttpId("http-nonexistent")).toEqual([]);
+
+    [a, b, c, d].forEach(s => unlinkWatchFile(s.watchFile));
+  });
+});
 

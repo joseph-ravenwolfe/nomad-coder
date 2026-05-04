@@ -1,5 +1,29 @@
 # [Unreleased]
 
+## v8.0.0 — 2026-05-04
+
+### Breaking
+
+- **Receiving updates: file watcher + drain replaces blocking `dequeue`.** Each session now gets a per-session heartbeat file. `session/start` returns a new `watch_file` field (absolute path). The bridge appends a single byte to that file every time an event lands in the session's queue. Agents wire Claude Code's `Monitor({ command: "tail -F <watch_file>", persistent: true })` to wake on each line, then call `dequeue({max_wait: 0})` to drain. The 300 s long-poll `dequeue()` mode still works for backward compat but is no longer the canonical pattern; idle cost in the new pattern is **zero** (no spinner-locking dequeue, no timeout cycles, no check-in chatter).
+- **Session liveness now tied to MCP HTTP transport.** When the streamable-http transport's `onclose` fires (Claude Code exits, network drops), all bridge sessions bound to that HTTP UUID are auto-closed via a new `httpSessionId` field on `Session`. Eliminates ghost sessions waiting for a health timeout.
+- **Backlog is dropped on `session/start`.** Any pre-existing unrouted backlog is discarded; the response's `discarded` count tells the agent how many were dropped. Clean-slate semantics — fresh sessions don't inherit messages from prior runs.
+- **Health threshold relaxed from 15 min to 24 h.** With Monitor handling event delivery and HTTP `onclose` handling cleanup, the 15-min `lastPollAt` check would false-positive on legitimate idle sessions. The 24 h threshold remains as a long-tail safety net for stuck connections that don't surface a TCP close.
+
+### Added
+
+- New module `src/request-context.ts`: `AsyncLocalStorage`-based request-scoped context that propagates the MCP HTTP session ID to tool handlers (e.g., `session/start` reads it via `getCurrentHttpSessionId()` and binds the bridge session to the transport).
+- `getWatchFilePath(sid)`, `unlinkWatchFile(path)`, `findSessionsByHttpId(httpSessionId)` exports on `session-manager`.
+- New tests: heartbeat file allocation, deletion, idempotent unlink, HTTP-ID lookup, file-write side effect of every enqueue path.
+
+### Migration
+
+Old agents (v7) using blocking `dequeue()` continue to work. New or updated agents should:
+
+1. On `session/start`, capture both `token` and `watch_file` from the response.
+2. Call `Monitor({ command: "tail -F ${watch_file}", description: "...", persistent: true })`.
+3. On each Monitor notification: drain via `dequeue({token, max_wait: 0})` until `empty: true`; handle events.
+4. Remove any "still listening" check-in notifications and the loop-guard Stop hook — neither is needed in the Monitor pattern.
+
 ## v7.2.2 — 2026-04-25
 
 ### Added

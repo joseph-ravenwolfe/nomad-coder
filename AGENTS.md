@@ -35,7 +35,7 @@ Connect Your Client:
 
 Transport mode:
 ├── HTTP ← USE THIS (works for every client, supports multi-session, no conflicts)
-│   → start server once: MCP_PORT=3099 pnpm start (or Docker)
+│   → start server once: MCP_PORT=3099 npm start (or Docker)
 │   → all clients point at http://127.0.0.1:3099/mcp
 │   → multiple clients can connect simultaneously — no getUpdates conflicts
 └── stdio ← FALLBACK ONLY (use when you cannot run a persistent server)
@@ -64,7 +64,7 @@ https://api.telegram.org/bot<TOKEN>/getUpdates
 
 Look for `message.from.id` in the JSON — that's your `ALLOWED_USER_ID`.
 
-**Shortcut:** `pnpm pair` automates both steps — run it, send the pairing code to your bot,
+**Shortcut:** `npm run pair` automates both steps — run it, send the pairing code to your bot,
 and it writes `.env` for you.
 
 ### Step 3 — Configure .env
@@ -95,7 +95,7 @@ Add to `.mcp.json` in your **project root** (not global config):
 }
 ```
 
-Start server first: `MCP_PORT=3099 pnpm start`
+Start server first: `MCP_PORT=3099 npm start`
 
 > **Do not** add to global `~/.claude.json`. Every Claude Code session would connect.
 
@@ -144,7 +144,7 @@ Add to `claude_desktop_config.json`:
 }
 ```
 
-Start server first: `MCP_PORT=3099 pnpm start`
+Start server first: `MCP_PORT=3099 npm start`
 
 ### Stdio mode — launcher (fallback: any client, zero credentials in config)
 

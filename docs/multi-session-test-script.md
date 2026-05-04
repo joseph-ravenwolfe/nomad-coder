@@ -6,7 +6,7 @@ Step-by-step test plan requiring 2–3 MCP agent sessions and one operator on Te
 
 ## Prerequisites
 
-- `pnpm build` clean, `pnpm lint` clean, `pnpm test` all passing
+- `npm run build` clean, `npm run lint` clean, `npm test` all passing
 - `mcp-config.json` has `"debug": true`
 - MCP server freshly restarted
 - **S1** — first MCP client, connected via `action(type: "session/start")` (auto-named "Primary")

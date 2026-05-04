@@ -35,9 +35,13 @@ export const CHECK_INTERVAL_MS = 60_000;
 
 /**
  * How long a session can go without any tool activity before it is considered
- * unhealthy. Set to 15 minutes to allow room for long-running local operations.
+ * unhealthy. Bumped to 24 hours in v8 — agents using the Monitor + heartbeat
+ * pattern legitimately sit idle indefinitely (no long-poll cadence). The
+ * primary "agent gone" signal is now the streamable-http transport's
+ * `onclose` (handled in `index.ts`); this threshold is a long-tail safety
+ * net for stuck connections that don't surface a TCP close.
  */
-export const HEALTH_THRESHOLD_MS = 900_000;
+export const HEALTH_THRESHOLD_MS = 86_400_000;
 
 const CB_REROUTE_NOW  = "hc_reroute_now";
 const CB_MAKE_PRIMARY = "hc_make_primary";

@@ -12,12 +12,43 @@
  * they receive copies of the same event references.
  */
 
+import { appendFileSync } from "node:fs";
 import { TemporalQueue } from "./temporal-queue.js";
 import type { TimelineEvent } from "./message-store.js";
 import { getMessage, CURRENT } from "./message-store.js";
 import { getGovernorSid } from "./routing-mode.js";
+import { getSession } from "./session-manager.js";
 import { dlog } from "./debug-log.js";
 import type { ReminderEvent } from "./reminder-state.js";
+
+/**
+ * Enqueue an event to the given session's queue and append a heartbeat
+ * line to its watch file. The heartbeat is what wakes Monitor-watching
+ * agents — without it, an agent has no way to know a new event arrived
+ * short of long-polling dequeue.
+ *
+ * The append is best-effort: file-write errors must NOT block event
+ * delivery. The event is in the queue regardless. Errors are logged and
+ * swallowed (e.g., the cache dir was deleted by an admin, the FS is
+ * full, etc.). Single-byte append is atomic on POSIX (under PIPE_BUF).
+ */
+function enqueueAndPing(
+  sid: number,
+  q: TemporalQueue<TimelineEvent>,
+  event: TimelineEvent,
+): void {
+  q.enqueue(event);
+  const watchFile = getSession(sid)?.watchFile;
+  if (watchFile) {
+    try {
+      appendFileSync(watchFile, "\n");
+    } catch (err) {
+      process.stderr.write(
+        `[heartbeat] write failed sid=${sid} file=${watchFile} err=${(err as Error).message}\n`,
+      );
+    }
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Voice-ready predicate (shared with message-store's queue)
@@ -198,8 +229,8 @@ export function routeToSession(event: TimelineEvent): void {
 
   // Fallback: broadcast to all sessions
   dlog("route", `broadcast event=${event.id} → ${_queues.size} sessions`);
-  for (const q of _queues.values()) {
-    q.enqueue(event);
+  for (const [sid, q] of _queues.entries()) {
+    enqueueAndPing(sid, q, event);
   }
 }
 
@@ -228,7 +259,7 @@ function enqueueToSession(
 ): void {
   const q = _queues.get(sid);
   if (!q) return;
-  q.enqueue(event);
+  enqueueAndPing(sid, q, event);
 }
 
 // ---------------------------------------------------------------------------
@@ -244,7 +275,7 @@ export function broadcastOutbound(event: TimelineEvent, senderSid: number): void
   const govSid = getGovernorSid();
   if (govSid <= 0 || govSid === senderSid) return;
   const q = _queues.get(govSid);
-  if (q) q.enqueue(event);
+  if (q) enqueueAndPing(govSid, q, event);
 }
 
 // ---------------------------------------------------------------------------
@@ -362,7 +393,7 @@ export function deliverAsyncSendCallback(
     sid: targetSid,
   };
 
-  q.enqueue(event);
+  enqueueAndPing(targetSid, q, event);
   dlog("async-send", `callback → sid=${targetSid}`, { pendingId: payload.pendingId, status: payload.status });
   return true;
 }
@@ -389,7 +420,7 @@ export function deliverDirectMessage(
     sid: senderSid,
   };
 
-  q.enqueue(event);
+  enqueueAndPing(targetSid, q, event);
   dlog("dm", `delivered DM from sid=${senderSid} → sid=${targetSid}`, { eventId: event.id });
   return true;
 }
@@ -462,7 +493,7 @@ export function deliverServiceMessage(
     sid: 0,
   };
 
-  q.enqueue(event);
+  enqueueAndPing(targetSid, q, event);
   dlog("service", `service message → sid=${targetSid}`, { eventType, eventId: event.id });
   return true;
 }
@@ -499,7 +530,7 @@ export function deliverReminderEvent(
     trigger: src.trigger,
   });
 
-  q.enqueue(event);
+  enqueueAndPing(targetSid, q, event);
   dlog("service", `startup reminder → sid=${targetSid}`, { reminderId: src.reminder_id });
   return true;
 }
@@ -522,7 +553,7 @@ export function routeMessage(messageId: number, targetSid: number, routerSid: nu
     ...event,
     content: { ...event.content, routed_by: routerSid },
   };
-  q.enqueue(routed);
+  enqueueAndPing(targetSid, q, routed);
   dlog("route", `governor delegated msg=${messageId} → sid=${targetSid}`, { routerSid });
   return true;
 }

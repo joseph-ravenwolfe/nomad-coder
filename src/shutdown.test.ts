@@ -121,7 +121,7 @@ describe("shutdown announcement helpers", () => {
     const text = (mocks.sendServiceMessage.mock.calls[0] as unknown as [string])[0];
     expect(text).toContain("operator /shutdown");
     expect(text).toContain("closing 3 active sessions");
-    expect(text).toContain("pnpm start");
+    expect(text).toContain("npm start");
   });
 
   it("postShutdownAnnouncement uses singular for 1 session", async () => {
@@ -430,7 +430,7 @@ describe("elegantShutdown — chat announcement sequence (AC5)", () => {
     const announcementText = chatCalls[announcementIdx];
     expect(announcementText).toContain("operator /shutdown");
     expect(announcementText).toContain("closing 2 active sessions");
-    expect(announcementText).toContain("pnpm start");
+    expect(announcementText).toContain("npm start");
 
     // Process exits cleanly
     expect(exitSpy).toHaveBeenCalledWith(0);

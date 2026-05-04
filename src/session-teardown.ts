@@ -14,6 +14,7 @@ import {
   listSessions,
   activeSessionCount,
   getSessionAnnouncementMessage,
+  unlinkWatchFile,
 } from "./session-manager.js";
 import {
   removeSessionQueue,
@@ -47,13 +48,19 @@ import { removeSilenceState } from "./silence-detector.js";
  *          session did not exist (already closed or never created).
  */
 export function closeSessionById(sid: number): { closed: boolean; sid: number } {
-  // Capture session name before closing (used in notifications)
+  // Capture session name and watch file before closing — both are read off
+  // the Session object, which is destroyed by closeSession() below.
   const sessionInfo = getSession(sid);
   const sessionName = sessionInfo?.name || `Session ${sid}`;
+  const watchFile = sessionInfo?.watchFile;
   const announcementMsgId = getSessionAnnouncementMessage(sid);
 
   const closed = closeSession(sid);
   if (!closed) return { closed: false, sid };
+
+  // Best-effort delete of the per-session heartbeat file. Idempotent —
+  // ENOENT is fine (already gone). Non-fatal on any other error.
+  unlinkWatchFile(watchFile);
 
   // Drain orphaned queue items after close succeeds so we can reroute
   const orphaned = drainQueue(sid);

@@ -10,9 +10,9 @@ Reusable manual test plan for the Telegram Bridge MCP server. Run through these 
 
 ## Prerequisites
 
-1. `pnpm build` — clean
-2. `pnpm lint` — clean
-3. `pnpm test` — all passing
+1. `npm run build` — clean
+2. `npm run lint` — clean
+3. `npm test` — all passing
 4. Restart the MCP server (`shutdown()` → call any tool to restart)
 5. `action(type: "session/start")` — fresh session (SID 1)
 6. `action(type: "profile/topic", topic: "🧪 Test")` with a test label

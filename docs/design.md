@@ -194,7 +194,7 @@ telegram-bridge-mcp/
 │   ├── markdown.ts           # Markdown → MarkdownV2 auto-conversion
 │   ├── built-in-commands.ts  # Server-intercepted slash commands (/session, /voice, /routing)
 │   ├── shutdown.ts           # SIGTERM/SIGINT handler; clears slash-command menus
-│   ├── setup.ts              # pnpm pair wizard — writes .env from live bot pairing
+│   ├── setup.ts              # npm run pair wizard — writes .env from live bot pairing
 │   └── tools/
 │       ├── get_agent_guide.ts
 │       ├── notify.ts

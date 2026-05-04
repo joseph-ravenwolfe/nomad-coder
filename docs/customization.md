@@ -22,14 +22,14 @@ Once configured, this MCP becomes your development assistant for its own codebas
 ```bash
 git clone https://github.com/electrified-cortex/Telegram-Bridge-MCP.git
 cd Telegram-Bridge-MCP
-pnpm install
-pnpm build
+npm install
+npm run build
 ```
 
 ### 2. Pair your bot
 
 ```bash
-pnpm pair
+npm run pair
 ```
 
 Follow the wizard to create `.env` with your bot credentials.
@@ -69,7 +69,7 @@ Follow the wizard to create `.env` with your bot credentials.
 **Shared server mode** — If you prefer running one persistent server instead of having each editor spawn its own process:
 
 ```bash
-MCP_PORT=3099 pnpm start
+MCP_PORT=3099 npm start
 ```
 
 Then use `"type": "streamable-http"` with `"url": "http://127.0.0.1:3099/mcp"` in your MCP host config instead of the stdio examples above. See the [setup guide](setup.md) for full config snippets.
@@ -144,7 +144,7 @@ Open your AI assistant (VS Code Copilot, Claude Desktop, etc.) and paste the con
 
 ## Hot Reload with `shutdown`
 
-After modifying TypeScript source files, run `pnpm build` then call the `shutdown` tool (via the loop prompt, the assistant can do this automatically or you can request it):
+After modifying TypeScript source files, run `npm run build` then call the `shutdown` tool (via the loop prompt, the assistant can do this automatically or you can request it):
 
 ```text
 "Rebuild and restart the server"
@@ -152,7 +152,7 @@ After modifying TypeScript source files, run `pnpm build` then call the `shutdow
 
 **What happens:**
 
-1. Runs `pnpm build` (compiles TypeScript)
+1. Runs `npm run build` (compiles TypeScript)
 2. `shutdown` exits the MCP server process
 3. The MCP host detects the exit and relaunches
 4. Calls `dequeue` to drain stale messages
@@ -171,7 +171,7 @@ The loop prompt requires the assistant to send a **silent notification** before:
 - Editing any test file (`*.test.ts`)
 - Editing config/build files (`package.json`, `tsconfig.json`, etc.)
 - Editing documentation (`docs/help/guide.md`, `setup.md`, `formatting.md`, `LOOP-PROMPT.md`, etc.)
-- Running commands (`pnpm build`, `pnpm test`, `git commit`, etc.)
+- Running commands (`npm run build`, `npm test`, `git commit`, etc.)
 - Deleting any file
 
 This gives you real-time visibility into what the assistant is doing, even when you're away from your computer.
@@ -285,7 +285,7 @@ _"Add a severity parameter to the notify tool, default to info"_
 - 👀 reaction on your message
 - 🔔 Silent notification: "Editing src/tools/notify.ts — adding severity parameter"
 - Edits the file
-- Runs `pnpm test`
+- Runs `npm test`
 - 🫡 "Done — `severity` parameter added, defaults to `info`, all tests pass"
 
 **You:**
@@ -294,7 +294,7 @@ _"Restart the server"_
 **Assistant:**
 
 - 🔔 "Restarting server"
-- Runs `pnpm build`
+- Runs `npm run build`
 - Restarts MCP
 - 🔔 "Back online — build clean"
 
@@ -357,7 +357,7 @@ Revert your changes via git, rebuild, and restart:
 
 ```bash
 git checkout src/tools/broken-file.ts
-pnpm build
+npm run build
 # Restart your MCP host
 ```
 

@@ -38,6 +38,9 @@ vi.mock("../../session-manager.js", () => ({
   listSessions: mocks.listSessions,
   activeSessionCount: () => mocks.activeSessionCount(),
   getSessionAnnouncementMessage: (...args: unknown[]) => mocks.getSessionAnnouncementMessage(...args),
+  // No-op mock for the v8 watch-file teardown step. Real implementation
+  // is best-effort filesystem unlink; tests don't need to verify file IO.
+  unlinkWatchFile: vi.fn(),
 }));
 
 vi.mock("../../session-queue.js", () => ({

@@ -5,6 +5,7 @@ import { markdownToV2 } from "../../markdown.js";
 import type { TimelineEvent } from "../../message-store.js";
 import { dequeue, registerCallbackHook, clearCallbackHook } from "../../message-store.js";
 import { createSession, closeSession, setActiveSession, listSessions, activeSessionCount, getSession, getAvailableColors, COLOR_PALETTE, setSessionAnnouncementMessage, getSessionAnnouncementMessage, setSessionReauthDialogMsgId, clearSessionReauthDialogMsgId } from "../../session-manager.js";
+import { getCurrentHttpSessionId } from "../../request-context.js";
 import { createSessionQueue, removeSessionQueue, deliverServiceMessage, trackMessageOwner, deliverReminderEvent, getSessionQueue } from "../../session-queue.js";
 import { setGovernorSid, getGovernorSid } from "../../routing-mode.js";
 import { SERVICE_MESSAGES } from "../../service-messages.js";
@@ -279,7 +280,10 @@ export async function handleSessionStart({ name, color }: { name: string; color?
 
       // forceColor = true when the operator explicitly tapped a color button, or on auto-approve (hint is definitive);
       // forceColor = false for the first session (no dialog, no hint).
-      const session = createSession(effectiveName, chosenColor, decision?.forceColor ?? false);
+      // httpSessionId binds the bridge session to the current MCP HTTP transport so
+      // the streamable-http onclose handler can auto-clean up when Claude Code exits.
+      const httpSessionId = getCurrentHttpSessionId();
+      const session = createSession(effectiveName, chosenColor, decision?.forceColor ?? false, httpSessionId);
       createSessionQueue(session.sid);
       setActiveSession(session.sid);
       if (!isPollerRunning()) startPoller();
@@ -304,6 +308,12 @@ export async function handleSessionStart({ name, color }: { name: string; color?
           // The bridge alerts the governor (without rejecting) if two callers
           // share the same SID/suffix but present different connection tokens.
           connection_token: session.connectionToken,
+          // watch_file: absolute path to the per-session heartbeat file the
+          // bridge appends to whenever a new event lands in this session's
+          // queue. Wire `Monitor({command: "tail -F <path>", persistent: true})`
+          // to wake on new events; call `dequeue({max_wait: 0})` to drain.
+          // Replaces the v7 long-poll dequeue pattern. Undefined if FS alloc failed.
+          ...(session.watchFile !== undefined && { watch_file: session.watchFile }),
         };
         if (isFirstSession) {
           // First session is the governor by default

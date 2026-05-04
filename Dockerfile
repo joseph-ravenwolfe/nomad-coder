@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # Node.js Version Selection: v24 (Krypton - Active LTS until Feb 24, 2026)
-# 
+#
 # Rationale:
 # - v24 is the latest Active LTS version with the most recent security patches
 # - All stable LTS versions (v20, v22, v24) share identical critical CVEs as of Jan 2026:
@@ -24,11 +24,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 make g++ \
     && rm -rf /var/lib/apt/lists/*
 
-RUN corepack enable && corepack prepare pnpm@10.0.0 --activate
-
 WORKDIR /app
-COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile --prod
+COPY package.json package-lock.json* ./
+RUN npm ci --omit=dev || npm install --omit=dev
 
 # ── Stage 2: TypeScript build ─────────────────────────────────────────────────
 FROM node:24-slim AS build
@@ -37,16 +35,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 make g++ \
     && rm -rf /var/lib/apt/lists/*
 
-RUN corepack enable && corepack prepare pnpm@10.0.0 --activate
-
 WORKDIR /app
-COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
+COPY package.json package-lock.json* ./
+RUN npm ci || npm install
 
 COPY tsconfig.json ./
 COPY src/ ./src/
 COPY scripts/ ./scripts/
-RUN pnpm build
+RUN npm run build
 
 # ── Stage 3: runtime (no build tools, no dev deps, non-root) ─────────────────
 FROM node:24-slim AS runtime

@@ -16,7 +16,9 @@ import { startPoller, stopPoller, drainPendingUpdates, waitForPollerExit } from 
 import { startSilenceDetector } from "./silence-detector.js";
 import { startHealthCheck } from "./health-check.js";
 import { setAuthHook } from "./session-gate.js";
-import { touchSession, getSessionReauthDialogMsgId, clearSessionReauthDialogMsgId } from "./session-manager.js";
+import { touchSession, getSessionReauthDialogMsgId, clearSessionReauthDialogMsgId, findSessionsByHttpId } from "./session-manager.js";
+import { closeSessionById } from "./session-teardown.js";
+import { runWithHttpContext } from "./request-context.js";
 import { createOutboundProxy } from "./outbound-proxy.js";
 import { loadConfig, getSessionLogMode, isDebugConfig, getPreToolDenyPatterns, getSessionApproval } from "./config.js";
 import { setDelegationEnabled } from "./agent-approval.js";
@@ -166,11 +168,29 @@ if (mcpPort !== undefined) {
         if (sid && httpTransports.has(sid)) {
           process.stderr.write(`[http] session closed: ${sid}\n`);
           httpTransports.delete(sid);
+          // Tear down any bridge sessions bound to this HTTP transport.
+          // This is the canonical "agent gone" signal in the v8 model —
+          // replaces the old 15-min lastPollAt liveness check.
+          const bridgeSids = findSessionsByHttpId(sid);
+          for (const bsid of bridgeSids) {
+            try {
+              closeSessionById(bsid);
+            } catch (err) {
+              process.stderr.write(
+                `[http] auto-close failed sid=${bsid} err=${(err as Error).message}\n`,
+              );
+            }
+          }
+          if (bridgeSids.length > 0) {
+            process.stderr.write(
+              `[http] auto-closed ${bridgeSids.length} bridge session(s) bound to ${sid}\n`,
+            );
+          }
         }
       };
       const server = createServer();
       await server.connect(transport);
-      await transport.handleRequest(req, res, req.body);
+      await runWithHttpContext(transport.sessionId, () => transport.handleRequest(req, res, req.body));
       return;
     } else {
       // Extract the request id (if present) so clients can correlate the error per JSON-RPC 2.0
@@ -199,7 +219,7 @@ if (mcpPort !== undefined) {
     }, 30_000);
     res.on("close", () => { clearInterval(keepaliveTimer); });
     try {
-      await transport.handleRequest(req, res, req.body);
+      await runWithHttpContext(transport.sessionId, () => transport.handleRequest(req, res, req.body));
     } finally {
       clearInterval(keepaliveTimer);
     }
@@ -222,7 +242,7 @@ if (mcpPort !== undefined) {
     }, 30_000);
     res.on("close", () => { clearInterval(keepaliveTimer); });
 
-    await transport.handleRequest(req, res);
+    await runWithHttpContext(transport.sessionId, () => transport.handleRequest(req, res));
   });
 
   app.delete("/mcp", async (req: Request, res: Response) => {
@@ -232,7 +252,7 @@ if (mcpPort !== undefined) {
       res.status(400).send("Invalid or missing session ID");
       return;
     }
-    await transport.handleRequest(req, res);
+    await runWithHttpContext(transport.sessionId, () => transport.handleRequest(req, res));
   });
 
   app.listen(mcpPort, "127.0.0.1", () => {
