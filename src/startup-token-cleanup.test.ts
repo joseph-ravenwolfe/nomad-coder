@@ -113,4 +113,15 @@ describe("cleanupStalePins", () => {
     mocks.unpinChatMessage.mockRejectedValue(new Error("not enough rights"));
     await expect(cleanupStalePins()).resolves.toBeUndefined();
   });
+
+  it("matches v8+ announcement format ('💻 *name* connected (Session N)')", async () => {
+    mocks.getChat
+      .mockResolvedValueOnce({
+        id: 42,
+        pinned_message: makeBotPin(400, "💻 *hyperworker* connected (Session 1)"),
+      })
+      .mockResolvedValueOnce({ id: 42, pinned_message: undefined });
+    await cleanupStalePins();
+    expect(mocks.unpinChatMessage).toHaveBeenCalledWith(42, 400);
+  });
 });

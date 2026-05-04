@@ -153,7 +153,7 @@ async function requestApproval(
     await getApi().editMessageText(
       chatId,
       msgId,
-      `🤖 *Session denied:* ${markdownToV2(name)} ✗`,
+      `💻 *Session denied:* ${markdownToV2(name)}`,
       { parse_mode: "MarkdownV2" },
     ).catch(() => {});
   }
@@ -327,9 +327,14 @@ export async function handleSessionStart({ name, color }: { name: string; color?
           setGovernorSid(session.sid);
           // Send visible announcement with name tag — same format as 2nd+ sessions.
           // buildHeader() intentionally skips single-session mode; compose inline.
+          // MarkdownV2: parens are special, must be backslash-escaped.
           const _announcement = await Promise.resolve(
             runInSessionContext(session.sid, () =>
-              getApi().sendMessage(chatId, `${session.color} 🤖 \`${markdownToV2(effectiveName)}\`\nSession ${session.sid} — 🟢 Online`, { parse_mode: "MarkdownV2" }),
+              getApi().sendMessage(
+                chatId,
+                `💻 *${markdownToV2(effectiveName)}* connected \\(Session ${session.sid}\\)`,
+                { parse_mode: "MarkdownV2" },
+              ),
             ),
           ).catch(() => undefined);
           const announcementMsgId = _announcement?.message_id;
@@ -357,13 +362,19 @@ export async function handleSessionStart({ name, color }: { name: string; color?
             setGovernorSid(governorSid);
           }
 
-          // Broadcast a visible announcement via the outbound proxy so the
-          // operator (and other sessions) can reply-to-address this session.
-          // runInSessionContext sets the ALS SID so the proxy prepends the
-          // correct name tag ("🟨 🤖 Worker 1\nSession 2 — 🟢 Online").
+          // Broadcast a visible announcement so the operator (and other
+          // sessions) can reply-to-address this session. The new v8 format
+          // already includes the bold name in the body, so we pass
+          // _skipHeader: true to suppress the proxy's auto-prefix
+          // (avoids the redundant "🟨 🤖 Worker\n💻 Worker connected ..." stutter).
+          // MarkdownV2: parens must be backslash-escaped.
           const _announcement = await Promise.resolve(
             runInSessionContext(session.sid, () =>
-              getApi().sendMessage(chatId, `Session ${session.sid} — 🟢 Online`),
+              getApi().sendMessage(
+                chatId,
+                `💻 *${markdownToV2(effectiveName)}* connected \\(Session ${session.sid}\\)`,
+                { parse_mode: "MarkdownV2", _skipHeader: true } as Record<string, unknown>,
+              ),
             ),
           ).catch(() => undefined);
           const announcementMsgId = _announcement?.message_id;

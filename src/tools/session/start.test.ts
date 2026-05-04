@@ -1217,13 +1217,15 @@ describe("session_start tool", () => {
     await call({});
 
     const announceCalls = mocks.sendMessage.mock.calls.filter(
-      (c: unknown[]) => String(c[1]).includes("🟢 Online"),
+      (c: unknown[]) => String(c[1]).includes("connected"),
     );
     expect(announceCalls.length).toBeGreaterThanOrEqual(1);
     const announceText = String(announceCalls[0][1]);
     const announceOpts = announceCalls[0][2] as Record<string, unknown>;
-    expect(announceText).toContain("`Primary`");
-    expect(announceText).toContain("🟦");
+    // v8 format: "💻 *Primary* connected (Session 1)" with parens escaped for MarkdownV2
+    expect(announceText).toContain("💻");
+    expect(announceText).toContain("*Primary*");
+    expect(announceText).toContain("Session 1");
     // Announcement must use MarkdownV2 (defense against injection via session names)
     expect(announceOpts.parse_mode).toBe("MarkdownV2");
   });
@@ -1469,11 +1471,18 @@ describe("session_start tool", () => {
 
     // A second sendMessage with the online announcement was sent
     const announceCalls = mocks.sendMessage.mock.calls.filter(
-      (c: unknown[]) => String(c[1]).includes("🟢 Online"),
+      (c: unknown[]) => String(c[1]).includes("connected"),
     );
     expect(announceCalls.length).toBeGreaterThanOrEqual(1);
     const announceText = String(announceCalls[0][1]);
+    const announceOpts = announceCalls[0][2] as Record<string, unknown>;
+    // v8 format: "💻 *Worker* connected (Session 2)"
+    expect(announceText).toContain("💻");
+    expect(announceText).toContain("*Worker*");
     expect(announceText).toContain("Session 2");
+    // _skipHeader bypasses the proxy's auto-prefix (avoids redundant nametag stutter)
+    expect(announceOpts._skipHeader).toBe(true);
+    expect(announceOpts.parse_mode).toBe("MarkdownV2");
 
     // Announcement tracked to SID 2 so replies route to it
     expect(mocks.trackMessageOwner).toHaveBeenCalledWith(51, 2);

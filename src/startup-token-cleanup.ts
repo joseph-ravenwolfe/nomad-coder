@@ -1,7 +1,13 @@
 import { getApi, resolveChat } from "./telegram.js";
 
-/** Pattern that identifies a session announcement message sent by the bot. */
-const SESSION_ANNOUNCEMENT_RE = /Session \d+ — 🟢 Online/;
+/**
+ * Pattern that identifies a session announcement message sent by the bot.
+ * Matches both:
+ *   - v8+ format: "💻 *name* connected (Session N)"
+ *   - legacy format: "Session N — 🟢 Online" (kept for one-time cleanup of
+ *     stale pins from pre-v8 crashes)
+ */
+const SESSION_ANNOUNCEMENT_RE = /Session \d+ — 🟢 Online|💻 .* connected \(Session \d+\)/;
 
 /**
  * Returns true if the given pinned message is a stale session announcement

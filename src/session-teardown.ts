@@ -80,7 +80,7 @@ export function closeSessionById(sid: number): { closed: boolean; sid: number } 
   const remaining = listSessions().sort((a, b) => a.sid - b.sid);
 
   // Always notify the operator that this session disconnected
-  sendServiceMessage(`🤖 ${sessionName} has disconnected.`).catch(() => {});
+  sendServiceMessage(`💻 *${sessionName}* has disconnected.`).catch(() => {});
 
   // Unpin the session's announcement message, if one was pinned
   if (announcementMsgId !== undefined) {
