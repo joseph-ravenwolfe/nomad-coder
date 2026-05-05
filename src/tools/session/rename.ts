@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { toResult, toError } from "../../telegram.js";
-import { listSessions, renameSession, setSessionColor, COLOR_PALETTE } from "../../session-manager.js";
+import { listSessions, renameSession, setSessionColor, getAvailableColors } from "../../session-manager.js";
 import { requireAuth } from "../../session-gate.js";
 import { getGovernorSid } from "../../routing-mode.js";
 import { TOKEN_SCHEMA } from "../identity-schema.js";
@@ -27,12 +27,15 @@ export async function handleRenameSession({ token, new_name, color, target_sid }
   if (typeof _sid !== "number") return toError(_sid);
   const callerSid = _sid;
 
-  // Validate color if provided
-  if (color !== undefined && !(COLOR_PALETTE as readonly string[]).includes(color)) {
-    return toError({
-      code: "INVALID_COLOR",
-      message: `"${color}" is not a valid session color. Valid colors: ${COLOR_PALETTE.join(" ")}.`,
-    });
+  // Validate color if provided — must be a member of the active session-tag pool.
+  if (color !== undefined) {
+    const pool = getAvailableColors();
+    if (!pool.includes(color)) {
+      return toError({
+        code: "INVALID_COLOR",
+        message: `"${color}" is not in the active session-tag pool. Valid entries: ${pool.join(" ")}.`,
+      });
+    }
   }
 
   // Resolve which session to rename
@@ -147,7 +150,7 @@ export function register(server: McpServer) {
         color: z
           .string()
           .optional()
-          .describe(`Optional color to apply in the same action. Must be a valid palette color: ${COLOR_PALETTE.join(" ")}.`),
+          .describe("Optional session-tag emoji to apply in the same action. Must be a member of the operator's configured pool. Validated at runtime against the active pool."),
         target_sid: z
           .number()
           .int()

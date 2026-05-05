@@ -26,12 +26,15 @@ import { escapeHtml, escapeV2 } from "./markdown.js";
 // ---------------------------------------------------------------------------
 
 /**
- * Returns the `{color} {emoji?} {name}\n` header when 2+ sessions are active.
- * The emoji segment is OPTIONAL — only rendered when the session explicitly
- * set `nametag_emoji` (via profile import). Default is no emoji at all,
- * which gives a clean `🟦 Worker\n` prefix using the session color square as
- * the visual identity. This replaced the v7 default of 🤖, which felt
- * redundant alongside the color and the bridge's own 💻 system messages.
+ * Returns the `{tag} {emoji?} {name}\n` header when 2+ sessions are active.
+ *
+ * `tag` is the auto-assigned session-tag emoji (since v8: any emoji from the
+ * configured 20-entry pool — formerly the 6-color rainbow palette 🟦🟩🟨🟧🟥🟪).
+ * The field is still called `color` on Session for backward compat.
+ *
+ * The optional `emoji` segment is `nametag_emoji` from the session's profile,
+ * an explicit override that renders between the auto-assigned tag and name.
+ * Default is no extra emoji.
  *
  * Returns `""` when fewer than 2 sessions are active or the session has no name.
  * Uses parse-mode specific formatting for the name portion.

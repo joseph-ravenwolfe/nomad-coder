@@ -4,7 +4,7 @@ import { getApi, toResult, toError, resolveChat } from "../../telegram.js";
 import { markdownToV2 } from "../../markdown.js";
 import type { TimelineEvent } from "../../message-store.js";
 import { dequeue, registerCallbackHook, clearCallbackHook } from "../../message-store.js";
-import { createSession, closeSession, setActiveSession, listSessions, activeSessionCount, getSession, getAvailableColors, COLOR_PALETTE, setSessionAnnouncementMessage, getSessionAnnouncementMessage } from "../../session-manager.js";
+import { createSession, closeSession, setActiveSession, listSessions, activeSessionCount, getSession, setSessionAnnouncementMessage, getSessionAnnouncementMessage } from "../../session-manager.js";
 import { getCurrentHttpSessionId } from "../../request-context.js";
 import { createSessionQueue, removeSessionQueue, deliverServiceMessage, trackMessageOwner, deliverReminderEvent, getSessionQueue } from "../../session-queue.js";
 import { setGovernorSid, getGovernorSid } from "../../routing-mode.js";
@@ -19,50 +19,44 @@ import type { ApprovalDecision } from "../../agent-approval.js";
 
 const APPROVAL_TIMEOUT_MS = 120_000;
 const APPROVAL_NO = "approve_no";
-
-const APPROVE_PREFIX = "approve_";
+const APPROVAL_YES = "approve_yes";
 const TOGGLE_DELEGATION = "approve_toggle_delegation";
 
 /**
- * Build the inline keyboard for the approval dialog.
- * Always 3 rows: [colors row1], [colors row2], [delegation toggle, deny].
+ * Build the inline keyboard for the approval dialog. Two rows:
+ *   [✅ Approve, ⛔ Deny]
+ *   [delegation toggle]    (only when delegation system enabled in config)
+ *
+ * Since v8 the operator no longer picks a session tag emoji — it's auto-
+ * assigned from the configured pool when the session is created.
  */
 function buildApprovalKeyboard(
-  availableColors: string[],
-  colorHint: string | undefined,
   delegationEnabled: boolean,
 ): { inline_keyboard: Record<string, unknown>[][] } {
-  const validHint =
-    colorHint && COLOR_PALETTE.includes(colorHint as (typeof COLOR_PALETTE)[number])
-      ? colorHint
-      : undefined;
-  const colorButtons = availableColors.map((c, i) => {
-    let isPrimary = false;
-    if (validHint) {
-      isPrimary = c === validHint;
-    } else if (delegationEnabled) {
-      isPrimary = i === 0;
-    }
-    return {
-      text: c,
-      callback_data: `${APPROVE_PREFIX}${COLOR_PALETTE.indexOf(c as (typeof COLOR_PALETTE)[number])}`,
-      ...(isPrimary ? { style: "primary" } : {}),
-    } as Record<string, unknown>;
-  });
-  const row1 = colorButtons.slice(0, 3);
-  const row2 = colorButtons.slice(3);
+  const approveButton: Record<string, unknown> = {
+    text: "✅ Approve",
+    callback_data: APPROVAL_YES,
+    style: "primary",
+  };
+  const denyButton: Record<string, unknown> = {
+    text: "⛔ Deny",
+    callback_data: APPROVAL_NO,
+    style: "danger",
+  };
   const toggleButton: Record<string, unknown> = delegationEnabled
     ? { text: "✅ Delegated", callback_data: TOGGLE_DELEGATION }
     : { text: "☐ Delegate", callback_data: TOGGLE_DELEGATION };
-  const denyButton: Record<string, unknown> = { text: "⛔ Deny", callback_data: APPROVAL_NO, style: "danger" };
-  return { inline_keyboard: [row1, row2, [toggleButton, denyButton]] };
+  return { inline_keyboard: [[approveButton, denyButton], [toggleButton]] };
 }
 
 /**
- * Send an operator approval prompt for a new session. The prompt shows
- * available color squares as buttons — tapping a color approves AND assigns
- * that color in one action. Returns { approved: true, color } on approval
+ * Send an operator approval prompt for a new session. Two buttons: Approve
+ * or Deny. The session's tag emoji is auto-assigned at creation time —
+ * the operator does not pick one. Returns { approved: true } on approval
  * or { approved: false } on denial / timeout.
+ *
+ * `colorHint` is preserved on the function signature for backward compat
+ * with the agent_approval module; it is no longer used in the UI.
  */
 async function requestApproval(
   chatId: number,
@@ -72,14 +66,13 @@ async function requestApproval(
 ): Promise<{ approved: boolean; color?: string; forceColor?: boolean }> {
   const label = reconnect ? "Session reconnecting:" : "New session requesting access:";
   const reconnectHint = reconnect ? `\nThe agent may have a saved token — approve only if token recovery failed\\.` : "";
-  const text = `*${label}* ${markdownToV2(name)}\nPick a color to approve, or deny:${reconnectHint}`;
-  const availableColors = getAvailableColors(colorHint);
+  const text = `*${label}* ${markdownToV2(name)}${reconnectHint}`;
   if (checkAndConsumeAutoApprove()) {
-    return { approved: true, color: colorHint ?? availableColors[0], forceColor: true };
+    return { approved: true };
   }
   const sent = await getApi().sendMessage(chatId, text, {
     parse_mode: "MarkdownV2",
-    reply_markup: buildApprovalKeyboard(availableColors, colorHint, isDelegationEnabled()),
+    reply_markup: buildApprovalKeyboard(isDelegationEnabled()),
   } as Record<string, unknown>);
   const msgId: number = sent.message_id;
 
@@ -118,7 +111,7 @@ async function requestApproval(
         setDelegationEnabled(!isDelegationEnabled());
         getApi()
           .editMessageReplyMarkup(chatId, msgId, {
-            reply_markup: buildApprovalKeyboard(availableColors, colorHint, isDelegationEnabled()),
+            reply_markup: buildApprovalKeyboard(isDelegationEnabled()),
           } as Record<string, unknown>)
           .catch(() => {});
         if (qid) getApi().answerCallbackQuery(qid).catch(() => {});
@@ -126,16 +119,10 @@ async function requestApproval(
       }
       clearPendingApproval(ticket);
       if (qid) getApi().answerCallbackQuery(qid).catch(() => {});
-      if (data === APPROVAL_NO) {
-        resolveOnce({ approved: false });
-      } else if (data.startsWith(APPROVE_PREFIX)) {
-        const idx = parseInt(data.slice(APPROVE_PREFIX.length), 10);
-        if (idx >= 0 && idx < COLOR_PALETTE.length) {
-          resolveOnce({ approved: true, color: COLOR_PALETTE[idx], forceColor: true });
-        } else {
-          resolveOnce({ approved: false });
-        }
+      if (data === APPROVAL_YES) {
+        resolveOnce({ approved: true });
       } else {
+        // APPROVAL_NO or anything unexpected → deny
         resolveOnce({ approved: false });
       }
     };
@@ -269,11 +256,16 @@ export async function handleSessionStart({ name, color }: { name: string; color?
             message: `Session "${effectiveName}" was denied by the operator.`,
           });
         }
-        chosenColor = decision.color;
+        // If the approval flow returned a color (legacy color-picker path or
+        // auto-approve override), use it; otherwise fall back to the agent's
+        // hint. The session-manager validates against the active pool.
+        if (decision.color !== undefined) chosenColor = decision.color;
       }
 
-      // forceColor = true when the operator explicitly tapped a color button, or on auto-approve (hint is definitive);
-      // forceColor = false for the first session (no dialog, no hint).
+      // forceColor = true when the approval flow definitively assigned a color
+      // (e.g. legacy operator color-pick). In v8 the operator no longer picks,
+      // so this is almost always false — the agent's hint is treated as a
+      // suggestion and the session-manager auto-assigns from the pool.
       // httpSessionId binds the bridge session to the current MCP HTTP transport so
       // the streamable-http onclose handler can auto-clean up when Claude Code exits.
       const httpSessionId = getCurrentHttpSessionId();
@@ -452,11 +444,11 @@ export function register(server: McpServer) {
           .string()
           .optional()
           .describe(
-            "Preferred color square emoji for this session. " +
-            "Palette meanings: 🟦 Coordinator/overseer · 🟩 Builder/worker · 🟨 Reviewer/QA · " +
-            "🟧 Research/exploration · 🟥 Ops/deployment · 🟪 Specialist/one-off. " +
-            "The operator makes the final choice via the approval dialog color buttons. " +
-            "Your hint goes first in the button list as a suggestion.",
+            "Optional preferred session-tag emoji from the operator's pool. " +
+            "Honored only when the requested emoji is in the active pool and " +
+            "no other session currently holds it; otherwise the bridge auto-" +
+            "assigns a random unused entry. The operator no longer picks; " +
+            "approval is a simple yes/no dialog.",
           ),
       },
     },

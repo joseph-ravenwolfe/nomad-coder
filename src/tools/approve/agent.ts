@@ -4,7 +4,7 @@ import { toResult, toError } from "../../telegram.js";
 import { requireAuth } from "../../session-gate.js";
 import { TOKEN_SCHEMA } from "../identity-schema.js";
 import { isDelegationEnabled, getPendingApproval, clearPendingApproval } from "../../agent-approval.js";
-import { getAvailableColors, COLOR_PALETTE } from "../../session-manager.js";
+import { getAvailableColors } from "../../session-manager.js";
 import { getGovernorSid } from "../../routing-mode.js";
 
 const DESCRIPTION =
@@ -45,22 +45,22 @@ export function handleApproveAgent({ token, ticket, color }: { token: number; ti
     });
   }
 
-  // Validate color if provided; fall back to first available if omitted.
-  if (color && !(COLOR_PALETTE as readonly string[]).includes(color)) {
+  // Validate color if provided; otherwise fall back to the agent's hint or
+  // the first unused tag from the active pool.
+  const pool = getAvailableColors();
+  if (color && !pool.includes(color)) {
     return toError({
       code: "INVALID_COLOR",
       message:
-        `"${color}" is not a valid color. ` +
-        `Valid options: ${COLOR_PALETTE.join(", ")}`,
+        `"${color}" is not in the active session-tag pool. ` +
+        `Valid entries: ${pool.join(" ")}`,
     });
   }
-  // Use colorHint directly — multiple sessions may share a color.
-  // Only fall back to LRU auto-assign when no hint was requested.
   const resolvedColor: string = color
     ? color
-    : pending.colorHint && (COLOR_PALETTE as readonly string[]).includes(pending.colorHint)
+    : pending.colorHint && pool.includes(pending.colorHint)
         ? pending.colorHint
-        : (getAvailableColors()[0] ?? COLOR_PALETTE[0]);
+        : (pool[0] ?? "");
 
   clearPendingApproval(ticket);
   pending.resolve({ approved: true, color: resolvedColor, forceColor: true });
@@ -87,8 +87,10 @@ export function register(server: McpServer): RegisteredTool {
           .string()
           .optional()
           .describe(
-            "Color to assign to the approved session (emoji from the color palette). " +
-            "Falls back to the agent's requested color (colorHint), or the least-recently-used color if no color was requested. Invalid colors return an error.",
+            "Session-tag emoji to assign to the approved session. Must be in " +
+            "the operator's active pool. Falls back to the agent's requested " +
+            "tag (colorHint), or the first unused entry in the pool. " +
+            "Invalid entries return an error.",
           ),
       },
     },

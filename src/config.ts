@@ -22,6 +22,12 @@ interface McpConfig {
   sessionLog?: "manual" | number;
   defaultVoice?: string;
   voices?: VoiceEntry[];
+  /**
+   * Optional override of the per-session tag emoji pool. Replaces the hardcoded
+   * default (animals, vehicles, mystic etc.). Each new session is assigned a
+   * random unused entry from this list. Empty / missing → use defaults.
+   */
+  sessionEmojis?: string[];
   debug?: boolean;
   sessionApproval?: "governor" | "manual" | "auto";
   preToolHook?: {
@@ -149,6 +155,15 @@ export function setDefaultVoice(voice: string | null): void {
 /** Get the configured voice menu (if any). */
 export function getConfiguredVoices(): VoiceEntry[] {
   return _config.voices ?? [];
+}
+
+/**
+ * Get the configured session-tag emoji pool override (if any). Empty array
+ * means "no override; use hardcoded defaults". Strings are returned as-is —
+ * any character is permitted (typically emoji, but no validation).
+ */
+export function getSessionEmojis(): string[] {
+  return _config.sessionEmojis ?? [];
 }
 
 /** Set the voice menu and persist to disk. */

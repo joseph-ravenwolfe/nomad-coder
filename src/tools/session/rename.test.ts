@@ -1,10 +1,13 @@
 import { vi, describe, it, expect, beforeEach } from "vitest";
 import { createMockServer, parseResult, isError, type ToolHandler } from "../test-utils.js";
 
+const POOL = ["🦄", "🐺", "👻", "🐶", "🐅", "🐦‍🔥", "🐊", "🦋", "🌸", "🦞", "🏆", "🔮", "🚄", "🏎️", "🛩️", "🚀", "🪐", "☄️", "⚔️", "🧬"];
+
 const mocks = vi.hoisted(() => ({
   listSessions: vi.fn().mockReturnValue([]),
   renameSession: vi.fn(),
   setSessionColor: vi.fn(),
+  getAvailableColors: vi.fn(() => ["🦄", "🐺", "👻", "🐶", "🐅", "🐦‍🔥", "🐊", "🦋", "🌸", "🦞", "🏆", "🔮", "🚄", "🏎️", "🛩️", "🚀", "🪐", "☄️", "⚔️", "🧬"] as string[]),
   validateSession: vi.fn().mockReturnValue(true),
   requestOperatorApproval: vi.fn().mockResolvedValue("approved"),
   getGovernorSid: vi.fn().mockReturnValue(0),
@@ -14,8 +17,8 @@ vi.mock("../../session-manager.js", () => ({
   listSessions: mocks.listSessions,
   renameSession: mocks.renameSession,
   setSessionColor: mocks.setSessionColor,
+  getAvailableColors: () => mocks.getAvailableColors(),
   validateSession: mocks.validateSession,
-  COLOR_PALETTE: ["🟦", "🟩", "🟨", "🟧", "🟥", "🟪"],
 }));
 
 vi.mock("../../built-in-commands.js", () => ({
@@ -36,7 +39,8 @@ describe("rename_session tool", () => {
     mocks.listSessions.mockReturnValue([]);
     mocks.validateSession.mockReturnValue(true);
     mocks.renameSession.mockReturnValue({ old_name: "Primary", new_name: "Scout" });
-    mocks.setSessionColor.mockReturnValue("🟦");
+    mocks.setSessionColor.mockReturnValue("🦄");
+    mocks.getAvailableColors.mockReturnValue(POOL);
     mocks.requestOperatorApproval.mockResolvedValue("approved");
     mocks.getGovernorSid.mockReturnValue(0); // not governor by default
     const server = createMockServer();
@@ -275,12 +279,12 @@ describe("rename_session tool", () => {
   it("applies color change when color is provided", async () => {
     mocks.listSessions.mockReturnValue([{ sid: 1, name: "Primary" }]);
     mocks.renameSession.mockReturnValue({ old_name: "Primary", new_name: "Scout" });
-    mocks.setSessionColor.mockReturnValue("🟦");
+    mocks.setSessionColor.mockReturnValue("🦄");
 
-    const result = parseResult(await call({ token: 1111111, new_name: "Scout", color: "🟦" }));
+    const result = parseResult(await call({ token: 1111111, new_name: "Scout", color: "🦄" }));
 
-    expect(mocks.setSessionColor).toHaveBeenCalledWith(1, "🟦");
-    expect(result.color).toBe("🟦");
+    expect(mocks.setSessionColor).toHaveBeenCalledWith(1, "🦄");
+    expect(result.color).toBe("🦄");
   });
 
   it("does not include color in result when color is not provided", async () => {

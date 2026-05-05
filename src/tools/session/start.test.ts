@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
   listSessions: vi.fn().mockReturnValue([]),
   activeSessionCount: vi.fn().mockReturnValue(0),
   getSession: vi.fn(),
-  getAvailableColors: vi.fn().mockReturnValue(["🟦", "🟩", "🟨", "🟧", "🟥", "🟪"]),
+  getAvailableColors: vi.fn().mockReturnValue(["🦄", "🐺", "👻", "🐶", "🐅", "🐦‍🔥", "🐊", "🦋", "🌸", "🦞", "🏆", "🔮", "🚄", "🏎️", "🛩️", "🚀", "🪐", "☄️", "⚔️", "🧬"]),
   setGovernorSid: vi.fn(),
   getGovernorSid: vi.fn().mockReturnValue(0),
   deliverServiceMessage: vi.fn(),
@@ -72,7 +72,6 @@ vi.mock("../../session-manager.js", () => ({
   activeSessionCount: () => mocks.activeSessionCount(),
   getSession: mocks.getSession,
   getAvailableColors: mocks.getAvailableColors,
-  COLOR_PALETTE: ["🟦", "🟩", "🟨", "🟧", "🟥", "🟪"],
   setSessionAnnouncementMessage: mocks.setSessionAnnouncementMessage,
   getSessionAnnouncementMessage: mocks.getSessionAnnouncementMessage,
   setSessionReauthDialogMsgId: mocks.setSessionReauthDialogMsgId,
@@ -161,7 +160,7 @@ describe("session_start tool", () => {
       sid: 1,
       suffix: 123456,
       name: "Primary",
-      color: "🟦",
+      color: "🦄",
       sessionsActive: 1,
       connectionToken: "test-connection-token-uuid",
     });
@@ -228,7 +227,7 @@ describe("session_start tool", () => {
       sid: 1,
       suffix: 123456,
       name: "Primary",
-      color: "🟦",
+      color: "🦄",
       sessionsActive: 1,
       connectionToken: expectedToken,
     });
@@ -245,7 +244,7 @@ describe("session_start tool", () => {
       sid: 1,
       suffix: 123456,
       name: "Primary",
-      color: "🟦",
+      color: "🦄",
       sessionsActive: 1,
     });
 
@@ -281,7 +280,7 @@ describe("session_start tool", () => {
       sessionsActive: 3,
     });
     mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
-      void Promise.resolve().then(() => { fn({ content: { data: "approve_0", qid: "q1" } }); });
+      void Promise.resolve().then(() => { fn({ content: { data: "approve_yes", qid: "q1" } }); });
     });
     mocks.sendMessage
       .mockResolvedValueOnce({ message_id: 50 });
@@ -302,7 +301,7 @@ describe("session_start tool", () => {
       sessionsActive: 2,
     });
     mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
-      void Promise.resolve().then(() => { fn({ content: { data: "approve_0", qid: "q1" } }); });
+      void Promise.resolve().then(() => { fn({ content: { data: "approve_yes", qid: "q1" } }); });
     });
     mocks.sendMessage
       .mockResolvedValueOnce({ message_id: 50 });
@@ -330,7 +329,7 @@ describe("session_start tool", () => {
       { sid: 4, name: "scout" },
     ]);
     mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
-      void Promise.resolve().then(() => { fn({ content: { data: "approve_0", qid: "q1" } }); });
+      void Promise.resolve().then(() => { fn({ content: { data: "approve_yes", qid: "q1" } }); });
     });
     mocks.sendMessage
       .mockResolvedValueOnce({ message_id: 50 })   // approval prompt;
@@ -359,7 +358,7 @@ describe("session_start tool", () => {
       { sid: 6, name: "gamma" },
     ]);
     mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
-      void Promise.resolve().then(() => { fn({ content: { data: "approve_0", qid: "q1" } }); });
+      void Promise.resolve().then(() => { fn({ content: { data: "approve_yes", qid: "q1" } }); });
     });
     mocks.sendMessage
       .mockResolvedValueOnce({ message_id: 50 })   // approval prompt;
@@ -394,7 +393,7 @@ describe("session_start tool", () => {
       .mockReturnValueOnce([{ sid: 1, name: "Primary" }])
       .mockReturnValue([{ sid: 1, name: "Primary" }, { sid: 5, name: "Worker" }]);
     mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
-      void Promise.resolve().then(() => { fn({ content: { data: "approve_0", qid: "q1" } }); });
+      void Promise.resolve().then(() => { fn({ content: { data: "approve_yes", qid: "q1" } }); });
     });
     mocks.sendMessage.mockResolvedValueOnce({ message_id: 50 });
     mocks.deliverServiceMessage.mockImplementationOnce(() => { throw new Error("service error"); });
@@ -477,7 +476,7 @@ describe("session_start tool", () => {
       { sid: 2, name: "Worker", createdAt: "2026-03-17" },
     ]);
     mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
-      void Promise.resolve().then(() => { fn({ content: { data: "approve_0", qid: "q1" } }); });
+      void Promise.resolve().then(() => { fn({ content: { data: "approve_yes", qid: "q1" } }); });
     });
     mocks.sendMessage
       .mockResolvedValueOnce({ message_id: 50 });
@@ -510,7 +509,7 @@ describe("session_start tool", () => {
       { sid: 5, name: "Late", createdAt: "2026-03-17" },
     ]);
     mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
-      void Promise.resolve().then(() => { fn({ content: { data: "approve_0", qid: "q1" } }); });
+      void Promise.resolve().then(() => { fn({ content: { data: "approve_yes", qid: "q1" } }); });
     });
     mocks.sendMessage
       .mockResolvedValueOnce({ message_id: 50 });
@@ -536,7 +535,7 @@ describe("session_start tool", () => {
       { sid: 3, name: "Third", createdAt: "2026-03-17" },
     ]);
     mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
-      void Promise.resolve().then(() => { fn({ content: { data: "approve_0", qid: "q1" } }); });
+      void Promise.resolve().then(() => { fn({ content: { data: "approve_yes", qid: "q1" } }); });
     });
     mocks.sendMessage
       .mockResolvedValueOnce({ message_id: 50 });
@@ -558,7 +557,7 @@ describe("session_start tool", () => {
         { sid: 3, name: "Overseer", createdAt: "2026-03-17" },
       ]);
     mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
-      void Promise.resolve().then(() => { fn({ content: { data: "approve_0", qid: "q1" } }); });
+      void Promise.resolve().then(() => { fn({ content: { data: "approve_yes", qid: "q1" } }); });
     });
     mocks.sendMessage.mockResolvedValueOnce({ message_id: 50 });
 
@@ -575,7 +574,7 @@ describe("session_start tool", () => {
   it("first session is auto-approved without operator interaction", async () => {
     mocks.pendingCount.mockReturnValue(0);
     mocks.activeSessionCount.mockReturnValue(0);
-    mocks.createSession.mockReturnValue({ sid: 1, suffix: 111111, name: "Primary", color: "🟦", sessionsActive: 1 });
+    mocks.createSession.mockReturnValue({ sid: 1, suffix: 111111, name: "Primary", color: "🦄", sessionsActive: 1 });
 
     const result = parseResult(await call({ name: "Primary" }));
 
@@ -587,7 +586,7 @@ describe("session_start tool", () => {
   it("first session defaults name to 'Primary' when none provided", async () => {
     mocks.pendingCount.mockReturnValue(0);
     mocks.activeSessionCount.mockReturnValue(0);
-    mocks.createSession.mockReturnValue({ sid: 1, suffix: 111111, name: "Primary", color: "🟦", sessionsActive: 1 });
+    mocks.createSession.mockReturnValue({ sid: 1, suffix: 111111, name: "Primary", color: "🦄", sessionsActive: 1 });
 
     await call({});
 
@@ -603,13 +602,15 @@ describe("session_start tool", () => {
       .mockResolvedValueOnce({ message_id: 200 })  // approval prompt;
     // Simulate operator pressing Approve
     mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
-      void Promise.resolve().then(() => { fn({ content: { data: "approve_0", qid: "cqid" } }); });
+      void Promise.resolve().then(() => { fn({ content: { data: "approve_yes", qid: "cqid" } }); });
     });
 
     const result = parseResult(await call({ name: "Scout" }));
 
     expect(mocks.registerCallbackHook).toHaveBeenCalled();
-    expect(mocks.createSession).toHaveBeenCalledWith("Scout", "🟦", true, undefined);
+    // color is undefined (no agent hint, operator no longer picks); session-manager auto-assigns at creation.
+    // forceColor is false (no operator pick).
+    expect(mocks.createSession).toHaveBeenCalledWith("Scout", undefined, false, undefined);
     expect(result.sid).toBe(2);
   });
 
@@ -797,7 +798,7 @@ describe("session_start tool", () => {
         { sid: 2, name: "Worker", createdAt: "2026-03-17" },
       ]);
     mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
-      void Promise.resolve().then(() => { fn({ content: { data: "approve_0", qid: "q1" } }); });
+      void Promise.resolve().then(() => { fn({ content: { data: "approve_yes", qid: "q1" } }); });
     });
     mocks.sendMessage
       .mockResolvedValueOnce({ message_id: 50 });
@@ -825,7 +826,7 @@ describe("session_start tool", () => {
         { sid: 2, name: "Worker", createdAt: "2026-03-17" },
       ]);
     mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
-      void Promise.resolve().then(() => { fn({ content: { data: "approve_0", qid: "q1" } }); });
+      void Promise.resolve().then(() => { fn({ content: { data: "approve_yes", qid: "q1" } }); });
     });
     mocks.sendMessage
       .mockResolvedValueOnce({ message_id: 50 });
@@ -843,7 +844,7 @@ describe("session_start tool", () => {
   it("first session receives session_orientation service message", async () => {
     mocks.pendingCount.mockReturnValue(0);
     mocks.activeSessionCount.mockReturnValue(0);
-    mocks.createSession.mockReturnValue({ sid: 1, suffix: 111111, name: "Primary", color: "🟦", sessionsActive: 1 });
+    mocks.createSession.mockReturnValue({ sid: 1, suffix: 111111, name: "Primary", color: "🦄", sessionsActive: 1 });
 
     await call({});
 
@@ -860,7 +861,7 @@ describe("session_start tool", () => {
   it("first session: injects onboarding_token_save after session_orientation", async () => {
     mocks.pendingCount.mockReturnValue(0);
     mocks.activeSessionCount.mockReturnValue(0);
-    mocks.createSession.mockReturnValue({ sid: 1, suffix: 111111, name: "Primary", color: "🟦", sessionsActive: 1 });
+    mocks.createSession.mockReturnValue({ sid: 1, suffix: 111111, name: "Primary", color: "🦄", sessionsActive: 1 });
     mocks.getGovernorSid.mockReturnValue(1);
 
     await call({});
@@ -875,7 +876,7 @@ describe("session_start tool", () => {
   it("first session: injects onboarding_role with governor text", async () => {
     mocks.pendingCount.mockReturnValue(0);
     mocks.activeSessionCount.mockReturnValue(0);
-    mocks.createSession.mockReturnValue({ sid: 1, suffix: 111111, name: "Primary", color: "🟦", sessionsActive: 1 });
+    mocks.createSession.mockReturnValue({ sid: 1, suffix: 111111, name: "Primary", color: "🦄", sessionsActive: 1 });
     mocks.getGovernorSid.mockReturnValue(1);
 
     await call({});
@@ -890,7 +891,7 @@ describe("session_start tool", () => {
   it("first session: does NOT inject onboarding_protocol at startup (delivered lazily on first user message)", async () => {
     mocks.pendingCount.mockReturnValue(0);
     mocks.activeSessionCount.mockReturnValue(0);
-    mocks.createSession.mockReturnValue({ sid: 1, suffix: 111111, name: "Primary", color: "🟦", sessionsActive: 1 });
+    mocks.createSession.mockReturnValue({ sid: 1, suffix: 111111, name: "Primary", color: "🦄", sessionsActive: 1 });
     mocks.getGovernorSid.mockReturnValue(1);
 
     await call({});
@@ -904,7 +905,7 @@ describe("session_start tool", () => {
   it("first session: does NOT inject onboarding_hybrid_messaging at startup (delivered lazily on first send)", async () => {
     mocks.pendingCount.mockReturnValue(0);
     mocks.activeSessionCount.mockReturnValue(0);
-    mocks.createSession.mockReturnValue({ sid: 1, suffix: 111111, name: "Primary", color: "🟦", sessionsActive: 1 });
+    mocks.createSession.mockReturnValue({ sid: 1, suffix: 111111, name: "Primary", color: "🦄", sessionsActive: 1 });
     mocks.getGovernorSid.mockReturnValue(1);
 
     await call({});
@@ -917,7 +918,7 @@ describe("session_start tool", () => {
   it("first session: does NOT inject onboarding_modality_priority at startup (delivered lazily on first user message)", async () => {
     mocks.pendingCount.mockReturnValue(0);
     mocks.activeSessionCount.mockReturnValue(0);
-    mocks.createSession.mockReturnValue({ sid: 1, suffix: 111111, name: "Primary", color: "🟦", sessionsActive: 1 });
+    mocks.createSession.mockReturnValue({ sid: 1, suffix: 111111, name: "Primary", color: "🦄", sessionsActive: 1 });
     mocks.getGovernorSid.mockReturnValue(1);
 
     await call({});
@@ -930,7 +931,7 @@ describe("session_start tool", () => {
   it("first session: does NOT inject onboarding_presence_signals at startup (delivered lazily on first user message)", async () => {
     mocks.pendingCount.mockReturnValue(0);
     mocks.activeSessionCount.mockReturnValue(0);
-    mocks.createSession.mockReturnValue({ sid: 1, suffix: 111111, name: "Primary", color: "🟦", sessionsActive: 1 });
+    mocks.createSession.mockReturnValue({ sid: 1, suffix: 111111, name: "Primary", color: "🦄", sessionsActive: 1 });
     mocks.getGovernorSid.mockReturnValue(1);
 
     await call({});
@@ -943,7 +944,7 @@ describe("session_start tool", () => {
   it("first session: does NOT inject onboarding_buttons at startup (delivered lazily on first confirm/question use)", async () => {
     mocks.pendingCount.mockReturnValue(0);
     mocks.activeSessionCount.mockReturnValue(0);
-    mocks.createSession.mockReturnValue({ sid: 1, suffix: 111111, name: "Primary", color: "🟦", sessionsActive: 1 });
+    mocks.createSession.mockReturnValue({ sid: 1, suffix: 111111, name: "Primary", color: "🦄", sessionsActive: 1 });
     mocks.getGovernorSid.mockReturnValue(1);
 
     await call({});
@@ -956,7 +957,7 @@ describe("session_start tool", () => {
   it("first session: injects onboarding_no_pending_yet", async () => {
     mocks.pendingCount.mockReturnValue(0);
     mocks.activeSessionCount.mockReturnValue(0);
-    mocks.createSession.mockReturnValue({ sid: 1, suffix: 111111, name: "Primary", color: "🟦", sessionsActive: 1 });
+    mocks.createSession.mockReturnValue({ sid: 1, suffix: 111111, name: "Primary", color: "🦄", sessionsActive: 1 });
     mocks.getGovernorSid.mockReturnValue(1);
 
     await call({});
@@ -979,7 +980,7 @@ describe("session_start tool", () => {
         { sid: 2, name: "Worker", createdAt: "2026-03-17" },
       ]);
     mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
-      void Promise.resolve().then(() => { fn({ content: { data: "approve_0", qid: "q1" } }); });
+      void Promise.resolve().then(() => { fn({ content: { data: "approve_yes", qid: "q1" } }); });
     });
     mocks.sendMessage.mockResolvedValueOnce({ message_id: 50 });
 
@@ -1003,7 +1004,7 @@ describe("session_start tool", () => {
         { sid: 2, name: "Worker", createdAt: "2026-03-17" },
       ]);
     mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
-      void Promise.resolve().then(() => { fn({ content: { data: "approve_0", qid: "q1" } }); });
+      void Promise.resolve().then(() => { fn({ content: { data: "approve_yes", qid: "q1" } }); });
     });
     mocks.sendMessage.mockResolvedValueOnce({ message_id: 50 });
 
@@ -1031,7 +1032,7 @@ describe("session_start tool", () => {
         { sid: 2, name: "Worker", createdAt: "2026-03-17" },
       ]);
     mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
-      void Promise.resolve().then(() => { fn({ content: { data: "approve_0", qid: "q1" } }); });
+      void Promise.resolve().then(() => { fn({ content: { data: "approve_yes", qid: "q1" } }); });
     });
     mocks.sendMessage.mockResolvedValueOnce({ message_id: 50 });
 
@@ -1054,7 +1055,7 @@ describe("session_start tool", () => {
         { sid: 2, name: "Worker", createdAt: "2026-03-17" },
       ]);
     mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
-      void Promise.resolve().then(() => { fn({ content: { data: "approve_0", qid: "q1" } }); });
+      void Promise.resolve().then(() => { fn({ content: { data: "approve_yes", qid: "q1" } }); });
     });
     mocks.sendMessage.mockResolvedValueOnce({ message_id: 50 });
 
@@ -1077,7 +1078,7 @@ describe("session_start tool", () => {
         { sid: 2, name: "Worker", createdAt: "2026-03-17" },
       ]);
     mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
-      void Promise.resolve().then(() => { fn({ content: { data: "approve_0", qid: "q1" } }); });
+      void Promise.resolve().then(() => { fn({ content: { data: "approve_yes", qid: "q1" } }); });
     });
     mocks.sendMessage.mockResolvedValueOnce({ message_id: 50 });
 
@@ -1100,7 +1101,7 @@ describe("session_start tool", () => {
         { sid: 2, name: "Worker", createdAt: "2026-03-17" },
       ]);
     mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
-      void Promise.resolve().then(() => { fn({ content: { data: "approve_0", qid: "q1" } }); });
+      void Promise.resolve().then(() => { fn({ content: { data: "approve_yes", qid: "q1" } }); });
     });
     mocks.sendMessage.mockResolvedValueOnce({ message_id: 50 });
 
@@ -1123,7 +1124,7 @@ describe("session_start tool", () => {
         { sid: 2, name: "Worker", createdAt: "2026-03-17" },
       ]);
     mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
-      void Promise.resolve().then(() => { fn({ content: { data: "approve_0", qid: "q1" } }); });
+      void Promise.resolve().then(() => { fn({ content: { data: "approve_yes", qid: "q1" } }); });
     });
     mocks.sendMessage.mockResolvedValueOnce({ message_id: 50 });
 
@@ -1138,7 +1139,7 @@ describe("session_start tool", () => {
     // discarded === 0 (dequeue returns undefined immediately) → message IS delivered
     mocks.pendingCount.mockReturnValue(0);
     mocks.activeSessionCount.mockReturnValue(0);
-    mocks.createSession.mockReturnValue({ sid: 1, suffix: 111111, name: "Primary", color: "🟦", sessionsActive: 1 });
+    mocks.createSession.mockReturnValue({ sid: 1, suffix: 111111, name: "Primary", color: "🦄", sessionsActive: 1 });
     mocks.getGovernorSid.mockReturnValue(1);
     // dequeue returns undefined by default → drain loop exits immediately, discarded = 0
 
@@ -1164,7 +1165,7 @@ describe("session_start tool", () => {
         { sid: 2, name: "Worker", createdAt: "2026-03-17" },
       ]);
     mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
-      void Promise.resolve().then(() => { fn({ content: { data: "approve_0", qid: "q1" } }); });
+      void Promise.resolve().then(() => { fn({ content: { data: "approve_yes", qid: "q1" } }); });
     });
     mocks.sendMessage.mockResolvedValueOnce({ message_id: 50 });
     // Simulate a pending operator message in the drain queue → discarded = 1 → guard is false
@@ -1188,7 +1189,7 @@ describe("session_start tool", () => {
   it("first session sends online announcement to chat", async () => {
     mocks.pendingCount.mockReturnValue(0);
     mocks.activeSessionCount.mockReturnValue(0);
-    mocks.createSession.mockReturnValue({ sid: 1, suffix: 111111, name: "Primary", color: "🟦", sessionsActive: 1 });
+    mocks.createSession.mockReturnValue({ sid: 1, suffix: 111111, name: "Primary", color: "🦄", sessionsActive: 1 });
     mocks.sendMessage.mockResolvedValueOnce({ message_id: 42 });
 
     await call({});
@@ -1210,7 +1211,7 @@ describe("session_start tool", () => {
   it("first session announcement is tracked with trackMessageOwner", async () => {
     mocks.pendingCount.mockReturnValue(0);
     mocks.activeSessionCount.mockReturnValue(0);
-    mocks.createSession.mockReturnValue({ sid: 1, suffix: 111111, name: "Primary", color: "🟦", sessionsActive: 1 });
+    mocks.createSession.mockReturnValue({ sid: 1, suffix: 111111, name: "Primary", color: "🦄", sessionsActive: 1 });
     mocks.sendMessage.mockResolvedValueOnce({ message_id: 55 });
 
     await call({});
@@ -1221,7 +1222,7 @@ describe("session_start tool", () => {
   it("first session session_orientation includes announcement_message_id", async () => {
     mocks.pendingCount.mockReturnValue(0);
     mocks.activeSessionCount.mockReturnValue(0);
-    mocks.createSession.mockReturnValue({ sid: 1, suffix: 111111, name: "Primary", color: "🟦", sessionsActive: 1 });
+    mocks.createSession.mockReturnValue({ sid: 1, suffix: 111111, name: "Primary", color: "🦄", sessionsActive: 1 });
     mocks.sendMessage.mockResolvedValueOnce({ message_id: 77 });
 
     await call({});
@@ -1239,7 +1240,7 @@ describe("session_start tool", () => {
   it("session/start always returns action='fresh'", async () => {
     mocks.pendingCount.mockReturnValue(0);
     mocks.activeSessionCount.mockReturnValue(0);
-    mocks.createSession.mockReturnValue({ sid: 1, suffix: 111111, name: "Primary", color: "🟦", sessionsActive: 1 });
+    mocks.createSession.mockReturnValue({ sid: 1, suffix: 111111, name: "Primary", color: "🦄", sessionsActive: 1 });
     mocks.listSessions.mockReturnValue([]);
 
     const result = parseResult(await call({}));
@@ -1258,7 +1259,7 @@ describe("session_start tool", () => {
         { sid: 2, name: "Worker", createdAt: "2026-03-17" },
       ]);
     mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
-      void Promise.resolve().then(() => { fn({ content: { data: "approve_0", qid: "q1" } }); });
+      void Promise.resolve().then(() => { fn({ content: { data: "approve_yes", qid: "q1" } }); });
     });
     mocks.sendMessage
       .mockResolvedValueOnce({ message_id: 50 });
@@ -1285,7 +1286,7 @@ describe("session_start tool", () => {
         { sid: 2, name: "Worker", createdAt: "2026-03-17" },
       ]);
     mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
-      void Promise.resolve().then(() => { fn({ content: { data: "approve_0", qid: "q1" } }); });
+      void Promise.resolve().then(() => { fn({ content: { data: "approve_yes", qid: "q1" } }); });
     });
     mocks.sendMessage
       .mockResolvedValueOnce({ message_id: 50 });
@@ -1313,7 +1314,7 @@ describe("session_start tool", () => {
         { sid: 2, name: "Worker", createdAt: "2026-03-17" },
       ]);
     mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
-      void Promise.resolve().then(() => { fn({ content: { data: "approve_0", qid: "q1" } }); });
+      void Promise.resolve().then(() => { fn({ content: { data: "approve_yes", qid: "q1" } }); });
     });
     mocks.sendMessage
       .mockResolvedValueOnce({ message_id: 50 });
@@ -1324,84 +1325,59 @@ describe("session_start tool", () => {
   });
 
   // =========================================================================
-  // Color-picker approval dialog (task 080)
+  // Approve/Deny dialog
+  //
+  // Since v8 the operator no longer picks a session-tag emoji — the bridge
+  // auto-assigns from the configured pool. The approval keyboard is now a
+  // simple Approve / Deny pair, plus a delegation toggle row.
   // =========================================================================
 
-  it("approval prompt shows color buttons from getAvailableColors", async () => {
+  it("approval prompt has Approve and Deny buttons in row 1", async () => {
     mocks.pendingCount.mockReturnValue(0);
     mocks.activeSessionCount.mockReturnValue(1);
     mocks.listSessions.mockReturnValue([{ sid: 1, name: "Primary", createdAt: "2026-03-17" }]);
-    mocks.getAvailableColors.mockReturnValue(["🟦", "🟩", "🟨"]);
     mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
-      void Promise.resolve().then(() => { fn({ content: { data: "approve_0", qid: "q1" } }); });
+      void Promise.resolve().then(() => { fn({ content: { data: "approve_yes", qid: "q1" } }); });
     });
-    mocks.sendMessage
-      .mockResolvedValueOnce({ message_id: 50 });
-    mocks.createSession.mockReturnValue({ sid: 2, suffix: 200002, name: "Worker", color: "🟦", sessionsActive: 2 });
-
-    await call({ name: "Worker" });
-
-    // First sendMessage is the approval prompt with color buttons
-    const promptOpts = (mocks.sendMessage.mock.calls[0] as unknown[])[2] as Record<string, unknown>;
-    const keyboard = (promptOpts.reply_markup as Record<string, unknown>).inline_keyboard as unknown[][];
-    const buttons = keyboard[0] as Array<Record<string, unknown>>;
-    const colorButtonData = buttons.filter(b => String(b.callback_data).startsWith("approve_") && b.callback_data !== "approve_no").map(b => b.callback_data);
-    expect(colorButtonData).toContain("approve_0");
-    expect(colorButtonData).toContain("approve_1");
-    expect(colorButtonData).toContain("approve_2");
-  });
-
-  it("approval prompt has Deny button", async () => {
-    mocks.pendingCount.mockReturnValue(0);
-    mocks.activeSessionCount.mockReturnValue(1);
-    mocks.listSessions.mockReturnValue([{ sid: 1, name: "Primary", createdAt: "2026-03-17" }]);
-    mocks.getAvailableColors.mockReturnValue(["🟦", "🟩"]);
-    mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
-      void Promise.resolve().then(() => { fn({ content: { data: "approve_0", qid: "q1" } }); });
-    });
-    mocks.sendMessage
-      .mockResolvedValueOnce({ message_id: 50 });
-    mocks.createSession.mockReturnValue({ sid: 2, suffix: 200002, name: "Worker", color: "🟦", sessionsActive: 2 });
+    mocks.sendMessage.mockResolvedValueOnce({ message_id: 50 });
+    mocks.createSession.mockReturnValue({ sid: 2, suffix: 200002, name: "Worker", color: "🦄", sessionsActive: 2 });
 
     await call({ name: "Worker" });
 
     const promptOpts = (mocks.sendMessage.mock.calls[0] as unknown[])[2] as Record<string, unknown>;
     const keyboard = (promptOpts.reply_markup as Record<string, unknown>).inline_keyboard as unknown[][];
-    // 2 rows of color buttons + 1 deny row = keyboard[2]
-    const denyRow = keyboard[2] as Array<Record<string, unknown>>;
-    const denyButton = denyRow.find(b => b.callback_data === "approve_no");
-    expect(denyButton).toBeDefined();
+    const row1 = keyboard[0] as Array<Record<string, unknown>>;
+    expect(row1).toHaveLength(2);
+    expect(row1[0].callback_data).toBe("approve_yes");
+    expect(row1[1].callback_data).toBe("approve_no");
   });
 
-  it("tapping a color approves and passes operator-chosen color to createSession", async () => {
+  it("tapping Approve passes the agent's color hint (or undefined) to createSession", async () => {
     mocks.pendingCount.mockReturnValue(0);
     mocks.activeSessionCount.mockReturnValue(1);
     mocks.listSessions.mockReturnValueOnce([{ sid: 1, name: "Primary", createdAt: "2026-03-17" }]).mockReturnValue([]);
-    mocks.getAvailableColors.mockReturnValue(["🟦", "🟩", "🟨"]);
     mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
-      void Promise.resolve().then(() => { fn({ content: { data: "approve_1", qid: "q1" } }); });
+      void Promise.resolve().then(() => { fn({ content: { data: "approve_yes", qid: "q1" } }); });
     });
-    mocks.sendMessage
-      .mockResolvedValueOnce({ message_id: 50 });
-    mocks.createSession.mockReturnValue({ sid: 2, suffix: 200002, name: "Worker", color: "🟩", sessionsActive: 2 });
+    mocks.sendMessage.mockResolvedValueOnce({ message_id: 50 });
+    mocks.createSession.mockReturnValue({ sid: 2, suffix: 200002, name: "Worker", color: "🐺", sessionsActive: 2 });
 
-    await call({ name: "Worker" });
+    await call({ name: "Worker", color: "🐺" });
 
-    // createSession should receive the operator-chosen color 🟩
-    expect(mocks.createSession).toHaveBeenCalledWith("Worker", "🟩", true, undefined);
+    // Agent's hint passes through; forceColor is false (operator no longer picks).
+    // The session-manager validates the hint against the pool at creation time.
+    expect(mocks.createSession).toHaveBeenCalledWith("Worker", "🐺", false, undefined);
   });
 
   it("approval prompt deleted (not edited) after operator approves", async () => {
     mocks.pendingCount.mockReturnValue(0);
     mocks.activeSessionCount.mockReturnValue(1);
     mocks.listSessions.mockReturnValueOnce([{ sid: 1, name: "Primary", createdAt: "2026-03-17" }]).mockReturnValue([]);
-    mocks.getAvailableColors.mockReturnValue(["🟦", "🟩"]);
     mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
-      void Promise.resolve().then(() => { fn({ content: { data: "approve_1", qid: "q1" } }); });
+      void Promise.resolve().then(() => { fn({ content: { data: "approve_yes", qid: "q1" } }); });
     });
-    mocks.sendMessage
-      .mockResolvedValueOnce({ message_id: 50 });
-    mocks.createSession.mockReturnValue({ sid: 2, suffix: 200002, name: "Worker", color: "🟩", sessionsActive: 2 });
+    mocks.sendMessage.mockResolvedValueOnce({ message_id: 50 });
+    mocks.createSession.mockReturnValue({ sid: 2, suffix: 200002, name: "Worker", color: "🐺", sessionsActive: 2 });
 
     await call({ name: "Worker" });
 
@@ -1424,14 +1400,13 @@ describe("session_start tool", () => {
         { sid: 1, name: "Primary", createdAt: "2026-03-17" },
         { sid: 2, name: "Worker", createdAt: "2026-03-17" },
       ]);
-    mocks.getAvailableColors.mockReturnValue(["🟦", "🟩"]);
     mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
-      void Promise.resolve().then(() => { fn({ content: { data: "approve_1", qid: "q1" } }); });
+      void Promise.resolve().then(() => { fn({ content: { data: "approve_yes", qid: "q1" } }); });
     });
     mocks.sendMessage
       .mockResolvedValueOnce({ message_id: 50 })   // approval prompt
       .mockResolvedValueOnce({ message_id: 51 });  // broadcast announcement
-    mocks.createSession.mockReturnValue({ sid: 2, suffix: 200002, name: "Worker", color: "🟩", sessionsActive: 2 });
+    mocks.createSession.mockReturnValue({ sid: 2, suffix: 200002, name: "Worker", color: "🐺", sessionsActive: 2 });
 
     await call({ name: "Worker" });
 
@@ -1466,7 +1441,7 @@ describe("session_start tool", () => {
         { sid: 2, name: "Worker", createdAt: "2026-03-17" },
       ]);
     mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
-      void Promise.resolve().then(() => { fn({ content: { data: "approve_0", qid: "q1" } }); });
+      void Promise.resolve().then(() => { fn({ content: { data: "approve_yes", qid: "q1" } }); });
     });
     mocks.sendMessage
       .mockResolvedValueOnce({ message_id: 50 })   // approval prompt
@@ -1484,11 +1459,10 @@ describe("session_start tool", () => {
     expect((toNew![3] as Record<string, unknown>).announcement_message_id).toBe(99);
   });
 
-  it("post-decision edit shows name (no color) after denial", async () => {
+  it("post-decision edit shows session name after denial (no color tag)", async () => {
     mocks.pendingCount.mockReturnValue(0);
     mocks.activeSessionCount.mockReturnValue(1);
     mocks.listSessions.mockReturnValue([{ sid: 1, name: "Primary", createdAt: "2026-03-17" }]);
-    mocks.getAvailableColors.mockReturnValue(["🟦", "🟩"]);
     mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
       void Promise.resolve().then(() => { fn({ content: { data: "approve_no", qid: "q1" } }); });
     });
@@ -1503,154 +1477,9 @@ describe("session_start tool", () => {
       expect.stringContaining("Worker"),
       expect.any(Object),
     );
-    // Should NOT contain a color emoji in the denial edit
+    // Should NOT contain a session-tag emoji in the denial edit
     const editCall = mocks.editMessageText.mock.calls[0] as unknown[];
-    expect(String(editCall[2])).not.toMatch(/🟦|🟩|🟨|🟧|🟥|🟪/);
-  });
-
-  it("agent's color hint passed to getAvailableColors", async () => {
-    mocks.pendingCount.mockReturnValue(0);
-    mocks.activeSessionCount.mockReturnValue(1);
-    mocks.listSessions.mockReturnValueOnce([{ sid: 1, name: "Primary", createdAt: "2026-03-17" }]).mockReturnValue([]);
-    mocks.getAvailableColors.mockReturnValue(["🟩", "🟦"]); // 🟩 first = hint honored
-    mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
-      void Promise.resolve().then(() => { fn({ content: { data: "approve_1", qid: "q1" } }); });
-    });
-    mocks.sendMessage
-      .mockResolvedValueOnce({ message_id: 50 });
-    mocks.createSession.mockReturnValue({ sid: 2, suffix: 200002, name: "Worker", color: "🟩", sessionsActive: 2 });
-
-    await call({ name: "Worker", color: "🟩" });
-
-    expect(mocks.getAvailableColors).toHaveBeenCalledWith("🟩");
-  });
-
-  it("first fresh color is the first button when no hint provided", async () => {
-    mocks.pendingCount.mockReturnValue(0);
-    mocks.activeSessionCount.mockReturnValue(1);
-    // 🟦 is used; fresh colors start with 🟩
-    mocks.listSessions
-      .mockReturnValueOnce([{ sid: 1, name: "Primary", createdAt: "2026-03-17" }])
-      .mockReturnValue([{ sid: 1, name: "Primary", color: "🟦", createdAt: "2026-03-17" }]);
-    mocks.getAvailableColors.mockReturnValue(["🟩", "🟨", "🟧", "🟥", "🟪", "🟦"]);
-    mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
-      void Promise.resolve().then(() => { fn({ content: { data: "approve_1", qid: "q1" } }); });
-    });
-    mocks.sendMessage.mockResolvedValueOnce({ message_id: 50 });
-    mocks.createSession.mockReturnValue({ sid: 2, suffix: 200002, name: "Worker", color: "🟩", sessionsActive: 2 });
-
-    await call({ name: "Worker" });
-
-    const promptOpts = (mocks.sendMessage.mock.calls[0] as unknown[])[2] as Record<string, unknown>;
-    const keyboard = (promptOpts.reply_markup as Record<string, unknown>).inline_keyboard as unknown[][];
-    const row1 = keyboard[0] as Array<Record<string, unknown>>;
-    const firstButton = row1[0];
-    expect(firstButton.text).toBe("🟩");
-    // Buttons should be split across 2 rows
-    expect(keyboard[0]).toHaveLength(3);
-    expect(keyboard[1]).toHaveLength(3);
-  });
-
-  it("hint is the first button when hint is a fresh color", async () => {
-    mocks.pendingCount.mockReturnValue(0);
-    mocks.activeSessionCount.mockReturnValue(1);
-    // 🟦 is used; hint 🟥 is fresh
-    mocks.listSessions
-      .mockReturnValueOnce([{ sid: 1, name: "Primary", createdAt: "2026-03-17" }])
-      .mockReturnValue([{ sid: 1, name: "Primary", color: "🟦", createdAt: "2026-03-17" }]);
-    mocks.getAvailableColors.mockReturnValue(["🟥", "🟩", "🟨", "🟧", "🟪", "🟦"]);
-    mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
-      void Promise.resolve().then(() => { fn({ content: { data: "approve_4", qid: "q1" } }); });
-    });
-    mocks.sendMessage.mockResolvedValueOnce({ message_id: 50 });
-    mocks.createSession.mockReturnValue({ sid: 2, suffix: 200002, name: "Worker", color: "🟥", sessionsActive: 2 });
-
-    await call({ name: "Worker", color: "🟥" });
-
-    const promptOpts = (mocks.sendMessage.mock.calls[0] as unknown[])[2] as Record<string, unknown>;
-    const keyboard = (promptOpts.reply_markup as Record<string, unknown>).inline_keyboard as unknown[][];
-    const row1 = keyboard[0] as Array<Record<string, unknown>>;
-    // Hint color must be the very first button
-    expect(row1[0].text).toBe("🟥");
-  });
-
-  it("hint is still the first button even when hint color is already used", async () => {
-    mocks.pendingCount.mockReturnValue(0);
-    mocks.activeSessionCount.mockReturnValue(1);
-    // 🟦 and 🟥 are used; hint is 🟥 (used); first fresh is 🟩
-    mocks.listSessions
-      .mockReturnValueOnce([{ sid: 1, name: "Primary", createdAt: "2026-03-17" }])
-      .mockReturnValue([
-        { sid: 1, name: "Primary", color: "🟦", createdAt: "2026-03-17" },
-        { sid: 2, name: "Other", color: "🟥", createdAt: "2026-03-17" },
-      ]);
-    mocks.getAvailableColors.mockReturnValue(["🟥", "🟩", "🟨", "🟧", "🟪", "🟦"]);
-    mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
-      void Promise.resolve().then(() => { fn({ content: { data: "approve_1", qid: "q1" } }); });
-    });
-    mocks.sendMessage.mockResolvedValueOnce({ message_id: 50 });
-    mocks.createSession.mockReturnValue({ sid: 3, suffix: 300003, name: "Worker2", color: "🟩", sessionsActive: 3 });
-
-    await call({ name: "Worker2", color: "🟥" });
-
-    const promptOpts = (mocks.sendMessage.mock.calls[0] as unknown[])[2] as Record<string, unknown>;
-    const keyboard = (promptOpts.reply_markup as Record<string, unknown>).inline_keyboard as unknown[][];
-    const row1 = keyboard[0] as Array<Record<string, unknown>>;
-    // Even when hint (🟥) is already used, it gets position 0 — agent's
-    // requested color is always the most prominent button.
-    expect(row1[0].text).toBe("🟥");
-  });
-
-  it("invalid colorHint (not in palette) is ignored — first fresh color is first button", async () => {
-    mocks.pendingCount.mockReturnValue(0);
-    mocks.activeSessionCount.mockReturnValue(1);
-    mocks.listSessions
-      .mockReturnValueOnce([{ sid: 1, name: "Primary", createdAt: "2026-03-17" }])
-      .mockReturnValue([{ sid: 1, name: "Primary", color: "🟦", createdAt: "2026-03-17" }]);
-    // getAvailableColors correctly ignores invalid hint; 🟩 is first fresh
-    mocks.getAvailableColors.mockReturnValue(["🟩", "🟨", "🟧", "🟥", "🟪", "🟦"]);
-    mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
-      void Promise.resolve().then(() => { fn({ content: { data: "approve_0", qid: "q1" } }); });
-    });
-    mocks.sendMessage.mockResolvedValueOnce({ message_id: 50 });
-    mocks.createSession.mockReturnValue({ sid: 2, suffix: 200002, name: "Worker", color: "🟩", sessionsActive: 2 });
-
-    await call({ name: "Worker", color: "❌" }); // invalid hint — not in COLOR_PALETTE
-
-    const promptOpts = (mocks.sendMessage.mock.calls[0] as unknown[])[2] as Record<string, unknown>;
-    const keyboard = (promptOpts.reply_markup as Record<string, unknown>).inline_keyboard as unknown[][];
-    const allButtons = [
-      ...(keyboard[0] as Array<Record<string, unknown>>),
-      ...(keyboard[1] as Array<Record<string, unknown>>),
-    ];
-    // Invalid hint must not appear as a button
-    const invalidButton = allButtons.find(b => b.text === "❌");
-    expect(invalidButton).toBeUndefined();
-    // First fresh palette color should be the first button
-    const row1 = keyboard[0] as Array<Record<string, unknown>>;
-    expect(row1[0].text).toBe("🟩");
-  });
-
-  it("color-picker approval still works for fresh second session", async () => {
-    mocks.pendingCount.mockReturnValue(0);
-    mocks.activeSessionCount.mockReturnValue(1);
-    mocks.listSessions
-      .mockReturnValueOnce([{ sid: 1, name: "Primary", createdAt: "2026-03-17" }])
-      .mockReturnValue([
-        { sid: 1, name: "Primary", createdAt: "2026-03-17" },
-        { sid: 2, name: "Worker", createdAt: "2026-03-17" },
-      ]);
-    mocks.getAvailableColors.mockReturnValue(["🟦", "🟩"]);
-    mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
-      void Promise.resolve().then(() => { fn({ content: { data: "approve_1", qid: "q1" } }); });
-    });
-    mocks.sendMessage
-      .mockResolvedValueOnce({ message_id: 50 });
-    mocks.createSession.mockReturnValue({ sid: 2, suffix: 222222, name: "Worker", color: "🟩", sessionsActive: 2 });
-
-    await call({ name: "Worker" });
-
-    expect(mocks.createSession).toHaveBeenCalledWith("Worker", "🟩", true, undefined);
+    expect(String(editCall[2])).not.toMatch(/🦄|🐺|👻|🐶|🐅|🐊/);
   });
 
   // =========================================================================
@@ -1667,12 +1496,12 @@ describe("session_start tool", () => {
         { sid: 2, name: "Worker", createdAt: "2026-03-17" },
       ]);
     mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
-      void Promise.resolve().then(() => { fn({ content: { data: "approve_0", qid: "q1" } }); });
+      void Promise.resolve().then(() => { fn({ content: { data: "approve_yes", qid: "q1" } }); });
     });
     mocks.sendMessage
       .mockResolvedValueOnce({ message_id: 50 })   // approval prompt
       .mockResolvedValueOnce({ message_id: 77 });  // announcement
-    mocks.createSession.mockReturnValue({ sid: 2, suffix: 200002, name: "Worker", color: "🟦", sessionsActive: 2 });
+    mocks.createSession.mockReturnValue({ sid: 2, suffix: 200002, name: "Worker", color: "🦄", sessionsActive: 2 });
 
     await call({ name: "Worker" });
 
@@ -1689,12 +1518,12 @@ describe("session_start tool", () => {
         { sid: 2, name: "Worker", createdAt: "2026-03-17" },
       ]);
     mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
-      void Promise.resolve().then(() => { fn({ content: { data: "approve_0", qid: "q1" } }); });
+      void Promise.resolve().then(() => { fn({ content: { data: "approve_yes", qid: "q1" } }); });
     });
     mocks.sendMessage
       .mockResolvedValueOnce({ message_id: 50 })
       .mockResolvedValueOnce({ message_id: 88 });
-    mocks.createSession.mockReturnValue({ sid: 2, suffix: 200002, name: "Worker", color: "🟦", sessionsActive: 2 });
+    mocks.createSession.mockReturnValue({ sid: 2, suffix: 200002, name: "Worker", color: "🦄", sessionsActive: 2 });
 
     await call({ name: "Worker" });
 
@@ -1711,12 +1540,12 @@ describe("session_start tool", () => {
         { sid: 2, name: "Worker", createdAt: "2026-03-17" },
       ]);
     mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
-      void Promise.resolve().then(() => { fn({ content: { data: "approve_0", qid: "q1" } }); });
+      void Promise.resolve().then(() => { fn({ content: { data: "approve_yes", qid: "q1" } }); });
     });
     mocks.sendMessage
       .mockResolvedValueOnce({ message_id: 50 })   // approval prompt
       .mockRejectedValueOnce(new Error("send failed")); // announcement fails
-    mocks.createSession.mockReturnValue({ sid: 2, suffix: 200002, name: "Worker", color: "🟦", sessionsActive: 2 });
+    mocks.createSession.mockReturnValue({ sid: 2, suffix: 200002, name: "Worker", color: "🦄", sessionsActive: 2 });
 
     await call({ name: "Worker" });
 
@@ -1727,7 +1556,7 @@ describe("session_start tool", () => {
   it("does not pin when first session announcement fails to send", async () => {
     mocks.pendingCount.mockReturnValue(0);
     mocks.activeSessionCount.mockReturnValue(0);
-    mocks.createSession.mockReturnValue({ sid: 1, suffix: 111111, name: "Primary", color: "🟦", sessionsActive: 1 });
+    mocks.createSession.mockReturnValue({ sid: 1, suffix: 111111, name: "Primary", color: "🦄", sessionsActive: 1 });
     mocks.sendMessage.mockResolvedValueOnce(undefined);
 
     await call({});
@@ -1738,7 +1567,7 @@ describe("session_start tool", () => {
   it("first session announcement is NOT pinned (deferred until second session joins)", async () => {
     mocks.pendingCount.mockReturnValue(0);
     mocks.activeSessionCount.mockReturnValue(0);
-    mocks.createSession.mockReturnValue({ sid: 1, suffix: 111111, name: "Primary", color: "🟦", sessionsActive: 1 });
+    mocks.createSession.mockReturnValue({ sid: 1, suffix: 111111, name: "Primary", color: "🦄", sessionsActive: 1 });
     mocks.sendMessage.mockResolvedValueOnce({ message_id: 55 });
 
     await call({});
@@ -1749,7 +1578,7 @@ describe("session_start tool", () => {
   it("second session retroactively pins first session announcement when sessionsActive === 2", async () => {
     mocks.pendingCount.mockReturnValue(0);
     mocks.activeSessionCount.mockReturnValue(1);
-    mocks.createSession.mockReturnValue({ sid: 2, suffix: 222222, name: "Worker", color: "🟩", sessionsActive: 2 });
+    mocks.createSession.mockReturnValue({ sid: 2, suffix: 222222, name: "Worker", color: "🐺", sessionsActive: 2 });
     mocks.listSessions
       .mockReturnValueOnce([{ sid: 1, name: "Primary", createdAt: "2026-03-20" }])
       .mockReturnValue([
@@ -1757,7 +1586,7 @@ describe("session_start tool", () => {
         { sid: 2, name: "Worker", createdAt: "2026-03-20" },
       ]);
     mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
-      void Promise.resolve().then(() => { fn({ content: { data: "approve_0", qid: "q1" } }); });
+      void Promise.resolve().then(() => { fn({ content: { data: "approve_yes", qid: "q1" } }); });
     });
     mocks.sendMessage
       .mockResolvedValueOnce({ message_id: 50 })   // approval prompt
@@ -1788,7 +1617,7 @@ describe("session_start tool", () => {
         { sid: 3, name: "Third", createdAt: "2026-03-20" },
       ]);
     mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
-      void Promise.resolve().then(() => { fn({ content: { data: "approve_0", qid: "q1" } }); });
+      void Promise.resolve().then(() => { fn({ content: { data: "approve_yes", qid: "q1" } }); });
     });
     mocks.sendMessage
       .mockResolvedValueOnce({ message_id: 50 })   // approval prompt
@@ -1806,7 +1635,7 @@ describe("session_start tool", () => {
   it("first session announcement tracked via setSessionAnnouncementMessage", async () => {
     mocks.pendingCount.mockReturnValue(0);
     mocks.activeSessionCount.mockReturnValue(0);
-    mocks.createSession.mockReturnValue({ sid: 1, suffix: 111111, name: "Primary", color: "🟦", sessionsActive: 1 });
+    mocks.createSession.mockReturnValue({ sid: 1, suffix: 111111, name: "Primary", color: "🦄", sessionsActive: 1 });
     mocks.sendMessage.mockResolvedValueOnce({ message_id: 88 });
 
     await call({});
@@ -1822,7 +1651,7 @@ describe("session_start tool", () => {
     mocks.listSessions.mockReturnValue([{ sid: 1, name: "Overseer", createdAt: "2026-03-17" }]);
     // existing session is bound to a DIFFERENT live HTTP transport
     mocks.getSession.mockReturnValue({
-      sid: 1, suffix: 123456, name: "Overseer", color: "🟦",
+      sid: 1, suffix: 123456, name: "Overseer", color: "🦄",
       createdAt: "2026-03-17", lastPollAt: 100, healthy: true,
       httpSessionId: "transport-A",
     });
@@ -1844,7 +1673,7 @@ describe("session_start tool", () => {
     // silently return the existing session.
     mocks.listSessions.mockReturnValue([{ sid: 1, name: "Overseer", createdAt: "2026-03-17" }]);
     mocks.getSession.mockReturnValue({
-      sid: 1, suffix: 123456, name: "Overseer", color: "🟦",
+      sid: 1, suffix: 123456, name: "Overseer", color: "🦄",
       createdAt: "2026-03-17", lastPollAt: 100, healthy: true,
       httpSessionId: "same-transport",
       connectionToken: "ct-1",
@@ -1874,7 +1703,7 @@ describe("session_start tool", () => {
   it("RECOVERY: stdio (both undefined httpSessionId) treated as same agent", async () => {
     mocks.listSessions.mockReturnValue([{ sid: 1, name: "Overseer", createdAt: "2026-03-17" }]);
     mocks.getSession.mockReturnValue({
-      sid: 1, suffix: 555555, name: "Overseer", color: "🟦",
+      sid: 1, suffix: 555555, name: "Overseer", color: "🦄",
       createdAt: "2026-03-17", lastPollAt: 100, healthy: true,
       // no httpSessionId — stdio mode
       connectionToken: "ct-stdio",
@@ -1894,7 +1723,7 @@ describe("session_start tool", () => {
     // a session originally created on HTTP, that's NOT the same agent.
     mocks.listSessions.mockReturnValue([{ sid: 1, name: "Overseer", createdAt: "2026-03-17" }]);
     mocks.getSession.mockReturnValue({
-      sid: 1, suffix: 123456, name: "Overseer", color: "🟦",
+      sid: 1, suffix: 123456, name: "Overseer", color: "🦄",
       createdAt: "2026-03-17", lastPollAt: 100, healthy: true,
       httpSessionId: "real-uuid",
     });
@@ -1909,7 +1738,7 @@ describe("session_start tool", () => {
   it("RECOVERY: case-insensitive name match still triggers idempotent path", async () => {
     mocks.listSessions.mockReturnValue([{ sid: 1, name: "Overseer", createdAt: "2026-03-17" }]);
     mocks.getSession.mockReturnValue({
-      sid: 1, suffix: 222222, name: "Overseer", color: "🟦",
+      sid: 1, suffix: 222222, name: "Overseer", color: "🦄",
       createdAt: "2026-03-17", lastPollAt: 100, healthy: true,
       httpSessionId: "uuid-1",
       connectionToken: "ct-2",
@@ -1926,7 +1755,7 @@ describe("session_start tool", () => {
   it("RECOVERY: pending count reflects unread messages that landed during the lapse", async () => {
     mocks.listSessions.mockReturnValue([{ sid: 1, name: "Overseer", createdAt: "2026-03-17" }]);
     mocks.getSession.mockReturnValue({
-      sid: 1, suffix: 100000, name: "Overseer", color: "🟦",
+      sid: 1, suffix: 100000, name: "Overseer", color: "🦄",
       createdAt: "2026-03-17", lastPollAt: 100, healthy: true,
       httpSessionId: "u",
       connectionToken: "ct",
@@ -1943,7 +1772,7 @@ describe("session_start tool", () => {
   it("RECOVERY: missing queue → pending defaults to 0", async () => {
     mocks.listSessions.mockReturnValue([{ sid: 1, name: "Overseer", createdAt: "2026-03-17" }]);
     mocks.getSession.mockReturnValue({
-      sid: 1, suffix: 100000, name: "Overseer", color: "🟦",
+      sid: 1, suffix: 100000, name: "Overseer", color: "🦄",
       createdAt: "2026-03-17", lastPollAt: 100, healthy: true,
       httpSessionId: "u",
       connectionToken: "ct",
@@ -1964,7 +1793,7 @@ describe("session_start tool", () => {
     mocks.pendingCount.mockReturnValue(0);
     mocks.activeSessionCount.mockReturnValue(0);
     mocks.isPollerRunning.mockReturnValue(false);
-    mocks.createSession.mockReturnValue({ sid: 1, suffix: 111111, name: "Primary", color: "🟦", sessionsActive: 1 });
+    mocks.createSession.mockReturnValue({ sid: 1, suffix: 111111, name: "Primary", color: "🦄", sessionsActive: 1 });
 
     await call({});
 
@@ -1975,7 +1804,7 @@ describe("session_start tool", () => {
     mocks.pendingCount.mockReturnValue(0);
     mocks.activeSessionCount.mockReturnValue(0);
     mocks.isPollerRunning.mockReturnValue(true);
-    mocks.createSession.mockReturnValue({ sid: 1, suffix: 111111, name: "Primary", color: "🟦", sessionsActive: 1 });
+    mocks.createSession.mockReturnValue({ sid: 1, suffix: 111111, name: "Primary", color: "🦄", sessionsActive: 1 });
 
     await call({});
 
@@ -1999,7 +1828,7 @@ describe("session_start tool", () => {
     it("startup reminders are delivered to the session queue after a fresh session_start", async () => {
       mocks.pendingCount.mockReturnValue(0);
       mocks.activeSessionCount.mockReturnValue(0);
-      mocks.createSession.mockReturnValue({ sid: 1, suffix: 111111, name: "Primary", color: "🟦", sessionsActive: 1 });
+      mocks.createSession.mockReturnValue({ sid: 1, suffix: 111111, name: "Primary", color: "🦄", sessionsActive: 1 });
 
       // Pre-load a startup reminder for SID 1
       runInSessionContext(1, () => {
@@ -2018,7 +1847,7 @@ describe("session_start tool", () => {
     it("one-shot startup reminder is not present after firing (not re-delivered on second session_start)", async () => {
       mocks.pendingCount.mockReturnValue(0);
       mocks.activeSessionCount.mockReturnValue(0);
-      mocks.createSession.mockReturnValue({ sid: 2, suffix: 222222, name: "Alpha", color: "🟩", sessionsActive: 1 });
+      mocks.createSession.mockReturnValue({ sid: 2, suffix: 222222, name: "Alpha", color: "🐺", sessionsActive: 1 });
 
       runInSessionContext(2, () => {
         addReminder({ id: "s-oneshot", text: "One shot", delay_seconds: 0, recurring: false, trigger: "startup" });
@@ -2032,7 +1861,7 @@ describe("session_start tool", () => {
 
       // Reset mocks and run second session_start — one-shot should NOT fire again
       vi.clearAllMocks();
-      mocks.createSession.mockReturnValue({ sid: 2, suffix: 222222, name: "Alpha", color: "🟩", sessionsActive: 1 });
+      mocks.createSession.mockReturnValue({ sid: 2, suffix: 222222, name: "Alpha", color: "🐺", sessionsActive: 1 });
       mocks.pendingCount.mockReturnValue(0);
       mocks.activeSessionCount.mockReturnValue(0);
       mocks.getSessionQueue.mockReturnValue({ pendingCount: () => 0 });
@@ -2048,7 +1877,7 @@ describe("session_start tool", () => {
     it("recurring startup reminder fires again on a second session_start", async () => {
       mocks.pendingCount.mockReturnValue(0);
       mocks.activeSessionCount.mockReturnValue(0);
-      mocks.createSession.mockReturnValue({ sid: 3, suffix: 333333, name: "Beta", color: "🟨", sessionsActive: 1 });
+      mocks.createSession.mockReturnValue({ sid: 3, suffix: 333333, name: "Beta", color: "👻", sessionsActive: 1 });
 
       runInSessionContext(3, () => {
         addReminder({ id: "s-recurring", text: "Every start", delay_seconds: 0, recurring: true, trigger: "startup" });
@@ -2064,7 +1893,7 @@ describe("session_start tool", () => {
 
       // Reset mocks for second call
       vi.clearAllMocks();
-      mocks.createSession.mockReturnValue({ sid: 3, suffix: 333333, name: "Beta", color: "🟨", sessionsActive: 1 });
+      mocks.createSession.mockReturnValue({ sid: 3, suffix: 333333, name: "Beta", color: "👻", sessionsActive: 1 });
       mocks.pendingCount.mockReturnValue(0);
       mocks.activeSessionCount.mockReturnValue(0);
       mocks.getSessionQueue.mockReturnValue({ pendingCount: () => 0 });
@@ -2090,7 +1919,7 @@ describe("session_start tool", () => {
     mocks.pendingCount.mockReturnValue(0);
     mocks.activeSessionCount.mockReturnValue(1);
     mocks.listSessions.mockReturnValue([{ sid: 1, name: "Primary", createdAt: "2026-03-17" }]);
-    mocks.createSession.mockReturnValue({ sid: 2, suffix: 222222, name: "Scout", sessionsActive: 2, color: "🟩" });
+    mocks.createSession.mockReturnValue({ sid: 2, suffix: 222222, name: "Scout", sessionsActive: 2, color: "🐺" });
     mocks.checkAndConsumeAutoApprove.mockReturnValueOnce(true);
 
     const result = parseResult(await call({ name: "Scout" }));
@@ -2098,53 +1927,59 @@ describe("session_start tool", () => {
     // registerCallbackHook should NOT have been called (no approval dialog was shown)
     expect(mocks.registerCallbackHook).not.toHaveBeenCalled();
     expect(result.sid).toBe(2);
-    // Auto-approve now uses availableColors[0] (not the raw hint) to avoid duplicate colors
-    expect(mocks.createSession).toHaveBeenCalledWith("Scout", "🟦", true, undefined);
+    // Auto-approve passes the agent's hint (or undefined) straight through; the
+    // session-manager auto-assigns from the pool when no/invalid hint.
+    expect(mocks.createSession).toHaveBeenCalledWith("Scout", undefined, false, undefined);
   });
 
   // =========================================================================
-  // Delegation toggle & color button styles (spec: approval dialog)
+  // Delegation toggle & button styles (v8 approval dialog)
+  //
+  // Keyboard layout: [[Approve, Deny], [Delegation toggle]]
+  //   row 0 = Approve (primary), Deny (danger)
+  //   row 1 = Delegation toggle (no style)
   // =========================================================================
 
-  it("deny button has danger style", async () => {
+  it("approve button has primary style; deny button has danger style", async () => {
     mocks.pendingCount.mockReturnValue(0);
     mocks.activeSessionCount.mockReturnValue(1);
     mocks.listSessions.mockReturnValue([{ sid: 1, name: "Primary", createdAt: "2026-03-17" }]);
-    mocks.getAvailableColors.mockReturnValue(["🟦", "🟩", "🟨", "🟧", "🟥", "🟪"]);
     mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
-      void Promise.resolve().then(() => { fn({ content: { data: "approve_0", qid: "q1" } }); });
+      void Promise.resolve().then(() => { fn({ content: { data: "approve_yes", qid: "q1" } }); });
     });
     mocks.sendMessage.mockResolvedValueOnce({ message_id: 50 });
-    mocks.createSession.mockReturnValue({ sid: 2, suffix: 200002, name: "Worker", color: "🟦", sessionsActive: 2 });
+    mocks.createSession.mockReturnValue({ sid: 2, suffix: 200002, name: "Worker", color: "🦄", sessionsActive: 2 });
 
     await call({ name: "Worker" });
 
     const promptOpts = (mocks.sendMessage.mock.calls[0] as unknown[])[2] as Record<string, unknown>;
     const keyboard = (promptOpts.reply_markup as Record<string, unknown>).inline_keyboard as unknown[][];
-    const row3 = keyboard[2] as Array<Record<string, unknown>>;
-    const denyButton = row3.find(b => b.callback_data === "approve_no");
+    const row1 = keyboard[0] as Array<Record<string, unknown>>;
+    const approveButton = row1.find(b => b.callback_data === "approve_yes");
+    const denyButton = row1.find(b => b.callback_data === "approve_no");
+    expect(approveButton).toBeDefined();
+    expect(approveButton!.style).toBe("primary");
     expect(denyButton).toBeDefined();
     expect(denyButton!.style).toBe("danger");
   });
 
-  it("delegation toggle button is in row 3, left of deny — OFF state by default", async () => {
+  it("delegation toggle button is in row 2 — OFF state by default", async () => {
     mocks.pendingCount.mockReturnValue(0);
     mocks.activeSessionCount.mockReturnValue(1);
     mocks.listSessions.mockReturnValue([{ sid: 1, name: "Primary", createdAt: "2026-03-17" }]);
-    mocks.getAvailableColors.mockReturnValue(["🟦", "🟩", "🟨", "🟧", "🟥", "🟪"]);
     mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
-      void Promise.resolve().then(() => { fn({ content: { data: "approve_0", qid: "q1" } }); });
+      void Promise.resolve().then(() => { fn({ content: { data: "approve_yes", qid: "q1" } }); });
     });
     mocks.sendMessage.mockResolvedValueOnce({ message_id: 50 });
-    mocks.createSession.mockReturnValue({ sid: 2, suffix: 200002, name: "Worker", color: "🟦", sessionsActive: 2 });
+    mocks.createSession.mockReturnValue({ sid: 2, suffix: 200002, name: "Worker", color: "🦄", sessionsActive: 2 });
 
     await call({ name: "Worker" });
 
     const promptOpts = (mocks.sendMessage.mock.calls[0] as unknown[])[2] as Record<string, unknown>;
     const keyboard = (promptOpts.reply_markup as Record<string, unknown>).inline_keyboard as unknown[][];
-    const row3 = keyboard[2] as Array<Record<string, unknown>>;
-    expect(row3).toHaveLength(2);
-    const toggleButton = row3[0];
+    const row2 = keyboard[1] as Array<Record<string, unknown>>;
+    expect(row2).toHaveLength(1);
+    const toggleButton = row2[0];
     expect(toggleButton.callback_data).toBe("approve_toggle_delegation");
     expect(toggleButton.text).toBe("☐ Delegate");
     expect(toggleButton.style).toBeUndefined();
@@ -2155,104 +1990,27 @@ describe("session_start tool", () => {
     mocks.pendingCount.mockReturnValue(0);
     mocks.activeSessionCount.mockReturnValue(1);
     mocks.listSessions.mockReturnValue([{ sid: 1, name: "Primary", createdAt: "2026-03-17" }]);
-    mocks.getAvailableColors.mockReturnValue(["🟦", "🟩", "🟨", "🟧", "🟥", "🟪"]);
     mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
-      void Promise.resolve().then(() => { fn({ content: { data: "approve_0", qid: "q1" } }); });
+      void Promise.resolve().then(() => { fn({ content: { data: "approve_yes", qid: "q1" } }); });
     });
     mocks.sendMessage.mockResolvedValueOnce({ message_id: 50 });
-    mocks.createSession.mockReturnValue({ sid: 2, suffix: 200002, name: "Worker", color: "🟦", sessionsActive: 2 });
+    mocks.createSession.mockReturnValue({ sid: 2, suffix: 200002, name: "Worker", color: "🦄", sessionsActive: 2 });
 
     await call({ name: "Worker" });
 
     const promptOpts = (mocks.sendMessage.mock.calls[0] as unknown[])[2] as Record<string, unknown>;
     const keyboard = (promptOpts.reply_markup as Record<string, unknown>).inline_keyboard as unknown[][];
-    const row3 = keyboard[2] as Array<Record<string, unknown>>;
-    const toggleButton = row3[0];
+    const row2 = keyboard[1] as Array<Record<string, unknown>>;
+    const toggleButton = row2[0];
     expect(toggleButton.text).toBe("✅ Delegated");
-  });
-
-  it("hint color button gets primary style", async () => {
-    mocks.pendingCount.mockReturnValue(0);
-    mocks.activeSessionCount.mockReturnValue(1);
-    mocks.listSessions.mockReturnValue([{ sid: 1, name: "Primary", createdAt: "2026-03-17" }]);
-    // hint 🟩 is at position 0 (promoted by getAvailableColors)
-    mocks.getAvailableColors.mockReturnValue(["🟩", "🟦", "🟨", "🟧", "🟥", "🟪"]);
-    mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
-      void Promise.resolve().then(() => { fn({ content: { data: "approve_1", qid: "q1" } }); });
-    });
-    mocks.sendMessage.mockResolvedValueOnce({ message_id: 50 });
-    mocks.createSession.mockReturnValue({ sid: 2, suffix: 200002, name: "Worker", color: "🟩", sessionsActive: 2 });
-
-    await call({ name: "Worker", color: "🟩" });
-
-    const promptOpts = (mocks.sendMessage.mock.calls[0] as unknown[])[2] as Record<string, unknown>;
-    const keyboard = (promptOpts.reply_markup as Record<string, unknown>).inline_keyboard as unknown[][];
-    const allButtons = [
-      ...(keyboard[0] as Array<Record<string, unknown>>),
-      ...(keyboard[1] as Array<Record<string, unknown>>),
-    ];
-    const hintButton = allButtons.find(b => b.text === "🟩");
-    expect(hintButton).toBeDefined();
-    expect(hintButton!.style).toBe("primary");
-    // Only the hint button gets primary
-    const otherPrimary = allButtons.filter(b => b.text !== "🟩" && b.style === "primary");
-    expect(otherPrimary).toHaveLength(0);
-  });
-
-  it("no hint + delegation ON → first color button gets primary", async () => {
-    setDelegationEnabled(true);
-    mocks.pendingCount.mockReturnValue(0);
-    mocks.activeSessionCount.mockReturnValue(1);
-    mocks.listSessions.mockReturnValue([{ sid: 1, name: "Primary", createdAt: "2026-03-17" }]);
-    mocks.getAvailableColors.mockReturnValue(["🟦", "🟩", "🟨", "🟧", "🟥", "🟪"]);
-    mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
-      void Promise.resolve().then(() => { fn({ content: { data: "approve_0", qid: "q1" } }); });
-    });
-    mocks.sendMessage.mockResolvedValueOnce({ message_id: 50 });
-    mocks.createSession.mockReturnValue({ sid: 2, suffix: 200002, name: "Worker", color: "🟦", sessionsActive: 2 });
-
-    await call({ name: "Worker" });
-
-    const promptOpts = (mocks.sendMessage.mock.calls[0] as unknown[])[2] as Record<string, unknown>;
-    const keyboard = (promptOpts.reply_markup as Record<string, unknown>).inline_keyboard as unknown[][];
-    const row1 = keyboard[0] as Array<Record<string, unknown>>;
-    expect(row1[0].style).toBe("primary");
-    // Others in row1 do not get primary
-    expect(row1[1].style).toBeUndefined();
-    expect(row1[2].style).toBeUndefined();
-  });
-
-  it("no hint + delegation OFF → no color button gets primary", async () => {
-    // delegation is OFF by default (setDelegationEnabled(false) in beforeEach)
-    mocks.pendingCount.mockReturnValue(0);
-    mocks.activeSessionCount.mockReturnValue(1);
-    mocks.listSessions.mockReturnValue([{ sid: 1, name: "Primary", createdAt: "2026-03-17" }]);
-    mocks.getAvailableColors.mockReturnValue(["🟦", "🟩", "🟨", "🟧", "🟥", "🟪"]);
-    mocks.registerCallbackHook.mockImplementationOnce((_id: number, fn: (evt: unknown) => void) => {
-      void Promise.resolve().then(() => { fn({ content: { data: "approve_0", qid: "q1" } }); });
-    });
-    mocks.sendMessage.mockResolvedValueOnce({ message_id: 50 });
-    mocks.createSession.mockReturnValue({ sid: 2, suffix: 200002, name: "Worker", color: "🟦", sessionsActive: 2 });
-
-    await call({ name: "Worker" });
-
-    const promptOpts = (mocks.sendMessage.mock.calls[0] as unknown[])[2] as Record<string, unknown>;
-    const keyboard = (promptOpts.reply_markup as Record<string, unknown>).inline_keyboard as unknown[][];
-    const colorButtons = [
-      ...(keyboard[0] as Array<Record<string, unknown>>),
-      ...(keyboard[1] as Array<Record<string, unknown>>),
-    ];
-    const primaryButtons = colorButtons.filter(b => b.style === "primary");
-    expect(primaryButtons).toHaveLength(0);
   });
 
   it("delegation toggle does NOT resolve the approval promise", async () => {
     mocks.pendingCount.mockReturnValue(0);
     mocks.activeSessionCount.mockReturnValue(1);
     mocks.listSessions.mockReturnValue([{ sid: 1, name: "Primary", createdAt: "2026-03-17" }]);
-    mocks.getAvailableColors.mockReturnValue(["🟦", "🟩", "🟨", "🟧", "🟥", "🟪"]);
     mocks.sendMessage.mockResolvedValueOnce({ message_id: 50 });
-    mocks.createSession.mockReturnValue({ sid: 2, suffix: 200002, name: "Worker", color: "🟦", sessionsActive: 2 });
+    mocks.createSession.mockReturnValue({ sid: 2, suffix: 200002, name: "Worker", color: "🦄", sessionsActive: 2 });
 
     let hookFn: ((evt: unknown) => void) | undefined;
     mocks.registerCallbackHook.mockImplementation((_id: number, fn: (evt: unknown) => void) => {
@@ -2273,7 +2031,7 @@ describe("session_start tool", () => {
     expect(mocks.deleteMessage).not.toHaveBeenCalled();
 
     // Now approve — the hook should have been re-registered
-    hookFn!({ content: { data: "approve_0", qid: "q1" } });
+    hookFn!({ content: { data: "approve_yes", qid: "q1" } });
     const result = parseResult(await callPromise);
 
     expect(result.sid).toBe(2);
@@ -2283,9 +2041,8 @@ describe("session_start tool", () => {
     mocks.pendingCount.mockReturnValue(0);
     mocks.activeSessionCount.mockReturnValue(1);
     mocks.listSessions.mockReturnValue([{ sid: 1, name: "Primary", createdAt: "2026-03-17" }]);
-    mocks.getAvailableColors.mockReturnValue(["🟦", "🟩", "🟨", "🟧", "🟥", "🟪"]);
     mocks.sendMessage.mockResolvedValueOnce({ message_id: 50 });
-    mocks.createSession.mockReturnValue({ sid: 2, suffix: 200002, name: "Worker", color: "🟦", sessionsActive: 2 });
+    mocks.createSession.mockReturnValue({ sid: 2, suffix: 200002, name: "Worker", color: "🦄", sessionsActive: 2 });
 
     let hookFn: ((evt: unknown) => void) | undefined;
     mocks.registerCallbackHook.mockImplementation((_id: number, fn: (evt: unknown) => void) => {
@@ -2306,12 +2063,12 @@ describe("session_start tool", () => {
       expect.objectContaining({ reply_markup: expect.any(Object) }),
     );
     const editedKeyboard = (mocks.editMessageReplyMarkup.mock.calls[0] as unknown[])[2] as Record<string, unknown>;
-    const row3 = ((editedKeyboard.reply_markup as Record<string, unknown>).inline_keyboard as unknown[][])[2] as Array<Record<string, unknown>>;
+    const row2 = ((editedKeyboard.reply_markup as Record<string, unknown>).inline_keyboard as unknown[][])[1] as Array<Record<string, unknown>>;
     // Toggle button should now show ON state
-    expect(row3[0].text).toBe("✅ Delegated");
+    expect(row2[0].text).toBe("✅ Delegated");
 
     // Approve to finish
-    hookFn!({ content: { data: "approve_0", qid: "q1" } });
+    hookFn!({ content: { data: "approve_yes", qid: "q1" } });
     await callPromise;
   });
 
@@ -2319,9 +2076,8 @@ describe("session_start tool", () => {
     mocks.pendingCount.mockReturnValue(0);
     mocks.activeSessionCount.mockReturnValue(1);
     mocks.listSessions.mockReturnValue([{ sid: 1, name: "Primary", createdAt: "2026-03-17" }]);
-    mocks.getAvailableColors.mockReturnValue(["🟦", "🟩", "🟨", "🟧", "🟥", "🟪"]);
     mocks.sendMessage.mockResolvedValueOnce({ message_id: 50 });
-    mocks.createSession.mockReturnValue({ sid: 2, suffix: 200002, name: "Worker", color: "🟦", sessionsActive: 2 });
+    mocks.createSession.mockReturnValue({ sid: 2, suffix: 200002, name: "Worker", color: "🦄", sessionsActive: 2 });
 
     let hookFn: ((evt: unknown) => void) | undefined;
     mocks.registerCallbackHook.mockImplementation((_id: number, fn: (evt: unknown) => void) => {
@@ -2349,7 +2105,7 @@ describe("session_start tool", () => {
 
     expect(editedCount).toBe(initialCount);
 
-    hookFn!({ content: { data: "approve_0", qid: "q1" } });
+    hookFn!({ content: { data: "approve_yes", qid: "q1" } });
     await callPromise;
   });
 });

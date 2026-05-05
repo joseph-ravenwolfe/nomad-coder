@@ -214,13 +214,16 @@ describe("approve_agent tool", () => {
       });
     });
 
-    it("falls back to first palette color when getAvailableColors returns empty", async () => {
+    it("returns empty string when pool is empty (synthetic edge case)", async () => {
+      // In production getSessionEmojiPool() always returns a non-empty list
+      // (config override or hardcoded default). Tests can force-empty to
+      // verify the fallback path doesn't crash.
       mocks.getAvailableColors.mockReturnValue([]);
       const result = parseResult(await call({ token: VALID_TOKEN, ticket: VALID_TICKET }));
-      expect(result.color).toBe("🟦");
+      expect(result.color).toBe("");
     });
 
-    it("uses colorHint directly when no explicit color is given", async () => {
+    it("uses colorHint directly when no explicit color is given (and hint is in the pool)", async () => {
       mocks.getPendingApproval.mockReturnValue({
         name: "Worker",
         resolve: mockResolve,
@@ -229,7 +232,8 @@ describe("approve_agent tool", () => {
       });
       const result = parseResult(await call({ token: VALID_TOKEN, ticket: VALID_TICKET }));
       expect(result.color).toBe("🟩");
-      expect(mocks.getAvailableColors).not.toHaveBeenCalled();
+      // Pool is fetched once for hint validation — that's expected.
+      expect(mocks.getAvailableColors).toHaveBeenCalled();
       expect(mockResolve).toHaveBeenCalledWith({ approved: true, color: "🟩", forceColor: true });
     });
 
@@ -240,15 +244,14 @@ describe("approve_agent tool", () => {
         registeredAt: Date.now(),
         colorHint: "🟩",
       });
-      // Simulate 🟩 in-use — should NOT affect the resolved color
+      // The mocked pool includes 🟩 — sessions may share tags so the hint
+      // resolves regardless of in-use state.
       mocks.getAvailableColors.mockReturnValue(["🟦", "🟧", "🟩"]);
       const result = parseResult(await call({ token: VALID_TOKEN, ticket: VALID_TICKET }));
       expect(result.color).toBe("🟩");
-      expect(mocks.getAvailableColors).not.toHaveBeenCalled();
     });
 
-    it("passes undefined colorHint to getAvailableColors when pending has no hint", async () => {
-      // pending.colorHint is undefined — getAvailableColors should still be called (with no args)
+    it("falls back to first pool entry when pending has no hint", async () => {
       mocks.getPendingApproval.mockReturnValue({
         name: "Worker",
         resolve: mockResolve,
@@ -257,7 +260,7 @@ describe("approve_agent tool", () => {
       });
       mocks.getAvailableColors.mockReturnValue(["🟦", "🟧"]);
       const result = parseResult(await call({ token: VALID_TOKEN, ticket: VALID_TICKET }));
-      expect(mocks.getAvailableColors).toHaveBeenCalledWith();
+      expect(mocks.getAvailableColors).toHaveBeenCalled();
       expect(result.color).toBe("🟦");
     });
 

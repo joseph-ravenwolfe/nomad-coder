@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { dlog } from "./debug-log.js";
 import { recordNonToolEvent } from "./trace-log.js";
 import { pickRotationVoice, setSessionVoiceForSid } from "./voice-state.js";
+import { getSessionEmojis } from "./config.js";
 
 // ── Watch file (heartbeat) location ────────────────────────
 //
@@ -26,9 +27,34 @@ export function getWatchFilePath(sid: number): string {
 
 // ── Types ──────────────────────────────────────────────────
 
-/** Emoji color squares assigned to sessions in rainbow order. */
-export const COLOR_PALETTE = ["🟦", "🟩", "🟨", "🟧", "🟥", "🟪"] as const;
-export type SessionColor = (typeof COLOR_PALETTE)[number];
+/**
+ * Pool of emojis automatically assigned to sessions as visual identity tags.
+ * The `color` field on Session was originally a 6-color rainbow palette
+ * (🟦🟩🟨🟧🟥🟪); since v8 it holds any emoji from this 20-entry pool —
+ * picked randomly from currently-unused entries on session creation. The
+ * field name "color" is kept for backward compatibility with tool responses.
+ *
+ * The default pool can be overridden via mcp-config.json `sessionEmojis`
+ * (string[]). Pool size > 6 means collisions are rare in normal usage.
+ */
+const DEFAULT_EMOJI_POOL: readonly string[] = [
+  "🦄", "🐺", "👻", "🐶", "🐅", "🐦‍🔥", "🐊", "🦋", "🌸", "🦞",
+  "🏆", "🔮", "🚄", "🏎️", "🛩️", "🚀", "🪐", "☄️", "⚔️", "🧬",
+];
+
+/** Returns the active session-tag pool — config override or hardcoded default. */
+function getSessionEmojiPool(): readonly string[] {
+  const override = getSessionEmojis();
+  return override.length > 0 ? override : DEFAULT_EMOJI_POOL;
+}
+
+/**
+ * @deprecated Kept for backward compatibility. The export now points to the
+ * full session-tag pool, not the 6-color rainbow. Use `getSessionEmojiPool()`
+ * for current behavior. Used by some legacy validation paths.
+ */
+export const COLOR_PALETTE = DEFAULT_EMOJI_POOL;
+export type SessionColor = string;
 
 export interface Session {
   sid: number;
@@ -108,90 +134,67 @@ const SUFFIX_MAX = 999_999;
 let _nextId = 1;
 const _sessions = new Map<number, Session>();
 
-/**
- * LRU color queue. Index 0 = least recently used (freshest for next assignment);
- * last index = most recently used. Initialized to palette definition order —
- * all colors are equally "never used" at startup.
- */
-let _colorLRU: string[] = [...COLOR_PALETTE];
-
-/** Colors that have been assigned at least once since last reset. */
-const _everUsedColors = new Set<string>();
-
 // ── Helpers ────────────────────────────────────────────────
 
 function generateSuffix(): number {
   return randomInt(SUFFIX_MIN, SUFFIX_MAX + 1);
 }
 
-/** Move a color to the MRU (far right) position in the LRU queue and mark it as ever-used. */
-function recordColorUse(color: string): void {
-  _everUsedColors.add(color);
-  const idx = _colorLRU.indexOf(color);
-  if (idx !== -1) {
-    _colorLRU.splice(idx, 1);
-    _colorLRU.push(color);
-  }
+/** Pick a uniformly random element from a non-empty array. */
+function pickRandom<T>(arr: readonly T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
 }
 
 /**
- * Pick a color from the palette.
+ * Pick a session-tag emoji.
  *
- * - `force = true` (operator explicit tap): assign `requested` unconditionally —
- *   even if it is already held by another active session.
- * - `force = false` (agent suggestion / auto): use `requested` only when it is
- *   free; otherwise auto-assign the least-recently-used free color (leftmost in
- *   the LRU queue). If all 6 colors are taken, wrap around by session count.
- *
- * Records the assigned color in the LRU queue regardless of how it was chosen.
+ * - `force = true` (legacy operator explicit tap): use `requested` unconditionally,
+ *   even if another session already holds it. Retained for the rare case where
+ *   an external caller needs to force a specific tag.
+ * - `force = false` (default): if `requested` is in the pool and unused, use it.
+ *   Otherwise pick a uniformly random unused emoji from the pool. If every
+ *   pool entry is in use (>20 active sessions), pick uniformly random from
+ *   the full pool — collisions are tolerated, the operator just sees two
+ *   sessions sharing an emoji until one closes.
  */
 function assignColor(requested?: string, force = false): string {
-  const usedColors = new Set([..._sessions.values()].map((s) => s.color));
-  let color: string;
-  if (requested && (COLOR_PALETTE as readonly string[]).includes(requested)) {
-    if (force || !usedColors.has(requested)) {
-      color = requested;
-    } else {
-      // Suggested color is in use and not forced — fall back to LRU auto-assign
-      color = _colorLRU.find(c => !usedColors.has(c))
-        ?? COLOR_PALETTE[_sessions.size % COLOR_PALETTE.length];
+  const pool = getSessionEmojiPool();
+  const usedTags = new Set([..._sessions.values()].map((s) => s.color));
+
+  if (requested) {
+    if (force) return requested;
+    if ((pool as readonly string[]).includes(requested) && !usedTags.has(requested)) {
+      return requested;
     }
-  } else {
-    // No valid suggestion — auto-assign least-recently-used free color
-    color = _colorLRU.find(c => !usedColors.has(c))
-      ?? COLOR_PALETTE[_sessions.size % COLOR_PALETTE.length];
+    // Hint not in pool, or in pool but already taken — fall through to random.
   }
-  recordColorUse(color);
-  return color;
+
+  const free = pool.filter((c) => !usedTags.has(c));
+  return free.length > 0 ? pickRandom(free) : pickRandom(pool);
 }
 
 // ── Public API ─────────────────────────────────────────────
 
 /**
- * Returns all palette colors sorted so that **currently unused colors appear
- * first** (LRU order within group) and **currently in-use colors appear last**
- * (LRU order within group).
+ * Returns all session-tag emojis sorted so that **currently unused entries
+ * appear first** and **currently in-use entries appear last**. If `hint` is a
+ * valid pool entry, it is always promoted to index 0.
  *
- * If `hint` is a valid palette color, it is always moved to index 0 (first
- * position) regardless of whether it is currently in use by another session.
- *
- * All 6 colors are always returned regardless of current active-session usage.
+ * Used historically by the approval dialog (color picker keyboard); since
+ * v8 the picker is gone (auto-assignment), so this remains primarily for
+ * legacy `approve_agent` paths and tests.
  */
 export function getAvailableColors(hint?: string): string[] {
-  const usedColors = new Set([..._sessions.values()].map((s) => s.color));
-  const allColors = [..._colorLRU]; // LRU order: [0]=least-recently-used … [5]=most-recently-used
+  const pool = getSessionEmojiPool();
+  const usedTags = new Set([..._sessions.values()].map((s) => s.color));
 
-  // Sort: unused colors first (LRU order within group), in-use colors last
   const sorted = [
-    ...allColors.filter(c => !usedColors.has(c)),
-    ...allColors.filter(c => usedColors.has(c)),
+    ...pool.filter((c) => !usedTags.has(c)),
+    ...pool.filter((c) => usedTags.has(c)),
   ];
 
-  if (hint && (COLOR_PALETTE as readonly string[]).includes(hint)) {
-    // Always promote hint to position 0 — this is the agent's requested color
-    // and should be the most prominent button in the approval dialog.
-    // In-use hints are still promoted (sessions may share colors).
-    return [hint, ...sorted.filter(c => c !== hint)];
+  if (hint && (pool as readonly string[]).includes(hint)) {
+    return [hint, ...sorted.filter((c) => c !== hint)];
   }
   return sorted;
 }
@@ -480,13 +483,11 @@ export function getActiveSession(): number {
   return _activeSessionId;
 }
 
-/** Clear all sessions, reset the ID counter, and reset the color LRU queue. Test-only. */
+/** Clear all sessions and reset the ID counter. Test-only. */
 export function resetSessions(): void {
   _sessions.clear();
   _nextId = 1;
   _activeSessionId = 0;
-  _colorLRU = [...COLOR_PALETTE];
-  _everUsedColors.clear();
 }
 
 /** Store the message ID of the session's online announcement for later unpin. */
@@ -546,15 +547,16 @@ export function renameSession(
 }
 
 /**
- * Update a session's color. Returns the assigned color on success or `null`
- * if the session does not exist or the color is not a valid palette entry.
+ * Update a session's tag emoji. Returns the assigned value on success or
+ * `null` if the session does not exist or the value is not in the active
+ * session-tag pool.
  */
 export function setSessionColor(sid: number, color: string): string | null {
-  if (!(COLOR_PALETTE as readonly string[]).includes(color)) return null;
+  const pool = getSessionEmojiPool();
+  if (!(pool as readonly string[]).includes(color)) return null;
   const session = _sessions.get(sid);
   if (!session) return null;
   session.color = color;
-  recordColorUse(color);
   dlog("session", `color sid=${sid} → ${color}`);
   return color;
 }

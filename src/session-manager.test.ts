@@ -124,57 +124,82 @@ describe("voice rotation on createSession", () => {
   });
 });
 
-describe("color assignment", () => {
-  it("auto-assigns palette colors in order", () => {
+describe("color assignment (session-tag emoji pool)", () => {
+  // Since v8: assignment is random-from-unused over a 20-emoji pool,
+  // not deterministic-LRU over 6 rainbow squares. Tests assert pool
+  // membership and collision-free behaviour rather than exact values.
+  const POOL = COLOR_PALETTE; // alias kept for backward-compat exports
+
+  it("auto-assigned tag is always a member of the active pool", () => {
     const s1 = createSession("A");
     const s2 = createSession("B");
     const s3 = createSession("C");
-    expect(s1.color).toBe(COLOR_PALETTE[0]); // 🟦
-    expect(s2.color).toBe(COLOR_PALETTE[1]); // 🟩
-    expect(s3.color).toBe(COLOR_PALETTE[2]); // 🟨
+    expect(POOL).toContain(s1.color);
+    expect(POOL).toContain(s2.color);
+    expect(POOL).toContain(s3.color);
   });
 
-  it("accepts a valid unoccupied color hint", () => {
-    const s = createSession("A", "🟥");
-    expect(s.color).toBe("🟥");
+  it("does not assign duplicate tags across active sessions while pool size > active count", () => {
+    const tags = new Set<string>();
+    for (let i = 0; i < 5; i++) {
+      tags.add(createSession(`S${i}`).color);
+    }
+    expect(tags.size).toBe(5); // 5 unique
   });
 
-  it("falls back to auto-assign when requested color is already taken", () => {
-    createSession("A", "🟦"); // takes 🟦
-    const s2 = createSession("B", "🟦"); // 🟦 taken → auto-assign next = 🟩
-    expect(s2.color).toBe("🟩");
+  it("accepts a valid unoccupied tag hint", () => {
+    const hint = POOL[7];
+    const s = createSession("A", hint);
+    expect(s.color).toBe(hint);
   });
 
-  it("wraps around when all 6 palette colors are in use", () => {
-    for (let i = 0; i < 6; i++) createSession(`S${i}`);
-    const s7 = createSession("S7");
-    // 6 sessions in map → size % 6 === 0 → COLOR_PALETTE[0]
-    expect(s7.color).toBe(COLOR_PALETTE[0]);
+  it("falls back to a random unused tag when requested hint is already taken", () => {
+    const hint = POOL[0];
+    createSession("A", hint); // takes hint
+    const s2 = createSession("B", hint); // hint taken → fall back
+    expect(s2.color).not.toBe(hint);
+    expect(POOL).toContain(s2.color);
   });
 
-  it("forceColor=true assigns the requested color even when already in use", () => {
-    createSession("A", "🟦"); // 🟦 now in use
-    const s2 = createSession("B", "🟦", true); // force: operator explicitly chose 🟦
-    expect(s2.color).toBe("🟦");
+  it("falls back when requested hint is not in the pool", () => {
+    const s = createSession("A", "🔵"); // not in pool
+    expect(POOL).toContain(s.color);
   });
 
-  it("forceColor=false (default) falls back when requested color is in use", () => {
-    createSession("A", "🟦"); // 🟦 now in use
-    const s2 = createSession("B", "🟦"); // no force: fall back to LRU auto-assign
-    expect(s2.color).not.toBe("🟦");
+  it("wraps with collision tolerance when all pool entries are in use", () => {
+    // Take every entry in the pool.
+    for (let i = 0; i < POOL.length; i++) createSession(`S${i}`);
+    const overflow = createSession("OVERFLOW");
+    // Overflow session still gets a valid tag from the pool — just shared.
+    expect(POOL).toContain(overflow.color);
   });
 
-  it("listSessions includes color", () => {
+  it("forceColor=true assigns the requested tag even when already in use", () => {
+    const tag = POOL[0];
+    createSession("A", tag); // tag now in use
+    const s2 = createSession("B", tag, true); // force
+    expect(s2.color).toBe(tag);
+  });
+
+  it("forceColor=false (default) falls back when requested tag is in use", () => {
+    const tag = POOL[0];
+    createSession("A", tag);
+    const s2 = createSession("B", tag);
+    expect(s2.color).not.toBe(tag);
+  });
+
+  it("listSessions includes a pool tag for each session", () => {
     createSession("A");
     createSession("B");
     const list = listSessions();
-    expect(list[0].color).toBe(COLOR_PALETTE[0]);
-    expect(list[1].color).toBe(COLOR_PALETTE[1]);
+    expect(POOL).toContain(list[0].color);
+    expect(POOL).toContain(list[1].color);
+    expect(list[0].color).not.toBe(list[1].color);
   });
 
-  it("getSession includes color", () => {
+  it("getSession includes a pool tag", () => {
     const s = createSession("A");
-    expect(getSession(s.sid)?.color).toBe(COLOR_PALETTE[0]);
+    expect(POOL).toContain(getSession(s.sid)?.color);
   });
 });
 
@@ -431,137 +456,53 @@ describe("health tracking", () => {
 });
 
 describe("getAvailableColors", () => {
-  it("returns all 6 palette colors when no sessions exist", () => {
-    const colors = getAvailableColors();
-    expect(colors).toEqual([...COLOR_PALETTE]);
+  // The function still exists for legacy callers (rename, approve_agent).
+  // Semantics: returns the full pool with currently-unused entries first,
+  // currently-in-use last. A valid hint is promoted to index 0.
+  const POOL = COLOR_PALETTE;
+
+  it("returns the full pool when no sessions exist", () => {
+    const tags = getAvailableColors();
+    expect(tags).toEqual([...POOL]);
   });
 
-  it("orders colors by LRU: never-used before recently-used", () => {
-    createSession("A"); // takes 🟦 (LRU moves 🟦 to end)
-    createSession("B"); // takes 🟩 (LRU moves 🟩 to end)
-    const colors = getAvailableColors();
-    expect(colors).toHaveLength(6);
-    // Never-used colors must appear before recently-used ones
-    const freshIndex = colors.indexOf("🟨"); // never used → toward left
-    const usedIndex1 = colors.indexOf("🟦");  // used first → near end
-    const usedIndex2 = colors.indexOf("🟩");  // used second → rightmost
-    expect(freshIndex).toBeLessThan(usedIndex1);
-    expect(freshIndex).toBeLessThan(usedIndex2);
-    expect(usedIndex1).toBeLessThan(usedIndex2); // 🟦 used before 🟩, so 🟩 is more recent
-  });
-
-  it("unused colors (no active session) appear before in-use colors", () => {
-    // 🟦 is in use by an active session; all others are unused
-    createSession("A", "🟦");
-    const colors = getAvailableColors();
-    expect(colors).toHaveLength(6);
-    // 🟦 is in-use → must appear after all unused colors
-    const inUseIndex = colors.indexOf("🟦");
-    for (const c of COLOR_PALETTE) {
-      if (c !== "🟦") {
-        expect(colors.indexOf(c)).toBeLessThan(inUseIndex);
+  it("unused entries appear before in-use entries", () => {
+    const inUseTag = POOL[3];
+    createSession("A", inUseTag);
+    const tags = getAvailableColors();
+    expect(tags).toHaveLength(POOL.length);
+    const inUseIdx = tags.indexOf(inUseTag);
+    // every other pool entry should appear before the in-use one
+    for (const c of POOL) {
+      if (c !== inUseTag) {
+        expect(tags.indexOf(c)).toBeLessThan(inUseIdx);
       }
     }
   });
 
-  it("closing a session moves its color back to the unused group", () => {
-    const s = createSession("A", "🟦"); // 🟦 in-use
-    const colorsBefore = getAvailableColors();
-    // 🟦 should be in the in-use group (last position: most-recently-used and in-use)
-    expect(colorsBefore[colorsBefore.length - 1]).toBe("🟦");
-    closeSession(s.sid); // 🟦 no longer in-use (but LRU history unchanged)
-    const colorsAfter = getAvailableColors();
-    // 🟦 was closed → it's now in the unused group
-    // All colors are now unused; 🟦 is the most-recently-used among them → rightmost
-    expect(colorsAfter[colorsAfter.length - 1]).toBe("🟦");
-    expect(colorsAfter).toHaveLength(6);
+  it("returns the full pool when all entries are taken", () => {
+    for (let i = 0; i < POOL.length; i++) createSession(`S${i}`);
+    const tags = getAvailableColors();
+    expect(tags).toHaveLength(POOL.length);
+    expect(new Set(tags)).toEqual(new Set(POOL));
   });
 
-  it("when all colors are in use, order is pure LRU (no unused group)", () => {
-    for (let i = 0; i < 6; i++) createSession(`S${i}`);
-    const colors = getAvailableColors();
-    expect(colors).toHaveLength(6);
-    // All colors in use → no unused group; order is LRU
-    expect(new Set(colors)).toEqual(new Set(COLOR_PALETTE));
-    // Last color is most-recently-used (COLOR_PALETTE[5] = 🟪, assigned 6th)
-    expect(colors[colors.length - 1]).toBe(COLOR_PALETTE[5]);
+  it("a valid hint is promoted to index 0 (unused)", () => {
+    const tags = getAvailableColors(POOL[5]);
+    expect(tags[0]).toBe(POOL[5]);
+    expect(tags).toHaveLength(POOL.length);
   });
 
-  it("never-used hint placed at far left", () => {
-    const colors = getAvailableColors("🟩");
-    expect(colors[0]).toBe("🟩");
-    expect(colors).toHaveLength(6);
+  it("a valid in-use hint is still promoted to index 0", () => {
+    const tag = POOL[2];
+    createSession("A", tag);
+    const tags = getAvailableColors(tag);
+    expect(tags[0]).toBe(tag);
   });
 
-  it("in-use hint is still promoted to position 0 (sessions may share colors)", () => {
-    createSession("A", "🟦"); // 🟦 in-use and most-recently-used
-    const colors = getAvailableColors("🟦");
-    expect(colors).toHaveLength(6);
-    // 🟦 is in-use but hint still forces it to position 0 — the agent's
-    // requested color must always be the first button in the approval dialog.
-    expect(colors[0]).toBe("🟦");
-  });
-
-  it("hint that is not in palette is ignored", () => {
-    const colors = getAvailableColors("🔵");
-    expect(colors).toEqual([...COLOR_PALETTE]);
-  });
-
-  it("returns all 6 when all are taken", () => {
-    for (let i = 0; i < 6; i++) createSession(`S${i}`);
-    const colors = getAvailableColors();
-    expect(colors).toHaveLength(6);
-    // All colors present, though order reflects LRU
-    expect(new Set(colors)).toEqual(new Set(COLOR_PALETTE));
-  });
-
-  it("never-used hint placed first even when 5 others are used", () => {
-    // Take 5 colors, leave only 🟪 never-used
-    createSession("A", "🟦");
-    createSession("B", "🟩");
-    createSession("C", "🟨");
-    createSession("D", "🟧");
-    createSession("E", "🟥");
-    const colors = getAvailableColors("🟪");
-    expect(colors).toHaveLength(6);
-    expect(colors[0]).toBe("🟪"); // never-used hint goes first
-    expect(colors.slice(1)).toEqual(expect.arrayContaining(["🟦", "🟩", "🟨", "🟧", "🟥"]));
-  });
-
-  it("assignment order is reflected in LRU position within the in-use group", () => {
-    // Assign in a non-palette order; verify LRU reflects assignment recency within in-use group
-    createSession("A", "🟥"); // 🟥 in-use, used first
-    createSession("B", "🟨"); // 🟨 in-use, used second (most recent)
-    const colors = getAvailableColors();
-    // 🟥 and 🟨 are both in-use → appear last; 🟨 more recent → rightmost
-    expect(colors[colors.length - 1]).toBe("🟨");
-    expect(colors[colors.length - 2]).toBe("🟥");
-    // Never-used + not-in-use colors come before both
-    const unusedGroup = ["🟦", "🟩", "🟧", "🟪"];
-    for (const c of unusedGroup) {
-      expect(colors.indexOf(c)).toBeLessThan(colors.indexOf("🟥"));
-    }
-  });
-
-  it("closing a session does not change LRU order — all colors always present", () => {
-    const s = createSession("A", "🟦"); // 🟦 → MRU
-    closeSession(s.sid);
-    const colors = getAvailableColors();
-    // 🟦 session closed → no longer in-use; now in unused group at rightmost (MRU within unused)
-    expect(colors[colors.length - 1]).toBe("🟦");
-    expect(colors).toHaveLength(6);
-  });
-
-  it("two active sessions: their colors are in in-use group; rest are in unused group", () => {
-    createSession("A", "🟨"); // 🟨 in-use
-    createSession("B", "🟪"); // 🟪 in-use, more recent
-    const colors = getAvailableColors();
-    const unusedColors = ["🟦", "🟩", "🟧", "🟥"];
-    const inUseColors = ["🟨", "🟪"];
-    // All unused colors appear before all in-use colors
-    const maxUnusedIdx = Math.max(...unusedColors.map(c => colors.indexOf(c)));
-    const minInUseIdx = Math.min(...inUseColors.map(c => colors.indexOf(c)));
-    expect(maxUnusedIdx).toBeLessThan(minInUseIdx);
+  it("hint not in the pool is ignored", () => {
+    const tags = getAvailableColors("🔵");
+    expect(tags).toEqual([...POOL]);
   });
 });
 
