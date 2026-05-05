@@ -25,6 +25,8 @@ import { fetchVoiceList, isTtsEnabled } from "./tts.js";
 import { getSessionSpeed } from "./voice-state.js";
 import { activateAutoApproveOne, activateAutoApproveTimed, cancelAutoApprove, getAutoApproveState } from "./auto-approve.js";
 import { isDelegationEnabled, setDelegationEnabled } from "./agent-approval.js";
+import { getRecentPaths, addRecentPath } from "./recent-paths.js";
+import { isCcLaunchConfigured, launchCcInGhostty, type CcLaunchError } from "./cc-launch.js";
 
 
 const require = createRequire(import.meta.url);
@@ -54,7 +56,7 @@ import { closeSessionById } from "./session-teardown.js";
 // ---------------------------------------------------------------------------
 
 /** Maps from message_id → panel type so we can route callback_queries back to us. */
-const _activePanels = new Map<number, "logging" | "voice" | "voice-sample" | "approval" | "governor" | "approve" | "session" | "log">();
+const _activePanels = new Map<number, "logging" | "voice" | "voice-sample" | "approval" | "governor" | "approve" | "session" | "log" | "cc">();
 
 // ---------------------------------------------------------------------------
 // Operator approval gate — system-level confirmation for sensitive tool calls
@@ -249,6 +251,7 @@ export const BUILT_IN_COMMANDS = [
   { command: "shutdown", description: "Shut down the MCP server" },
   { command: "approve", description: "Pre-approve session requests" },
   { command: "session", description: "Manage active sessions" },
+  { command: "cc", description: "Launch a Claude Code session in Ghostty" },
 ] as const;
 
 const _builtInCommandNames = new Set<string>([...BUILT_IN_COMMANDS.map(c => c.command), "primary"]);
@@ -287,7 +290,8 @@ export function isInternalTimelineEvent(evt: Omit<TimelineEvent, "_update">): bo
       evt.content.data.startsWith("approve_") ||
       evt.content.data.startsWith("governor:") ||
       evt.content.data.startsWith("session:") ||
-      evt.content.data.startsWith("log:")
+      evt.content.data.startsWith("log:") ||
+      evt.content.data.startsWith("cc:")
     );
   }
   return false;
@@ -299,6 +303,29 @@ export function isInternalTimelineEvent(evt: Omit<TimelineEvent, "_update">): bo
  * forwarded to the agent as normal.
  */
 export async function handleIfBuiltIn(update: Update): Promise<boolean> {
+  // ── Pending /cc path-reply intercept ────────────────────────────────────
+  // The "Other..." button on the /cc panel sets a short-lived flag that
+  // captures the operator's NEXT plain-text message as the launch path.
+  // We detect "real" slash commands via the `bot_command` MessageEntity
+  // (NOT a leading `/` heuristic) so Unix paths like `/Users/me/...` are
+  // captured correctly, while a deliberate /version still bails out.
+  if (update.message?.text && _pendingCcInputUntilMs !== undefined) {
+    if (Date.now() > _pendingCcInputUntilMs) {
+      // Expired — drop the flag, let the message flow to normal handling.
+      _pendingCcInputUntilMs = undefined;
+    } else {
+      const ents = update.message.entities ?? [];
+      const isBotCommand = ents.some(e => e.type === "bot_command" && e.offset === 0);
+      if (!isBotCommand) {
+        _pendingCcInputUntilMs = undefined;
+        await runCcLaunch(update.message.text.trim());
+        return true;
+      }
+      // Real slash command — clear pending state but fall through.
+      _pendingCcInputUntilMs = undefined;
+    }
+  }
+
   // ── Built-in command message ────────────────────────────────────────────
   if (update.message?.text) {
     const entities = update.message.entities ?? [];
@@ -346,6 +373,13 @@ export async function handleIfBuiltIn(update: Update): Promise<boolean> {
       }
       if (raw === "log") {
         await handleLoggingCommand();
+        return true;
+      }
+      if (raw === "cc") {
+        // Inline-arg shortcut: `/cc /path/to/dir` runs immediately.
+        const fullText = update.message.text;
+        const argText = fullText.slice(cmd.length).trim();
+        await handleCcCommand(argText);
         return true;
       }
     }
@@ -404,6 +438,12 @@ export async function handleIfBuiltIn(update: Update): Promise<boolean> {
           msgId,
           update.callback_query.data ?? "",
         );
+      } else if (panelType === "cc") {
+        await handleCcCallback(
+          update.callback_query.id,
+          msgId,
+          update.callback_query.data ?? "",
+        );
       }
       return true;
     }
@@ -431,6 +471,10 @@ export async function handleIfBuiltIn(update: Update): Promise<boolean> {
       return true;
     }
     if (data.startsWith("log:")) {
+      try { await getApi().answerCallbackQuery(update.callback_query.id, { text: "This panel has expired." }); } catch { /* ignore */ }
+      return true;
+    }
+    if (data.startsWith("cc:")) {
       try { await getApi().answerCallbackQuery(update.callback_query.id, { text: "This panel has expired." }); } catch { /* ignore */ }
       return true;
     }
@@ -1587,4 +1631,176 @@ export function resetBuiltInCommandsForTest(): void {
   setAutoDumpThreshold(null);
   _dumpCursor = 0;
   cancelAutoApprove();
+  _pendingCcInputUntilMs = undefined;
+  _ccPanelRecents.clear();
+}
+
+// ---------------------------------------------------------------------------
+// /cc — launch a Claude Code session in Ghostty
+//
+// Two entry shapes:
+//   1. `/cc /path/to/dir` — direct launch, validates and spawns the script.
+//   2. `/cc` (no args) — opens a panel with recent paths as quick-pick
+//      buttons plus an "Other..." button that captures the next plain-text
+//      message as the path (with a 60s expiry).
+//
+// Auth: the bridge already filters all incoming updates by ALLOWED_USER_ID
+// (see filterAllowedUpdates), so any /cc handler call is implicitly
+// operator-only. No additional auth check needed here.
+//
+// Configuration: requires CC_LAUNCH_SCRIPT to point at an absolute-path
+// AppleScript that takes one positional `target-dir` argument. Returns a
+// configuration error otherwise.
+// ---------------------------------------------------------------------------
+
+const CC_INPUT_TIMEOUT_MS = 60_000;
+let _pendingCcInputUntilMs: number | undefined = undefined;
+
+async function handleCcCommand(argText: string): Promise<void> {
+  const chatId = resolveChat();
+  if (typeof chatId !== "number") return;
+  const api = getApi();
+
+  if (!isCcLaunchConfigured()) {
+    try {
+      await api.sendMessage(chatId,
+        "⚠️ */cc not configured*\n\nSet `CC_LAUNCH_SCRIPT` in the bridge environment to an AppleScript path (e.g. `/Users/you/bin/ghostty-cc-tab.applescript`).",
+        { parse_mode: "Markdown", _skipHeader: true } as Record<string, unknown>,
+      );
+    } catch { /* best-effort */ }
+    return;
+  }
+
+  // Inline arg — launch immediately.
+  if (argText.length > 0) {
+    await runCcLaunch(argText);
+    return;
+  }
+
+  // No arg — show panel.
+  const recents = getRecentPaths();
+  const text = recents.length > 0
+    ? "*Launch Claude Code*\nPick a recent path or tap Other… to enter a new one."
+    : "*Launch Claude Code*\nNo recent paths yet — tap Other… to enter one.";
+
+  // Recent-path buttons: one per row so long paths don't get truncated.
+  // Callback data is `cc:r:<index>` (resolved against `recents` snapshot
+  // captured in module state at panel creation time — see _ccPanelRecents).
+  const recentRows = recents.map((path, idx) => [
+    { text: truncatePath(path, 60), callback_data: `cc:r:${idx}` },
+  ]);
+  const otherRow = [
+    { text: "📁 Other…", callback_data: "cc:other" },
+    { text: "✖ Dismiss", callback_data: "cc:dismiss" },
+  ];
+
+  let msg: { message_id: number };
+  try {
+    msg = await api.sendMessage(chatId, text, {
+      parse_mode: "Markdown",
+      _skipHeader: true,
+      reply_markup: { inline_keyboard: [...recentRows, otherRow] },
+    } as Record<string, unknown>);
+  } catch { return; }
+
+  markInternalMessage(msg.message_id);
+  _activePanels.set(msg.message_id, "cc");
+  _ccPanelRecents.set(msg.message_id, recents);
+}
+
+/** Snapshot of `getRecentPaths()` at panel creation time, keyed by panel msg ID. */
+const _ccPanelRecents = new Map<number, string[]>();
+
+async function handleCcCallback(
+  callbackQueryId: string,
+  panelMsgId: number,
+  data: string,
+): Promise<void> {
+  const chatId = resolveChat();
+  if (typeof chatId !== "number") return;
+  const api = getApi();
+
+  try { await api.answerCallbackQuery(callbackQueryId); } catch { /* ignore */ }
+
+  if (data === "cc:dismiss") {
+    _activePanels.delete(panelMsgId);
+    _ccPanelRecents.delete(panelMsgId);
+    await api.editMessageText(chatId, panelMsgId,
+      "*Launch Claude Code → Dismissed*",
+      { parse_mode: "Markdown", _skipHeader: true, reply_markup: { inline_keyboard: [] } } as Record<string, unknown>,
+    ).catch(() => {/* non-fatal */});
+    return;
+  }
+
+  if (data === "cc:other") {
+    _activePanels.delete(panelMsgId);
+    _ccPanelRecents.delete(panelMsgId);
+    _pendingCcInputUntilMs = Date.now() + CC_INPUT_TIMEOUT_MS;
+    await api.editMessageText(chatId, panelMsgId,
+      "*Launch Claude Code → Other…*\nReply with the absolute path to launch.\n_(Times out in 60s — send a slash-command to cancel.)_",
+      { parse_mode: "Markdown", _skipHeader: true, reply_markup: { inline_keyboard: [] } } as Record<string, unknown>,
+    ).catch(() => {/* non-fatal */});
+    return;
+  }
+
+  if (data.startsWith("cc:r:")) {
+    const idx = Number.parseInt(data.slice("cc:r:".length), 10);
+    const recents = _ccPanelRecents.get(panelMsgId) ?? [];
+    const path = Number.isFinite(idx) ? recents[idx] : undefined;
+    _activePanels.delete(panelMsgId);
+    _ccPanelRecents.delete(panelMsgId);
+
+    if (!path) {
+      await api.editMessageText(chatId, panelMsgId,
+        "*Launch Claude Code → Path not found*",
+        { parse_mode: "Markdown", _skipHeader: true, reply_markup: { inline_keyboard: [] } } as Record<string, unknown>,
+      ).catch(() => {/* non-fatal */});
+      return;
+    }
+
+    await api.editMessageText(chatId, panelMsgId,
+      `*Launch Claude Code →* \`${escapeMarkdownV1(path)}\``,
+      { parse_mode: "Markdown", _skipHeader: true, reply_markup: { inline_keyboard: [] } } as Record<string, unknown>,
+    ).catch(() => {/* non-fatal */});
+    await runCcLaunch(path);
+    return;
+  }
+}
+
+/**
+ * Validates + spawns the launch script, then sends a success or failure
+ * notification to chat. Records successful paths in the recent-paths store.
+ */
+async function runCcLaunch(path: string): Promise<void> {
+  const chatId = resolveChat();
+  if (typeof chatId !== "number") return;
+  const api = getApi();
+
+  try {
+    await launchCcInGhostty(path);
+    addRecentPath(path);
+    await api.sendMessage(chatId,
+      `🚀 *cc launched* in Ghostty\n\`${escapeMarkdownV1(path)}\``,
+      { parse_mode: "Markdown", _skipHeader: true } as Record<string, unknown>,
+    ).catch(() => {/* non-fatal */});
+  } catch (err) {
+    const e = err as CcLaunchError;
+    await api.sendMessage(chatId,
+      `❌ *cc launch failed*\n\`${escapeMarkdownV1(e.message)}\``,
+      { parse_mode: "Markdown", _skipHeader: true } as Record<string, unknown>,
+    ).catch(() => {/* non-fatal */});
+  }
+}
+
+/** Truncate a path for display in a Telegram inline button. Telegram limits ≈64 chars. */
+function truncatePath(path: string, max: number): string {
+  if (path.length <= max) return path;
+  // Keep the trailing component intact when possible.
+  const tail = path.slice(-(max - 1));
+  return `…${tail}`;
+}
+
+/** Backtick-safe escape for Markdown v1 inline code spans. */
+function escapeMarkdownV1(s: string): string {
+  return s.replace(/`/g, "ʼ");
 }

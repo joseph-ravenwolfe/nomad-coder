@@ -150,6 +150,23 @@ vi.mock("./session-teardown.js", () => ({
   closeSessionById: (...args: unknown[]) => mocks.closeSessionById(...args),
 }));
 
+const ccMocks = vi.hoisted(() => ({
+  getRecentPaths: vi.fn((): string[] => []),
+  addRecentPath: vi.fn((..._args: unknown[]) => undefined as void),
+  isCcLaunchConfigured: vi.fn((): boolean => true),
+  launchCcInGhostty: vi.fn((..._args: unknown[]): Promise<void> => Promise.resolve()),
+}));
+
+vi.mock("./recent-paths.js", () => ({
+  getRecentPaths: () => ccMocks.getRecentPaths(),
+  addRecentPath: (path: string) => ccMocks.addRecentPath(path),
+}));
+
+vi.mock("./cc-launch.js", () => ({
+  isCcLaunchConfigured: () => ccMocks.isCcLaunchConfigured(),
+  launchCcInGhostty: (path: string) => ccMocks.launchCcInGhostty(path),
+}));
+
 
 import {
   handleIfBuiltIn,
@@ -182,6 +199,19 @@ function cmdUpdate(text: string): Update {
       from: { id: 1, is_bot: false, first_name: "T" },
       text,
       entities: [{ type: "bot_command", offset: 0, length: text.split(" ")[0].length }],
+    },
+  } as unknown as Update;
+}
+
+function textUpdate(text: string): Update {
+  return {
+    update_id: 3,
+    message: {
+      message_id: 1,
+      date: Math.floor(Date.now() / 1000),
+      chat: { id: 123, type: "private" },
+      from: { id: 1, is_bot: false, first_name: "T" },
+      text,
     },
   } as unknown as Update;
 }
@@ -223,7 +253,7 @@ describe("built-in-commands", () => {
 
   // -- BUILT_IN_COMMANDS constant ------------------------------------------
 
-  it("exports built-in command metadata including /session and /log", () => {
+  it("exports built-in command metadata including /session, /log, and /cc", () => {
     expect(BUILT_IN_COMMANDS).toEqual([
       { command: "logging", description: "Logging controls" },
       { command: "voice", description: "Change the TTS voice" },
@@ -231,6 +261,7 @@ describe("built-in-commands", () => {
       { command: "shutdown", description: "Shut down the MCP server" },
       { command: "approve", description: "Pre-approve session requests" },
       { command: "session", description: "Manage active sessions" },
+      { command: "cc", description: "Launch a Claude Code session in Ghostty" },
     ]);
   });
 
@@ -1556,6 +1587,155 @@ describe("built-in-commands", () => {
       const args = mocks.sendMessage.mock.calls[0];
       const text: string = args[1];
       expect(text).toContain("Logging");
+    });
+  });
+
+  // -- /cc command ----------------------------------------------------------
+
+  describe("/cc command", () => {
+    beforeEach(() => {
+      ccMocks.getRecentPaths.mockReturnValue([]);
+      ccMocks.addRecentPath.mockReset();
+      ccMocks.isCcLaunchConfigured.mockReturnValue(true);
+      ccMocks.launchCcInGhostty.mockReset().mockResolvedValue(undefined);
+    });
+
+    it("returns a configuration error when CC_LAUNCH_SCRIPT is not configured", async () => {
+      ccMocks.isCcLaunchConfigured.mockReturnValue(false);
+      const result = await handleIfBuiltIn(cmdUpdate("/cc"));
+      expect(result).toBe(true);
+      expect(mocks.sendMessage).toHaveBeenCalledTimes(1);
+      const text: string = mocks.sendMessage.mock.calls[0][1];
+      expect(text).toContain("CC_LAUNCH_SCRIPT");
+      expect(ccMocks.launchCcInGhostty).not.toHaveBeenCalled();
+    });
+
+    it("with no args + no recents shows panel with 'No recent paths yet' and Other/Dismiss buttons", async () => {
+      mocks.sendMessage.mockResolvedValueOnce({ message_id: 700 });
+      const result = await handleIfBuiltIn(cmdUpdate("/cc"));
+      expect(result).toBe(true);
+      const [, text, opts] = mocks.sendMessage.mock.calls[0] as [number, string, Record<string, unknown>];
+      expect(text).toContain("Launch Claude Code");
+      expect(text).toContain("No recent paths");
+      const keyboard = (opts.reply_markup as { inline_keyboard: Array<Array<{ callback_data: string }>> }).inline_keyboard;
+      // No recent rows; final row has Other + Dismiss.
+      expect(keyboard).toHaveLength(1);
+      const cbData = keyboard[0].map(b => b.callback_data);
+      expect(cbData).toEqual(["cc:other", "cc:dismiss"]);
+      expect(ccMocks.launchCcInGhostty).not.toHaveBeenCalled();
+    });
+
+    it("with no args + recents lists each recent as a button row in MRU order", async () => {
+      ccMocks.getRecentPaths.mockReturnValue(["/Users/me/projA", "/Users/me/projB"]);
+      mocks.sendMessage.mockResolvedValueOnce({ message_id: 701 });
+      await handleIfBuiltIn(cmdUpdate("/cc"));
+      const opts = mocks.sendMessage.mock.calls[0][2] as Record<string, unknown>;
+      const keyboard = (opts.reply_markup as { inline_keyboard: Array<Array<{ text: string; callback_data: string }>> }).inline_keyboard;
+      expect(keyboard).toHaveLength(3); // 2 recent rows + Other/Dismiss row
+      expect(keyboard[0][0].text).toContain("projA");
+      expect(keyboard[0][0].callback_data).toBe("cc:r:0");
+      expect(keyboard[1][0].text).toContain("projB");
+      expect(keyboard[1][0].callback_data).toBe("cc:r:1");
+      expect(keyboard[2].map(b => b.callback_data)).toEqual(["cc:other", "cc:dismiss"]);
+    });
+
+    it("with an inline path arg launches immediately without showing the panel", async () => {
+      const result = await handleIfBuiltIn(cmdUpdate("/cc /Users/me/proj"));
+      expect(result).toBe(true);
+      expect(ccMocks.launchCcInGhostty).toHaveBeenCalledWith("/Users/me/proj");
+      // Two sendMessage calls expected: success notification only (no panel).
+      // First (and only) call should be the success message.
+      expect(mocks.sendMessage).toHaveBeenCalledTimes(1);
+      const text: string = mocks.sendMessage.mock.calls[0][1];
+      expect(text).toContain("launched");
+      expect(text).toContain("/Users/me/proj");
+    });
+
+    it("records a successful direct launch in recent paths", async () => {
+      await handleIfBuiltIn(cmdUpdate("/cc /Users/me/proj"));
+      expect(ccMocks.addRecentPath).toHaveBeenCalledWith("/Users/me/proj");
+    });
+
+    it("does not record a failed launch in recent paths", async () => {
+      ccMocks.launchCcInGhostty.mockRejectedValueOnce({
+        code: "PATH_NOT_FOUND",
+        message: "Path does not exist: /Users/me/oops",
+      });
+      await handleIfBuiltIn(cmdUpdate("/cc /Users/me/oops"));
+      expect(ccMocks.addRecentPath).not.toHaveBeenCalled();
+      const text: string = mocks.sendMessage.mock.calls[0][1];
+      expect(text).toContain("failed");
+      expect(text).toContain("Path does not exist");
+    });
+
+    it("tapping a recent-path button launches that path", async () => {
+      ccMocks.getRecentPaths.mockReturnValue(["/Users/me/projA", "/Users/me/projB"]);
+      mocks.sendMessage.mockResolvedValueOnce({ message_id: 702 });
+      await handleIfBuiltIn(cmdUpdate("/cc"));
+      await handleIfBuiltIn(callbackUpdate(702, "cc:r:1"));
+      expect(ccMocks.launchCcInGhostty).toHaveBeenCalledWith("/Users/me/projB");
+      expect(ccMocks.addRecentPath).toHaveBeenCalledWith("/Users/me/projB");
+    });
+
+    it("tapping Dismiss closes the panel without launching anything", async () => {
+      mocks.sendMessage.mockResolvedValueOnce({ message_id: 703 });
+      await handleIfBuiltIn(cmdUpdate("/cc"));
+      await handleIfBuiltIn(callbackUpdate(703, "cc:dismiss"));
+      expect(ccMocks.launchCcInGhostty).not.toHaveBeenCalled();
+      expect(mocks.editMessageText).toHaveBeenCalledWith(
+        123, 703,
+        expect.stringContaining("Dismissed"),
+        expect.any(Object),
+      );
+    });
+
+    it("tapping Other... edits the panel and arms a pending-input window", async () => {
+      mocks.sendMessage.mockResolvedValueOnce({ message_id: 704 });
+      await handleIfBuiltIn(cmdUpdate("/cc"));
+      await handleIfBuiltIn(callbackUpdate(704, "cc:other"));
+      expect(mocks.editMessageText).toHaveBeenCalledWith(
+        123, 704,
+        expect.stringContaining("Reply with the absolute path"),
+        expect.any(Object),
+      );
+      // Sending a plain-text message right after should be captured as the path.
+      await handleIfBuiltIn(textUpdate("/Users/me/late-bound-path"));
+      expect(ccMocks.launchCcInGhostty).toHaveBeenCalledWith("/Users/me/late-bound-path");
+    });
+
+    it("a pending-input window cancels itself when the operator types a slash command", async () => {
+      mocks.sendMessage.mockResolvedValueOnce({ message_id: 705 });
+      await handleIfBuiltIn(cmdUpdate("/cc"));
+      await handleIfBuiltIn(callbackUpdate(705, "cc:other"));
+      // Operator changes their mind and runs another command.
+      ccMocks.launchCcInGhostty.mockClear();
+      const result = await handleIfBuiltIn(cmdUpdate("/version"));
+      expect(result).toBe(true); // /version was handled
+      expect(ccMocks.launchCcInGhostty).not.toHaveBeenCalled();
+      // Subsequent plain-text messages should NOT be captured anymore.
+      const flowsThrough = await handleIfBuiltIn(textUpdate("just chatting"));
+      expect(flowsThrough).toBe(false);
+      expect(ccMocks.launchCcInGhostty).not.toHaveBeenCalled();
+    });
+
+    it("a recently-tapped recent path that no longer exists in the snapshot fails gracefully", async () => {
+      ccMocks.getRecentPaths.mockReturnValue(["/a"]);
+      mocks.sendMessage.mockResolvedValueOnce({ message_id: 706 });
+      await handleIfBuiltIn(cmdUpdate("/cc"));
+      // Out-of-range index — should NOT crash, should NOT launch.
+      await handleIfBuiltIn(callbackUpdate(706, "cc:r:99"));
+      expect(ccMocks.launchCcInGhostty).not.toHaveBeenCalled();
+      expect(mocks.editMessageText).toHaveBeenCalledWith(
+        123, 706,
+        expect.stringContaining("Path not found"),
+        expect.any(Object),
+      );
+    });
+
+    it("plain-text messages are NOT intercepted when there is no pending /cc input", async () => {
+      const result = await handleIfBuiltIn(textUpdate("hello"));
+      expect(result).toBe(false);
+      expect(ccMocks.launchCcInGhostty).not.toHaveBeenCalled();
     });
   });
 
