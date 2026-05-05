@@ -1,13 +1,13 @@
 import { vi, describe, it, expect, beforeEach } from "vitest";
 import { createMockServer, parseResult, isError, type ToolHandler } from "../test-utils.js";
 
-const POOL = ["🦄", "🐺", "👻", "🐶", "🐅", "🐦‍🔥", "🐊", "🦋", "🌸", "🦞", "🏆", "🔮", "🚄", "🏎️", "🛩️", "🚀", "🪐", "☄️", "⚔️", "🧬"];
+const POOL = ["🦄", "🐺", "👻", "🐊", "🦋", "🌸", "🦅", "🏆", "🔮", "✨", "💥", "💫", "🧞", "🏎️", "🛩️", "🚀", "🪐", "☄️", "⚔️", "🧬"];
 
 const mocks = vi.hoisted(() => ({
   listSessions: vi.fn().mockReturnValue([]),
   renameSession: vi.fn(),
   setSessionColor: vi.fn(),
-  getAvailableColors: vi.fn(() => ["🦄", "🐺", "👻", "🐶", "🐅", "🐦‍🔥", "🐊", "🦋", "🌸", "🦞", "🏆", "🔮", "🚄", "🏎️", "🛩️", "🚀", "🪐", "☄️", "⚔️", "🧬"] as string[]),
+  getAvailableColors: vi.fn(() => ["🦄", "🐺", "👻", "🐊", "🦋", "🌸", "🦅", "🏆", "🔮", "✨", "💥", "💫", "🧞", "🏎️", "🛩️", "🚀", "🪐", "☄️", "⚔️", "🧬"] as string[]),
   validateSession: vi.fn().mockReturnValue(true),
   requestOperatorApproval: vi.fn().mockResolvedValue("approved"),
   getGovernorSid: vi.fn().mockReturnValue(0),

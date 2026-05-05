@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
   listSessions: vi.fn().mockReturnValue([]),
   activeSessionCount: vi.fn().mockReturnValue(0),
   getSession: vi.fn(),
-  getAvailableColors: vi.fn().mockReturnValue(["🦄", "🐺", "👻", "🐶", "🐅", "🐦‍🔥", "🐊", "🦋", "🌸", "🦞", "🏆", "🔮", "🚄", "🏎️", "🛩️", "🚀", "🪐", "☄️", "⚔️", "🧬"]),
+  getAvailableColors: vi.fn().mockReturnValue(["🦄", "🐺", "👻", "🐊", "🦋", "🌸", "🦅", "🏆", "🔮", "✨", "💥", "💫", "🧞", "🏎️", "🛩️", "🚀", "🪐", "☄️", "⚔️", "🧬"]),
   setGovernorSid: vi.fn(),
   getGovernorSid: vi.fn().mockReturnValue(0),
   deliverServiceMessage: vi.fn(),
@@ -1479,7 +1479,7 @@ describe("session_start tool", () => {
     );
     // Should NOT contain a session-tag emoji in the denial edit
     const editCall = mocks.editMessageText.mock.calls[0] as unknown[];
-    expect(String(editCall[2])).not.toMatch(/🦄|🐺|👻|🐶|🐅|🐊/);
+    expect(String(editCall[2])).not.toMatch(/🦄|🐺|👻|🐊|🦋|🦅/);
   });
 
   // =========================================================================

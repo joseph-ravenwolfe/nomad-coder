@@ -88,8 +88,8 @@ describe("createSession", () => {
   });
 });
 
-describe("voice rotation on createSession", () => {
-  it("auto-assigns the curated voice list, rotating across sids", async () => {
+describe("voice assignment on createSession", () => {
+  it("auto-assigns the curated voice list, deterministically by name", async () => {
     const config = await import("./config.js");
     const { getSessionVoiceFor, resetVoiceStateForTest } = await import("./voice-state.js");
     resetVoiceStateForTest();
@@ -98,13 +98,22 @@ describe("voice rotation on createSession", () => {
       { name: "VID_B", description: "Rachel" },
     ]);
 
-    const a = createSession();
-    const b = createSession();
-    const c = createSession();
+    const a = createSession("Scout");
+    const b = createSession("Worker");
+    const c = createSession("Primary");
 
-    expect(getSessionVoiceFor(a.sid)).toBe("VID_A");
-    expect(getSessionVoiceFor(b.sid)).toBe("VID_B");
-    expect(getSessionVoiceFor(c.sid)).toBe("VID_A"); // wraps
+    // Each session got a voice from the curated list (we don't assert exact
+    // mappings — the hash output isn't user-meaningful).
+    expect(["VID_A", "VID_B"]).toContain(getSessionVoiceFor(a.sid));
+    expect(["VID_A", "VID_B"]).toContain(getSessionVoiceFor(b.sid));
+    expect(["VID_A", "VID_B"]).toContain(getSessionVoiceFor(c.sid));
+
+    // Determinism across runs: re-creating with the same name yields the same voice.
+    const aVoice = getSessionVoiceFor(a.sid);
+    resetVoiceStateForTest();
+    resetSessions();
+    const a2 = createSession("Scout");
+    expect(getSessionVoiceFor(a2.sid)).toBe(aVoice);
 
     spy.mockRestore();
     resetVoiceStateForTest();
@@ -116,7 +125,7 @@ describe("voice rotation on createSession", () => {
     resetVoiceStateForTest();
     const spy = vi.spyOn(config, "getConfiguredVoices").mockReturnValue([]);
 
-    const s = createSession();
+    const s = createSession("Scout");
     expect(getSessionVoiceFor(s.sid)).toBeNull();
 
     spy.mockRestore();
@@ -125,9 +134,10 @@ describe("voice rotation on createSession", () => {
 });
 
 describe("color assignment (session-tag emoji pool)", () => {
-  // Since v8: assignment is random-from-unused over a 20-emoji pool,
-  // not deterministic-LRU over 6 rainbow squares. Tests assert pool
-  // membership and collision-free behaviour rather than exact values.
+  // Since v8: hash(name) → starting index in a 20-emoji pool, then linear
+  // probe forward to skip in-use entries. Same name → same starting tag
+  // across runs. Tests assert pool membership, determinism, and
+  // collision-free behaviour rather than exact emoji values.
   const POOL = COLOR_PALETTE; // alias kept for backward-compat exports
 
   it("auto-assigned tag is always a member of the active pool", () => {
@@ -153,12 +163,21 @@ describe("color assignment (session-tag emoji pool)", () => {
     expect(s.color).toBe(hint);
   });
 
-  it("falls back to a random unused tag when requested hint is already taken", () => {
+  it("falls back to a deterministic unused tag when requested hint is already taken", () => {
     const hint = POOL[0];
     createSession("A", hint); // takes hint
-    const s2 = createSession("B", hint); // hint taken → fall back
+    const s2 = createSession("B", hint); // hint taken → fall back via hash(name)
     expect(s2.color).not.toBe(hint);
     expect(POOL).toContain(s2.color);
+  });
+
+  it("same name maps to the same starting tag across runs", async () => {
+    const sa = createSession("Scout");
+    const tagA = sa.color;
+    // Re-create from a clean slate; same name should land on the same tag.
+    resetSessions();
+    const sb = createSession("Scout");
+    expect(sb.color).toBe(tagA);
   });
 
   it("falls back when requested hint is not in the pool", () => {

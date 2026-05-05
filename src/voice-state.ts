@@ -11,6 +11,7 @@
 
 import { getCallerSid } from "./session-context.js";
 import { getConfiguredVoices } from "./config.js";
+import { hashNameToIndex } from "./name-hash.js";
 
 const _voices = new Map<number, string | null>();
 const _speeds = new Map<number, number | null>();
@@ -72,21 +73,22 @@ export function setSessionVoiceForSid(sid: number, voice: string): void {
 
 /**
  * Pick a voice from the operator's curated `voices` list (mcp-config.json)
- * for a newly created session, rotating deterministically by sid:
+ * deterministically by session name:
  *
- *   voice index = (sid - 1) modulo voices.length
+ *   voice index = hash(normalize(name)) modulo voices.length
  *
- * - With one voice, every session gets that voice.
- * - With N voices, sessions cycle through them as they join (sid=1 → voice 0,
- *   sid=2 → voice 1, …, sid=N+1 → voice 0).
+ * Same name always maps to the same voice across runs and machines, so
+ * "Scout" sounds like Scout every time. Collisions across different names
+ * are tolerated — multiple sessions can share a voice (the operator picks
+ * tag emojis to disambiguate visually anyway).
  *
- * Returns `null` when no curated voices are configured — the resolution chain
- * then falls through to `getDefaultVoice()` and the provider default.
+ * Returns `null` when no curated voices are configured — the resolution
+ * chain then falls through to `getDefaultVoice()` and the provider default.
  */
-export function pickRotationVoice(sid: number): string | null {
+export function pickRotationVoice(name: string): string | null {
   const voices = getConfiguredVoices();
   if (voices.length === 0) return null;
-  const idx = ((sid - 1) % voices.length + voices.length) % voices.length; // safe mod for sid ≤ 0
+  const idx = hashNameToIndex(name, voices.length);
   const entry = voices[idx];
   return entry?.name ?? null;
 }

@@ -6,6 +6,7 @@ import { dlog } from "./debug-log.js";
 import { recordNonToolEvent } from "./trace-log.js";
 import { pickRotationVoice, setSessionVoiceForSid } from "./voice-state.js";
 import { getSessionEmojis } from "./config.js";
+import { hashNameToIndex } from "./name-hash.js";
 
 // ── Watch file (heartbeat) location ────────────────────────
 //
@@ -38,8 +39,8 @@ export function getWatchFilePath(sid: number): string {
  * (string[]). Pool size > 6 means collisions are rare in normal usage.
  */
 const DEFAULT_EMOJI_POOL: readonly string[] = [
-  "🦄", "🐺", "👻", "🐶", "🐅", "🐦‍🔥", "🐊", "🦋", "🌸", "🦞",
-  "🏆", "🔮", "🚄", "🏎️", "🛩️", "🚀", "🪐", "☄️", "⚔️", "🧬",
+  "🦄", "🐺", "👻", "🐊", "🦋", "🌸", "🦅", "🏆", "🔮", "✨",
+  "💥", "💫", "🧞", "🏎️", "🛩️", "🚀", "🪐", "☄️", "⚔️", "🧬",
 ];
 
 /** Returns the active session-tag pool — config override or hardcoded default. */
@@ -140,24 +141,23 @@ function generateSuffix(): number {
   return randomInt(SUFFIX_MIN, SUFFIX_MAX + 1);
 }
 
-/** Pick a uniformly random element from a non-empty array. */
-function pickRandom<T>(arr: readonly T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
-
 /**
- * Pick a session-tag emoji.
+ * Pick a session-tag emoji deterministically by name.
  *
  * - `force = true` (legacy operator explicit tap): use `requested` unconditionally,
  *   even if another session already holds it. Retained for the rare case where
  *   an external caller needs to force a specific tag.
  * - `force = false` (default): if `requested` is in the pool and unused, use it.
- *   Otherwise pick a uniformly random unused emoji from the pool. If every
- *   pool entry is in use (>20 active sessions), pick uniformly random from
- *   the full pool — collisions are tolerated, the operator just sees two
- *   sessions sharing an emoji until one closes.
+ *   Otherwise hash `name` → starting index in the pool, then linear-probe
+ *   forward until an unused entry is found. Same name → same starting tag
+ *   across runs ("Scout" always tries the same emoji first). If every pool
+ *   entry is in use (>20 active sessions), return the deterministic pick
+ *   anyway — the operator just sees two sessions sharing an emoji until one
+ *   closes.
+ *
+ * Empty / whitespace `name` hashes to 0 (predictable starting position).
  */
-function assignColor(requested?: string, force = false): string {
+function assignColor(name: string, requested?: string, force = false): string {
   const pool = getSessionEmojiPool();
   const usedTags = new Set([..._sessions.values()].map((s) => s.color));
 
@@ -166,11 +166,16 @@ function assignColor(requested?: string, force = false): string {
     if ((pool as readonly string[]).includes(requested) && !usedTags.has(requested)) {
       return requested;
     }
-    // Hint not in pool, or in pool but already taken — fall through to random.
+    // Hint not in pool, or in pool but already taken — fall through to hash.
   }
 
-  const free = pool.filter((c) => !usedTags.has(c));
-  return free.length > 0 ? pickRandom(free) : pickRandom(pool);
+  const start = hashNameToIndex(name, pool.length);
+  for (let i = 0; i < pool.length; i++) {
+    const idx = (start + i) % pool.length;
+    if (!usedTags.has(pool[idx])) return pool[idx];
+  }
+  // All entries in use — return the deterministic pick (collision tolerated).
+  return pool[start];
 }
 
 // ── Public API ─────────────────────────────────────────────
@@ -219,7 +224,7 @@ export function createSession(
       `[session-manager] Failed to generate a unique token suffix after ${MAX_SUFFIX_ATTEMPTS} attempts.`,
     );
   }
-  const color = assignColor(colorHint, forceColor);
+  const color = assignColor(name, colorHint, forceColor);
   const connectionToken = randomUUID();
 
   // Allocate the per-session heartbeat file.
@@ -251,13 +256,14 @@ export function createSession(
   };
   _sessions.set(sid, session);
 
-  // Auto-rotate the operator's curated voice list (mcp-config.json `voices`)
-  // across newly-created sessions. No-op when the voices array is empty —
-  // the resolution chain then falls through to defaultVoice + provider default.
-  const rotated = pickRotationVoice(sid);
+  // Deterministically assign a voice from the operator's curated list
+  // (mcp-config.json `voices`) by hashing the session name. Same name →
+  // same voice across runs. No-op when the voices array is empty — the
+  // resolution chain then falls through to defaultVoice + provider default.
+  const rotated = pickRotationVoice(name);
   if (rotated) {
     setSessionVoiceForSid(sid, rotated);
-    dlog("session", `voice rotation sid=${sid} → ${rotated}`);
+    dlog("session", `voice assignment sid=${sid} name=${JSON.stringify(name)} → ${rotated}`);
   }
 
   dlog("session", `created sid=${sid} name=${JSON.stringify(name)} color=${color} total=${_sessions.size}`);
