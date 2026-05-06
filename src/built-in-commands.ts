@@ -1664,7 +1664,7 @@ async function handleCcCommand(argText: string): Promise<void> {
   if (!isCcLaunchConfigured()) {
     try {
       await api.sendMessage(chatId,
-        "⚠️ */cc not configured*\n\nSet `CC_LAUNCH_SCRIPT` in the bridge environment to an AppleScript path (e.g. `/Users/you/bin/ghostty-cc-tab.applescript`).",
+        "⚠️ */cc not configured*\n\nSet `CC_LAUNCH_SCRIPT` in the bridge environment to an absolute path of a launcher script. The repo ships `scripts/cc/ghostty-cc-tab.applescript` as a reference Ghostty launcher.",
         { parse_mode: "Markdown", _skipHeader: true } as Record<string, unknown>,
       );
     } catch { /* best-effort */ }
