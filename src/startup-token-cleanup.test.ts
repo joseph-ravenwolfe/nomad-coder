@@ -96,7 +96,7 @@ describe("cleanupStalePins", () => {
   it("does NOT unpin a bot message that does not match the announcement pattern", async () => {
     mocks.getChat.mockResolvedValue({
       id: 42,
-      pinned_message: makeBotPin(77, "📦 *Telegram Bridge MCP*\n\n🟢 Online\nSession record: off"),
+      pinned_message: makeBotPin(77, "📦 *Nomad Coder*\n\n🟢 Online\nSession record: off"),
     });
     await cleanupStalePins();
     expect(mocks.unpinChatMessage).not.toHaveBeenCalled();

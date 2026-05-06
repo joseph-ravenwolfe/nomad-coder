@@ -1,5 +1,5 @@
 /**
- * Telegram Bridge MCP — Pairing Setup Script
+ * Nomad Coder — Pairing Setup Script
  *
  * Usage: npm run pair   (or: node dist/setup.js)
  *
@@ -64,7 +64,7 @@ function dim(s: string) { return `\x1b[2m${s}\x1b[0m`; }
 
 async function main() {
   console.log("");
-  console.log(bold("  Telegram Bridge MCP — Pairing Setup"));
+  console.log(bold("  Nomad Coder — Pairing Setup"));
   console.log(dim("  ─────────────────────────────────────────────"));
   console.log("");
 
@@ -194,7 +194,7 @@ async function main() {
 
         // Send confirmation back to the user
         await api
-          .sendMessage(chatId, "✅ *Pairing complete\\!*\n\nThis bot is now secured to your user ID\\.\nYou can now use Telegram Bridge MCP\\.", {
+          .sendMessage(chatId, "✅ *Pairing complete\\!*\n\nThis bot is now secured to your user ID\\.\nYou can now use Nomad Coder\\.", {
             parse_mode: "MarkdownV2",
           })
           .catch(() => {/* non-fatal */});

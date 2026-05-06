@@ -3,10 +3,10 @@
 > Relocated from `docs/guide.spec.md`. This is the canonical location.
 
 ## Purpose
-The full agent communication etiquette and operating rules reference for agents using the Telegram Bridge MCP.
+The full agent communication etiquette and operating rules reference for agents using the Nomad Coder.
 
 ## Audience
-Agents using the Telegram Bridge MCP.
+Agents using the Nomad Coder.
 
 ## Content Rules
 - Instructions only — no prose explanations

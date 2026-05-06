@@ -7,11 +7,11 @@ Type: Epic / Minor or Major Version Feature
 Repo: electrified-cortex/Telegram-Bridge-MCP
 ---
 
-# 10-274: Telegram Bridge MCP — Web UI Alternate Interface
+# 10-274: Nomad Coder — Web UI Alternate Interface
 
 ## Concept
 
-Add a browser-based interface to the Telegram Bridge MCP as a first-class alternative
+Add a browser-based interface to Nomad Coder as a first-class alternative
 to the Telegram front end. The MCP bridge already handles all session logic, DMs,
 reminders, and tool routing internally — Telegram is just one interface into it. A local
 web UI would expose the same interaction surface without requiring a Telegram account,

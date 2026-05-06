@@ -1,4 +1,4 @@
-# Telegram Bridge MCP — Feature Highlights
+# Nomad Coder — Feature Highlights
 
 Internal reference. Covers the system's key design decisions and capabilities.
 

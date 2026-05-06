@@ -2,7 +2,7 @@
 
 When the operator has initiated loop mode, all substantive agent communication goes through Telegram. The operator is on their phone — not watching the agent panel.
 
-MCP resource: `telegram-bridge-mcp://communication-guide`
+MCP resource: `nomad-coder://communication-guide`
 
 ---
 

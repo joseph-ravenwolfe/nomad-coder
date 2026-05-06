@@ -1,6 +1,6 @@
 # Security Model
 
-This document explains the security boundary for Telegram Bridge MCP, what is protected, what is not, and how to operate it safely. It is intentionally explicit about risk because this project exists to unlock agent capability.
+This document explains the security boundary for Nomad Coder, what is protected, what is not, and how to operate it safely. It is intentionally explicit about risk because this project exists to unlock agent capability.
 
 ---
 
@@ -14,7 +14,7 @@ This document explains the security boundary for Telegram Bridge MCP, what is pr
 
 ## Primary Security Boundary
 
-Telegram Bridge MCP enforces a strict, single-user / single-chat model by default:
+Nomad Coder enforces a strict, single-user / single-chat model by default:
 
 - `ALLOWED_USER_ID` blocks inbound updates from anyone else, and its value is used as the outbound chat target (for private bots, chat.id === user.id).
 

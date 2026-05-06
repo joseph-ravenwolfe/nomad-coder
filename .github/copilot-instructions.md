@@ -1,6 +1,6 @@
-# Telegram Bridge MCP — Workspace Instructions
+# Nomad Coder — Workspace Instructions
 
-This repository **is** the Telegram Bridge MCP server. Edits to `src/` directly
+This repository **is** the Nomad Coder server. Edits to `src/` directly
 change the running MCP server.
 
 ## Changelog Maintenance

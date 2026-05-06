@@ -15,7 +15,7 @@
 
 ## Critical Constraint: One MCP Instance Per Bot Token
 
-**Only one Telegram Bridge MCP process may run per bot token.** This is a hard Telegram API limitation:
+**Only one Nomad Coder process may run per bot token.** This is a hard Telegram API limitation:
 
 - `getUpdates` (long polling) only supports one consumer per bot token. A second process calling `getUpdates` will steal updates from the first, causing lost messages, duplicate processing, and unpredictable behavior.
 - Running two separate MCP instances with the same bot token **will break both**.
@@ -25,7 +25,7 @@ Documentation must emphasize this clearly: if you want multiple agents, connect 
 
 ## Problem Statement
 
-Today, Telegram Bridge MCP supports both stdio and Streamable HTTP transports. With stdio, each MCP host spawns its own process — limiting it to one agent client per process. With Streamable HTTP (`MCP_PORT`), multiple clients connect to a single server instance, each getting their own session and queue.
+Today, Nomad Coder supports both stdio and Streamable HTTP transports. With stdio, each MCP host spawns its own process — limiting it to one agent client per process. With Streamable HTTP (`MCP_PORT`), multiple clients connect to a single server instance, each getting their own session and queue.
 
 The goal: enable multiple agent sessions to share a single bot and Telegram chat, with clear routing so messages reach the right session and don't cause confusion.
 

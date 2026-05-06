@@ -1,4 +1,4 @@
-# Token Cost Analysis — Telegram Bridge MCP
+# Token Cost Analysis — Nomad Coder
 
 > **Purpose:** An honest study of how using this MCP affects the token consumption of an AI agent, what patterns are cheap, what patterns are expensive, and what decisions were made as a result.
 
@@ -137,7 +137,7 @@ After 50 turns, the context is ~**52,000 tokens** even for simple short messages
 
 For a developer considering whether to use this MCP vs writing a bot directly:
 
-| Aspect | Direct bot code | Telegram Bridge MCP |
+| Aspect | Direct bot code | Nomad Coder |
 | --- | --- | --- |
 | Tool schema overhead | 0 | ~6,600 tokens/session |
 | Per-message call overhead | 0 | ~20 tokens |

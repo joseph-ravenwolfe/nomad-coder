@@ -4,7 +4,7 @@
 Documents animation frame syntax, the single-emoji sticker problem and fix, and the built-in named presets.
 
 ## Audience
-Agents using the Telegram Bridge MCP.
+Agents using the Nomad Coder.
 
 ## Content Rules
 - Instructions only — no prose explanations

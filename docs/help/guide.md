@@ -1,4 +1,4 @@
-# Agent Guide: Telegram Bridge MCP
+# Agent Guide: Nomad Coder
 
 **Receiving updates: file watcher + drain.** Each session gets a per-session
 heartbeat file (`watch_file` returned by `session/start`). The bridge appends
@@ -266,7 +266,7 @@ Keep labels short. Use `columns=1` for longer option text.
 `send(type: "text")`, `send(type: "notification")`, `action(type: "message/edit")`, `send(type: "append")`, and `send(type: "file")` all default to `"Markdown"`.
 Standard Markdown (bold, italic, code, links, headings) is auto-converted to Telegram MarkdownV2. No manual escaping needed.
 
-See the `formatting-guide` resource (`telegram-bridge-mcp://formatting-guide`) for the full reference.
+See the `formatting-guide` resource (`nomad-coder://formatting-guide`) for the full reference.
 
 ---
 

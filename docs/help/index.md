@@ -1,4 +1,4 @@
-Telegram Bridge MCP — Skill Index
+Nomad Coder — Skill Index
 
 Categorized routing menu. Call help(topic: '<name>') to navigate.
 Call help() for tool index. Call help(topic: 'index') to return here.

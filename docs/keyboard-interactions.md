@@ -1,6 +1,6 @@
 # Keyboard Interaction Taxonomy
 
-This document defines the keyboard interaction vocabulary for the Telegram Bridge MCP.
+This document defines the keyboard interaction vocabulary for the Nomad Coder.
 Understanding the hierarchy prevents choosing the wrong tool and guides future API design.
 
 ---

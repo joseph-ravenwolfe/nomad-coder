@@ -1,4 +1,4 @@
-# Telegram Bridge MCP — Claude Code Instructions
+# Nomad Coder — Claude Code Instructions
 
 See `.github/copilot-instructions.md` for changelog and merge policy.
 

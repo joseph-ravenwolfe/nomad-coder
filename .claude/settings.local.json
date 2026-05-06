@@ -11,14 +11,12 @@
       "Write(//**/.env.*)"
     ],
     "allow": [
-      "mcp__telegram-bridge-mcp",
+      "mcp__nomad",
       "Bash(*)",
       "Read(*)",
       "Write(*)",
       "Edit(*)",
-      "MultiEdit(*)",
-      "mcp__telegram-bridge__send_direct_message",
-      "mcp__telegram-bridge__dequeue_update"
+      "MultiEdit(*)"
     ]
   }
 }

@@ -2,7 +2,7 @@
  * Persistent list of recent project paths used by `/cc` to populate the
  * launch panel's quick-pick keyboard.
  *
- * Storage: `~/.cache/telegram-bridge-mcp/recent-paths.json` (JSON array of
+ * Storage: `~/.cache/nomad-coder/recent-paths.json` (JSON array of
  * strings). Best-effort I/O — read/write failures degrade silently to "no
  * recents", and the operator can always type a path manually.
  */
@@ -16,7 +16,7 @@ const MAX_RECENT = 10;
 function getStorePath(): string {
   const xdg = process.env.XDG_CACHE_HOME;
   const base = xdg && xdg.length > 0 ? xdg : join(homedir(), ".cache");
-  return join(base, "telegram-bridge-mcp", "recent-paths.json");
+  return join(base, "nomad-coder", "recent-paths.json");
 }
 
 function readStore(): string[] {

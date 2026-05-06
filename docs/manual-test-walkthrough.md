@@ -1,6 +1,6 @@
 # Manual Regression Test Suite
 
-Reusable manual test plan for the Telegram Bridge MCP server. Run through these scenarios after any significant change to verify core functionality.
+Reusable manual test plan for the Nomad Coder server. Run through these scenarios after any significant change to verify core functionality.
 
 **Notation:**
 

@@ -4,7 +4,7 @@
 Covers the dequeue loop pattern, drain-then-block flow, rules for staying in the loop, and idle behavior.
 
 ## Audience
-Agents using the Telegram Bridge MCP.
+Agents using the Nomad Coder.
 
 ## Content Rules
 - Instructions only — no prose explanations

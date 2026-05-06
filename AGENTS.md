@@ -1,4 +1,4 @@
-# Telegram Bridge MCP — Agent Onboarding Guide
+# Nomad Coder — Agent Onboarding Guide
 
 This file is for AI agents. When a user says "set me up", "get this working", or
 "help me configure Telegram", read this file and follow the decision tree below.
@@ -7,7 +7,7 @@ This file is for AI agents. When a user says "set me up", "get this working", or
 
 ## What This MCP Does
 
-Telegram Bridge MCP connects your AI session to a Telegram bot. Once configured, you
+Nomad Coder connects your AI session to a Telegram bot. Once configured, you
 can send messages, ask questions, receive voice replies, and run multi-agent sessions —
 all through the user's Telegram app.
 
@@ -158,7 +158,7 @@ server. No credentials needed in your editor config.
   "mcpServers": {
     "telegram": {
       "command": "node",
-      "args": ["/absolute/path/to/telegram-bridge-mcp/dist/launcher.js"]
+      "args": ["/absolute/path/to/nomad-coder/dist/launcher.js"]
     }
   }
 }
@@ -173,7 +173,7 @@ server. No credentials needed in your editor config.
       "type": "stdio",
       "command": "node",
       "args": ["dist/launcher.js"],
-      "cwd": "/absolute/path/to/telegram-bridge-mcp"
+      "cwd": "/absolute/path/to/nomad-coder"
     }
   }
 }
@@ -186,7 +186,7 @@ server. No credentials needed in your editor config.
   "mcpServers": {
     "telegram": {
       "command": "node",
-      "args": ["/absolute/path/to/telegram-bridge-mcp/dist/launcher.js"]
+      "args": ["/absolute/path/to/nomad-coder/dist/launcher.js"]
     }
   }
 }
@@ -201,7 +201,7 @@ Only use if `.env` files are not available and you cannot run the server. Pass c
   "mcpServers": {
     "telegram": {
       "command": "node",
-      "args": ["/absolute/path/to/telegram-bridge-mcp/dist/index.js"],
+      "args": ["/absolute/path/to/nomad-coder/dist/index.js"],
       "env": {
         "BOT_TOKEN": "YOUR_TOKEN_HERE",
         "ALLOWED_USER_ID": "123456789"
@@ -232,4 +232,4 @@ After successful verification, paste `LOOP-PROMPT.md` into the chat (or read its
 and follow the startup sequence). This enters the persistent Telegram event loop.
 
 For detailed troubleshooting and advanced configuration, read `docs/setup.md` or call
-the `telegram-bridge-mcp://setup-guide` resource.
+the `nomad-coder://setup-guide` resource.

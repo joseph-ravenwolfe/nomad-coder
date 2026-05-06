@@ -11,7 +11,7 @@ import {
 } from "./rate-limiter.js";
 
 /** Directory where downloaded files are stored — only local paths under this dir are allowed for file uploads. */
-export const SAFE_FILE_DIR = resolve(tmpdir(), "telegram-bridge-mcp");
+export const SAFE_FILE_DIR = resolve(tmpdir(), "nomad-coder");
 
 /**
  * Resolves a user-provided media input (file path, HTTPS URL, or Telegram file_id)
@@ -245,7 +245,7 @@ export function getRawApi(): Api {
   const token = process.env.BOT_TOKEN;
   if (token) return (_rawApi = new Api(token));
   throw new Error(
-    "[telegram-bridge-mcp] Fatal: BOT_TOKEN environment variable is not set.\n" +
+    "[nomad-coder] Fatal: BOT_TOKEN environment variable is not set.\n" +
       "Set it in a .env file or pass it via the MCP server env config."
   );
 }
@@ -320,7 +320,7 @@ function parseEnvInt(envVar: string): number {
   const n = parseInt(raw, 10);
   if (Number.isFinite(n)) return n;
   console.warn(
-    `[telegram-bridge-mcp] WARNING: ${envVar} "${raw}" is not a valid integer — ignored.`
+    `[nomad-coder] WARNING: ${envVar} "${raw}" is not a valid integer — ignored.`
   );
   return 0;
 }
@@ -334,14 +334,14 @@ export function getSecurityConfig(): SecurityConfig {
 
   if (process.env.ALLOW_ALL_USERS !== "true")
     throw new Error(
-      "[telegram-bridge-mcp] ALLOWED_USER_ID is not set. " +
+      "[nomad-coder] ALLOWED_USER_ID is not set. " +
         "Any Telegram user who messages the bot can inject updates. " +
         "Set ALLOWED_USER_ID to your numeric Telegram user ID, " +
         "or set ALLOW_ALL_USERS=true to explicitly bypass this check."
     );
 
   console.warn(
-    "[telegram-bridge-mcp] WARNING: ALLOWED_USER_ID is not set and ALLOW_ALL_USERS=true. " +
+    "[nomad-coder] WARNING: ALLOWED_USER_ID is not set and ALLOW_ALL_USERS=true. " +
       "Any Telegram user who messages the bot can inject updates."
   );
 
@@ -432,7 +432,7 @@ function getHijackNotifyConfig(): { console: boolean; telegram: boolean; agent: 
 export function fireHijackNotification(message: string): void {
   const notify = getHijackNotifyConfig();
   if (notify.console)
-    console.error(`[telegram-bridge-mcp] WARNING: ${message}`);
+    console.error(`[nomad-coder] WARNING: ${message}`);
   if (notify.telegram) {
     const chatId = resolveChat();
     if (typeof chatId === "number")

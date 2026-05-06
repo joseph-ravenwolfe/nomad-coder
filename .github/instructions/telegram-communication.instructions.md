@@ -3,7 +3,7 @@ applyTo: "**"
 ---
 # Telegram Communication
 
-> **Authoritative guide:** `docs/communication.md` · **MCP resource:** `telegram-bridge-mcp://communication-guide`
+> **Authoritative guide:** `docs/communication.md` · **MCP resource:** `nomad-coder://communication-guide`
 >
 > At session start, load the MCP resource for full patterns (session flow, button design, animations, commit/push flow, loop, session end).
 

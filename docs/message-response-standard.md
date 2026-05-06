@@ -1,6 +1,6 @@
 # Message Response Standard
 
-Authoritative reference for all user-facing text in the Telegram Bridge MCP (TMCP).
+Authoritative reference for all user-facing text in the Nomad Coder (TMCP).
 Applies to: error messages, hints, tool descriptions, TOOL_INDEX entries.
 
 ---

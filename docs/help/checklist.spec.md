@@ -4,7 +4,7 @@
 Lists all valid step status values for checklists and documents the common invalid-status mistake.
 
 ## Audience
-Agents using the Telegram Bridge MCP.
+Agents using the Nomad Coder.
 
 ## Content Rules
 - Instructions only — no prose explanations

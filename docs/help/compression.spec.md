@@ -4,7 +4,7 @@
 Defines the four compression tiers (None/Lite/Full/Ultra) and maps each tier to the appropriate communication surface.
 
 ## Audience
-Agents using the Telegram Bridge MCP.
+Agents using the Nomad Coder.
 
 ## Content Rules
 - Instructions only — no prose explanations

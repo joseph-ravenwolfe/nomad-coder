@@ -671,7 +671,7 @@ async function handleVersionCommand(): Promise<void> {
   if (typeof chatId !== "number") return;
   const buildTimeDisplay = _mcpBuildTime.replace("T", " ").replace("Z", " UTC");
   const lines = [
-    "📦 *Telegram Bridge MCP*",
+    "📦 *Nomad Coder*",
     "",
     `*Version:* \`${MCP_VERSION}\``,
     `*Commit:* \`${_mcpCommit}\``,

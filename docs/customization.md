@@ -1,6 +1,6 @@
 # Customization Guide
 
-This guide shows you how to use **Telegram Bridge MCP to develop and customize itself** — a self-hosting workflow where you give instructions via Telegram to modify code, behaviors, and documentation.
+This guide shows you how to use **Nomad Coder to develop and customize itself** — a self-hosting workflow where you give instructions via Telegram to modify code, behaviors, and documentation.
 
 ---
 
@@ -130,10 +130,10 @@ Open your AI assistant (VS Code Copilot, Claude Desktop, etc.) and paste the con
 
 | File | What it controls |
 | ---- | ---------------- |
-| `docs/help/guide.md` | Agent personality, tool usage conventions, formatting rules. Also served as the `telegram-bridge-mcp://agent-guide` MCP resource. |
-| `formatting.md` | Markdown/HTML/MarkdownV2 reference for message formatting. Served as `telegram-bridge-mcp://formatting-guide`. |
+| `docs/help/guide.md` | Agent personality, tool usage conventions, formatting rules. Also served as the `nomad-coder://agent-guide` MCP resource. |
+| `formatting.md` | Markdown/HTML/MarkdownV2 reference for message formatting. Served as `nomad-coder://formatting-guide`. |
 | `LOOP-PROMPT.md` | Your session startup script — the instructions you paste to begin a loop session. Customize this to change session behavior. |
-| `setup.md` | Bot creation and pairing walkthrough. Served as `telegram-bridge-mcp://setup-guide`. |
+| `setup.md` | Bot creation and pairing walkthrough. Served as `nomad-coder://setup-guide`. |
 | `src/tools/*.ts` | Individual MCP tool implementations. Each file = one tool. |
 | `src/telegram.ts` | Core Telegram API wrapper, security enforcement, polling helpers. |
 | `src/markdown.ts` | Markdown → MarkdownV2 auto-conversion logic. |

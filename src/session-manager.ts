@@ -18,7 +18,7 @@ import { hashNameToIndex } from "./name-hash.js";
 function getCacheDir(): string {
   const xdg = process.env.XDG_CACHE_HOME;
   const base = xdg && xdg.length > 0 ? xdg : join(homedir(), ".cache");
-  return join(base, "telegram-bridge-mcp", "sessions");
+  return join(base, "nomad-coder", "sessions");
 }
 
 /** Absolute path to the heartbeat file for a given session ID. */

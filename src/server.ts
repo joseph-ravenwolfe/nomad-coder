@@ -164,7 +164,7 @@ export function dispatchBehaviorTracking(
 
 export function createServer(): McpServer {
   const server = new McpServer({
-    name: "telegram-bridge-mcp",
+    name: "nomad-coder",
     version: PKG_VERSION,
   });
 
@@ -322,12 +322,12 @@ export function createServer(): McpServer {
 
   server.registerResource(
     "agent-guide",
-    "telegram-bridge-mcp://agent-guide",
+    "nomad-coder://agent-guide",
     { mimeType: "text/markdown", description: "Agent behavior guide for this MCP server. Read this at session start to understand how to communicate with the user and which tools to use." },
     () => ({
       contents: [
         {
-          uri: "telegram-bridge-mcp://agent-guide",
+          uri: "nomad-coder://agent-guide",
           mimeType: "text/markdown",
           text: agentGuideContent,
         },
@@ -337,12 +337,12 @@ export function createServer(): McpServer {
 
   server.registerResource(
     "communication-guide",
-    "telegram-bridge-mcp://communication-guide",
+    "nomad-coder://communication-guide",
     { mimeType: "text/markdown", description: "Compact Telegram communication patterns: tool selection, hard rules, commit/push flow, multi-step tasks, and loop behavior." },
     () => ({
       contents: [
         {
-          uri: "telegram-bridge-mcp://communication-guide",
+          uri: "nomad-coder://communication-guide",
           mimeType: "text/markdown",
           text: communicationContent,
         },
@@ -352,12 +352,12 @@ export function createServer(): McpServer {
 
   server.registerResource(
     "quick-reference",
-    "telegram-bridge-mcp://quick-reference",
+    "nomad-coder://quick-reference",
     { mimeType: "text/markdown", description: "Hard rules + tool selection table for Telegram communication. Minimal injected rules card — full detail in communication-guide." },
     () => ({
       contents: [
         {
-          uri: "telegram-bridge-mcp://quick-reference",
+          uri: "nomad-coder://quick-reference",
           mimeType: "text/markdown",
           text: quickReferenceContent,
         },
@@ -367,12 +367,12 @@ export function createServer(): McpServer {
 
   server.registerResource(
     "setup-guide",
-    "telegram-bridge-mcp://setup-guide",
+    "nomad-coder://setup-guide",
     { mimeType: "text/markdown", description: "Step-by-step guide to creating a Telegram bot and running npm run pair to configure this MCP server." },
     () => ({
       contents: [
         {
-          uri: "telegram-bridge-mcp://setup-guide",
+          uri: "nomad-coder://setup-guide",
           mimeType: "text/markdown",
           text: setupContent,
         },
@@ -382,12 +382,12 @@ export function createServer(): McpServer {
 
   server.registerResource(
     "formatting-guide",
-    "telegram-bridge-mcp://formatting-guide",
+    "nomad-coder://formatting-guide",
     { mimeType: "text/markdown", description: "Reference for Markdown/HTML/MarkdownV2 formatting in Telegram messages. Consult this when unsure how to format text." },
     () => ({
       contents: [
         {
-          uri: "telegram-bridge-mcp://formatting-guide",
+          uri: "nomad-coder://formatting-guide",
           mimeType: "text/markdown",
           text: formattingContent,
         },

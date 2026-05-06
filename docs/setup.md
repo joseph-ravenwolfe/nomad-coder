@@ -1,7 +1,7 @@
-# Telegram Bridge MCP — Setup Guide
+# Nomad Coder — Setup Guide
 
-This guide walks you through creating a Telegram bot and configuring it for use with Telegram Bridge MCP.
-An AI assistant can read this resource (`telegram-bridge-mcp://setup-guide`) and walk you through setup step-by-step.
+This guide walks you through creating a Telegram bot and configuring it for use with Nomad Coder.
+An AI assistant can read this resource (`nomad-coder://setup-guide`) and walk you through setup step-by-step.
 
 ---
 
@@ -119,7 +119,7 @@ in your editor settings.
 > survive. On Windows, you can spawn an independent window from PowerShell:
 >
 > ```powershell
-> Start-Process pwsh -ArgumentList "-NoExit","-Command","cd 'path/to/telegram-bridge-mcp'; npm start -- --http"
+> Start-Process pwsh -ArgumentList "-NoExit","-Command","cd 'path/to/nomad-coder'; npm start -- --http"
 > ```
 
 **2. Point your MCP hosts at it:**
@@ -180,7 +180,7 @@ stdio mode spawns a dedicated process per host. Only one host can connect at a t
       "type": "stdio",
       "command": "node",
       "args": ["dist/index.js"],
-      "cwd": "/path/to/telegram-bridge-mcp",
+      "cwd": "/path/to/nomad-coder",
       "env": {
         "BOT_TOKEN": "YOUR_TOKEN_HERE",
         "ALLOWED_USER_ID": "123456789"
@@ -197,7 +197,7 @@ stdio mode spawns a dedicated process per host. Only one host can connect at a t
   "mcpServers": {
     "telegram": {
       "command": "node",
-      "args": ["/absolute/path/to/telegram-bridge-mcp/dist/index.js"],
+      "args": ["/absolute/path/to/nomad-coder/dist/index.js"],
       "env": {
         "BOT_TOKEN": "YOUR_TOKEN_HERE",
         "ALLOWED_USER_ID": "123456789"
@@ -216,7 +216,7 @@ stdio mode spawns a dedicated process per host. Only one host can connect at a t
   "mcpServers": {
     "telegram": {
       "command": "node",
-      "args": ["/absolute/path/to/telegram-bridge-mcp/dist/index.js"],
+      "args": ["/absolute/path/to/nomad-coder/dist/index.js"],
       "env": {
         "BOT_TOKEN": "YOUR_TOKEN_HERE",
         "ALLOWED_USER_ID": "123456789"
@@ -240,7 +240,7 @@ Instead of starting the server manually, use `dist/launcher.js` as a drop-in std
       "type": "stdio",
       "command": "node",
       "args": ["dist/launcher.js"],
-      "cwd": "/absolute/path/to/telegram-bridge-mcp"
+      "cwd": "/absolute/path/to/nomad-coder"
     }
   }
 }
@@ -253,7 +253,7 @@ Instead of starting the server manually, use `dist/launcher.js` as a drop-in std
   "mcpServers": {
     "telegram": {
       "command": "node",
-      "args": ["/absolute/path/to/telegram-bridge-mcp/dist/launcher.js"]
+      "args": ["/absolute/path/to/nomad-coder/dist/launcher.js"]
     }
   }
 }
@@ -266,7 +266,7 @@ Instead of starting the server manually, use `dist/launcher.js` as a drop-in std
   "mcpServers": {
     "telegram": {
       "command": "node",
-      "args": ["/absolute/path/to/telegram-bridge-mcp/dist/launcher.js"]
+      "args": ["/absolute/path/to/nomad-coder/dist/launcher.js"]
     }
   }
 }

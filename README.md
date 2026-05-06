@@ -1,11 +1,11 @@
-# Telegram Bridge MCP
+# Nomad Coder
 
 [![CI](https://github.com/electrified-cortex/Telegram-Bridge-MCP/actions/workflows/ci.yml/badge.svg)](https://github.com/electrified-cortex/Telegram-Bridge-MCP/actions/workflows/ci.yml)
 [![Docker](https://github.com/electrified-cortex/Telegram-Bridge-MCP/actions/workflows/publish.yml/badge.svg)](https://github.com/electrified-cortex/Telegram-Bridge-MCP/actions/workflows/publish.yml)
-[![Docker Image](https://img.shields.io/badge/ghcr.io-telegram--bridge--mcp-blue?logo=docker)](https://github.com/electrified-cortex/Telegram-Bridge-MCP/pkgs/container/telegram-bridge-mcp)
+[![Docker Image](https://img.shields.io/badge/ghcr.io-telegram--bridge--mcp-blue?logo=docker)](https://github.com/electrified-cortex/Telegram-Bridge-MCP/pkgs/container/nomad-coder)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 
-<img align="right" src="interaction.jpg" width="320" alt="AI agents coordinating through Telegram Bridge MCP" />
+<img align="right" src="interaction.jpg" width="320" alt="AI agents coordinating through Nomad Coder" />
 
 ## No Claw? No Problem.
 
@@ -15,7 +15,7 @@
 
 ## What Is This?
 
-**Telegram Bridge MCP** connects AI assistants to Telegram bidirectionally. It lets any MCP-compatible client send messages, ask questions, receive voice replies, and run multiple concurrent agent sessions — all through a single bot you control.
+**Nomad Coder** connects AI assistants to Telegram bidirectionally. It lets any MCP-compatible client send messages, ask questions, receive voice replies, and run multiple concurrent agent sessions — all through a single bot you control.
 
 **Works with:** VS Code (GitHub Copilot Chat), Claude Code, Cursor, Windsurf, Copilot CLI, and any MCP-compatible host.
 
@@ -329,18 +329,18 @@ Five resources are available to any connected client — no tool call required:
 
 | URI | Contents |
 | --- | --- |
-| `telegram-bridge-mcp://agent-guide` | Behavioral guide for AI agents |
-| `telegram-bridge-mcp://communication-guide` | Communication patterns and loop rules |
-| `telegram-bridge-mcp://quick-reference` | Hard rules + compact tool table |
-| `telegram-bridge-mcp://setup-guide` | Setup walkthrough |
-| `telegram-bridge-mcp://formatting-guide` | Markdown / MarkdownV2 / HTML reference |
+| `nomad-coder://agent-guide` | Behavioral guide for AI agents |
+| `nomad-coder://communication-guide` | Communication patterns and loop rules |
+| `nomad-coder://quick-reference` | Hard rules + compact tool table |
+| `nomad-coder://setup-guide` | Setup walkthrough |
+| `nomad-coder://formatting-guide` | Markdown / MarkdownV2 / HTML reference |
 
 ---
 
 ## Docker
 
 ```text
-ghcr.io/electrified-cortex/telegram-bridge-mcp:latest
+ghcr.io/electrified-cortex/nomad-coder:latest
 ```
 
 > **Before running Docker:** Create your `.env` file first by running `npm run pair` on a machine with Node.js, or copy `.env.example` and fill it in manually.
@@ -353,7 +353,7 @@ docker run -d --name telegram-mcp \
   -e MCP_PORT=3099 \
   -p 3099:3099 \
   -v telegram-mcp-cache:/home/node/.cache \
-  ghcr.io/electrified-cortex/telegram-bridge-mcp:latest
+  ghcr.io/electrified-cortex/nomad-coder:latest
 ```
 
 Connect MCP hosts to `http://127.0.0.1:3099/mcp`.
@@ -368,7 +368,7 @@ Connect MCP hosts to `http://127.0.0.1:3099/mcp`.
     "run", "--rm", "-i",
     "--env-file", "/absolute/path/to/.env",
     "-v", "telegram-mcp-cache:/home/node/.cache",
-    "ghcr.io/electrified-cortex/telegram-bridge-mcp:latest"
+    "ghcr.io/electrified-cortex/nomad-coder:latest"
   ]
 }
 ```

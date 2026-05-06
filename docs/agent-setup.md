@@ -6,7 +6,7 @@ This guide covers how to configure AI agents to stay in the Telegram dequeue loo
 
 ## What is the loop guard?
 
-When an agent is running a Telegram Bridge MCP session, it must remain alive and call `dequeue` continuously to receive messages. Without a loop guard, the host IDE may terminate the agent conversation at any time — dropping the session silently.
+When an agent is running a Nomad Coder session, it must remain alive and call `dequeue` continuously to receive messages. Without a loop guard, the host IDE may terminate the agent conversation at any time — dropping the session silently.
 
 The **loop guard** is a Stop hook that checks for an active Telegram session file before allowing the host to shut down the agent. If a session file is found with content, the hook blocks the stop and prompts the agent to resume the dequeue loop. If no session file exists (or it is empty), the hook exits cleanly and allows normal shutdown.
 
@@ -157,4 +157,4 @@ Once the file is empty, the hook exits 0 and the host can shut down the agent no
 
 ### Hook blocked stop but agent is unreachable
 
-If the Telegram Bridge MCP server is down or unreachable, the agent may be blocked from stopping but unable to resume the loop. Clear the session file as described above to unblock the stop.
+If the Nomad Coder server is down or unreachable, the agent may be blocked from stopping but unable to resume the loop. Clear the session file as described above to unblock the stop.

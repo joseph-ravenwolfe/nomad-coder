@@ -17,7 +17,7 @@ action(type: "download", token: 3165424,
   file_name: "script.py",
   mime_type: "text/x-python")
 → {
-  local_path: "/tmp/telegram-bridge-mcp/1234567890_script.py",
+  local_path: "/tmp/nomad-coder/1234567890_script.py",
   file_name: "script.py",
   mime_type: "text/x-python",
   file_size: 2048,

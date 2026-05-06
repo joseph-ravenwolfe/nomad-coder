@@ -1,6 +1,6 @@
 # Telegram Loop Prompt
 
-Start a persistent Telegram chat loop using the Telegram Bridge MCP tools.
+Start a persistent Telegram chat loop using the Nomad Coder tools.
 
 ## Channel Rule
 
@@ -12,7 +12,7 @@ Return to VS Code chat only if the operator explicitly exits the loop or Telegra
 ## Setup
 
 1. Call `help` — read tool descriptions and orient yourself
-2. Read `telegram-bridge-mcp://communication-guide`
+2. Read `nomad-coder://communication-guide`
 3. Call `help(topic: "identity")` to verify bot/build identity — if it fails, report the error to the user and stop
 4. `action(type: "session/start")` — intro + handles pending messages from previous session
 5. **Save your SID and PIN** — write them to your auto-memory directory immediately after `action(type: "session/start")`. After context compaction you will lose in-context state; the saved PIN lets you call `action(type: "session/reconnect", name: "<your name>")` to reclaim your session without operator re-approval.

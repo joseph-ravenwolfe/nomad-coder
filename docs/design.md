@@ -1,6 +1,6 @@
-# Telegram Bridge MCP — Design Document
+# Nomad Coder — Design Document
 
-**Telegram Bridge MCP** is a Model Context Protocol server that bridges AI assistants to a Telegram bot for two-way communication: messaging, confirmations, status updates, and voice transcription.
+**Nomad Coder** is a Model Context Protocol server that bridges AI assistants to a Telegram bot for two-way communication: messaging, confirmations, status updates, and voice transcription.
 
 ---
 
@@ -11,7 +11,7 @@ AI Assistant (MCP Client)
         │  MCP over stdio or Streamable HTTP
         ▼
 ┌──────────────────────────┐
-│  Telegram Bridge MCP     │  (Node.js / TypeScript)
+│  Nomad Coder     │  (Node.js / TypeScript)
 │  @modelcontextprotocol/  │
 │           sdk            │
 └────────────┬─────────────┘
@@ -136,11 +136,11 @@ Five Markdown documents are exposed as MCP resources and via `get_agent_guide`:
 
 | URI | File | Description |
 | --- | --- | --- |
-| `telegram-bridge-mcp://agent-guide` | `help/guide.md` | Behavioral guide: personality, tool conventions, formatting rules |
-| `telegram-bridge-mcp://communication-guide` | `communication.md` | Tool selection, commit/push flow, loop rules, and multi-step task patterns |
-| `telegram-bridge-mcp://quick-reference` | `.github/instructions/telegram-communication.instructions.md` | Hard rules + tool selection table — compact injected rules card |
-| `telegram-bridge-mcp://setup-guide` | `setup.md` | Step-by-step setup guide for new users |
-| `telegram-bridge-mcp://formatting-guide` | `formatting.md` | Markdown/MarkdownV2/HTML formatting reference |
+| `nomad-coder://agent-guide` | `help/guide.md` | Behavioral guide: personality, tool conventions, formatting rules |
+| `nomad-coder://communication-guide` | `communication.md` | Tool selection, commit/push flow, loop rules, and multi-step task patterns |
+| `nomad-coder://quick-reference` | `.github/instructions/telegram-communication.instructions.md` | Hard rules + tool selection table — compact injected rules card |
+| `nomad-coder://setup-guide` | `setup.md` | Step-by-step setup guide for new users |
+| `nomad-coder://formatting-guide` | `formatting.md` | Markdown/MarkdownV2/HTML formatting reference |
 
 ---
 
@@ -167,14 +167,14 @@ All tools that send text default to `parse_mode: "Markdown"`. The server auto-co
 
 Explicit `parse_mode: "MarkdownV2"` and `parse_mode: "HTML"` are also supported for full control.
 
-See `formatting.md` (or the `telegram-bridge-mcp://formatting-guide` resource) for the full reference.
+See `formatting.md` (or the `nomad-coder://formatting-guide` resource) for the full reference.
 
 ---
 
 ## Project Structure
 
 ```text
-telegram-bridge-mcp/
+nomad-coder/
 ├── src/
 │   ├── index.ts              # Entry point — starts MCP server (stdio or Streamable HTTP), background poller
 │   ├── server.ts             # McpServer definition, tool registration, resource registration

@@ -1,6 +1,6 @@
 # Multi-Session End-to-End Flow
 
-This document describes the out-of-box experience for multi-session Telegram Bridge MCP. The goal: zero configuration, everything just works.
+This document describes the out-of-box experience for multi-session Nomad Coder. The goal: zero configuration, everything just works.
 
 ## Single Session (default)
 

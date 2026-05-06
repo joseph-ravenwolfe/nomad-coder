@@ -677,7 +677,7 @@ describe("fireHijackNotification", () => {
 // ---------------------------------------------------------------------------
 
 describe("sendVoiceDirect path restriction", () => {
-  const SAFE_DIR = resolve(tmpdir(), "telegram-bridge-mcp");
+  const SAFE_DIR = resolve(tmpdir(), "nomad-coder");
   const safeFile = join(SAFE_DIR, "test-voice.ogg");
 
   beforeEach(() => {
@@ -706,9 +706,9 @@ describe("sendVoiceDirect path restriction", () => {
   });
 
   it("throws when voice path is a sibling directory with same prefix", async () => {
-    // e.g. 'telegram-bridge-mcp2' should not be allowed
+    // e.g. 'nomad-coder2' should not be allowed
     process.env.BOT_TOKEN = "bot_test_token";
-    const siblingDir = resolve(tmpdir(), "telegram-bridge-mcp2");
+    const siblingDir = resolve(tmpdir(), "nomad-coder2");
     mkdirSync(siblingDir, { recursive: true });
     const siblingFile = join(siblingDir, "voice.ogg");
     writeFileSync(siblingFile, Buffer.from([0]));

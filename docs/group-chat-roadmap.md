@@ -1,6 +1,6 @@
 # Group Chat Roadmap
 
-This document tracks the design decisions and implementation plan for a group-capable edition of Telegram Bridge MCP.
+This document tracks the design decisions and implementation plan for a group-capable edition of Nomad Coder.
 
 The 1-on-1 edition (`master`) remains unchanged — group support is being developed separately to keep the security models cleanly isolated.
 

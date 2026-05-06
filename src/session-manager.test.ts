@@ -642,7 +642,7 @@ describe("watch file (v8 heartbeat)", () => {
   it("getWatchFilePath returns a path under the cache dir", () => {
     const path = getWatchFilePath(42);
     // Should end with the conventional suffix, regardless of XDG settings
-    expect(path).toMatch(/telegram-bridge-mcp\/sessions\/42\.events$/);
+    expect(path).toMatch(/nomad-coder\/sessions\/42\.events$/);
   });
 
   it("createSession populates session.watchFile and creates the file empty", () => {

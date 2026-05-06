@@ -85,7 +85,7 @@ describe("recent-paths", () => {
 
   it("survives a corrupt store file by returning empty", async () => {
     const { writeFileSync, mkdirSync } = await import("node:fs");
-    const dir = join(cacheDir, "telegram-bridge-mcp");
+    const dir = join(cacheDir, "nomad-coder");
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, "recent-paths.json"), "{ not json", "utf8");
     const { getRecentPaths } = await import("./recent-paths.js");
@@ -94,7 +94,7 @@ describe("recent-paths", () => {
 
   it("survives a non-array JSON payload by returning empty", async () => {
     const { writeFileSync, mkdirSync } = await import("node:fs");
-    const dir = join(cacheDir, "telegram-bridge-mcp");
+    const dir = join(cacheDir, "nomad-coder");
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, "recent-paths.json"), '{"foo":"bar"}', "utf8");
     const { getRecentPaths } = await import("./recent-paths.js");
@@ -103,7 +103,7 @@ describe("recent-paths", () => {
 
   it("filters out non-string array entries", async () => {
     const { writeFileSync, mkdirSync } = await import("node:fs");
-    const dir = join(cacheDir, "telegram-bridge-mcp");
+    const dir = join(cacheDir, "nomad-coder");
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, "recent-paths.json"), '["/a", 42, "/b", null]', "utf8");
     const { getRecentPaths } = await import("./recent-paths.js");

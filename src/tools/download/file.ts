@@ -92,7 +92,7 @@ export async function handleDownloadFile({ file_id, file_name, mime_type, token 
     const resolvedName = `${Date.now()}_${displayName}`;
 
     // 4. Save to temp directory with restricted permissions
-    const dir = join(tmpdir(), "telegram-bridge-mcp");
+    const dir = join(tmpdir(), "nomad-coder");
     await mkdir(dir, { recursive: true });
     const localPath = join(dir, resolvedName);
     await writeFile(localPath, bytes, { mode: 0o600 });

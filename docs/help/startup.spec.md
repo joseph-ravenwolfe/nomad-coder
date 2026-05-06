@@ -4,7 +4,7 @@
 Covers the immediate post-session-start checklist: token storage, reconnect pattern, profile loading, and entry into the dequeue loop.
 
 ## Audience
-Agents using the Telegram Bridge MCP.
+Agents using the Nomad Coder.
 
 ## Content Rules
 - Instructions only — no prose explanations

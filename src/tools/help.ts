@@ -137,7 +137,7 @@ const TOOL_INDEX: Record<string, string> = {
 
 function buildOverview(): string {
   const lines: string[] = [
-    "Telegram Bridge MCP — Tool Overview",
+    "Nomad Coder — Tool Overview",
     "",
     "Bridges AI agents to Telegram. help(topic: 'index') for categorized skill index. help(topic: 'guide') for full comms guide.",
     "help(topic: '<tool_name>') for docs on a specific tool.",
