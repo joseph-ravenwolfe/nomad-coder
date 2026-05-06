@@ -23,7 +23,7 @@ import { getDefaultVoice, setDefaultVoice, getConfiguredVoices } from "./config.
 import type { VoiceEntry } from "./config.js";
 import { fetchVoiceList, isTtsEnabled } from "./tts.js";
 import { getSessionSpeed } from "./voice-state.js";
-import { activateAutoApproveOne, activateAutoApproveTimed, cancelAutoApprove, getAutoApproveState } from "./auto-approve.js";
+import { activateAutoApproveOne, activateAutoApproveTimed, cancelAutoApprove, getAutoApproveState, isPersistentAutoApproveEnabled } from "./auto-approve.js";
 import { isDelegationEnabled, setDelegationEnabled } from "./agent-approval.js";
 import { getRecentPaths, addRecentPath } from "./recent-paths.js";
 import { isCcLaunchConfigured, launchCcInGhostty, type CcLaunchError } from "./cc-launch.js";
@@ -1065,6 +1065,33 @@ async function handleApproveCommand(): Promise<void> {
   const chatId = resolveChat();
   if (typeof chatId !== "number") return;
   const api = getApi();
+
+  // Env override: AUTO_APPROVE_AGENTS bypasses the per-request gate entirely.
+  // Show the panel as informational so the operator knows the state, but
+  // hide the per-request toggles (they'd be no-ops anyway).
+  if (isPersistentAutoApproveEnabled()) {
+    let msg: { message_id: number };
+    try {
+      msg = await api.sendMessage(chatId,
+        "*Session Auto-Approve*\n🟢 Always on via `AUTO_APPROVE_AGENTS` env\n_All session_start requests are approved unconditionally. Per-request controls disabled while this env var is set._",
+        {
+          parse_mode: "Markdown",
+          _skipHeader: true,
+          reply_markup: {
+            inline_keyboard: [[
+              isDelegationEnabled()
+                ? { text: "⬇ Disable Governor", callback_data: "approve:delegate:off" }
+                : { text: "⬆ Enable Governor",  callback_data: "approve:delegate:on" },
+              { text: "✖ Dismiss", callback_data: "approve:dismiss" },
+            ]],
+          },
+        } as Record<string, unknown>,
+      );
+    } catch { return; }
+    markInternalMessage(msg.message_id);
+    _activePanels.set(msg.message_id, "approve");
+    return;
+  }
 
   const state = getAutoApproveState();
   let statusLine: string;

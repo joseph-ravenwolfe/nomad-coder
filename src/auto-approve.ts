@@ -9,6 +9,27 @@ interface AutoApproveState {
 let _state: AutoApproveState = { mode: "none" };
 let _timer: ReturnType<typeof setTimeout> | undefined;
 
+/**
+ * Returns true when `AUTO_APPROVE_AGENTS` is set to a truthy value (`1` or
+ * `true`, case-insensitive). When enabled, all session_start requests are
+ * approved unconditionally — bypassing the per-request and timed modes
+ * altogether — and the `/approve` panel becomes informational only.
+ *
+ * Intended for single-operator setups where the approval prompt is just
+ * friction (the bridge already gates inbound updates by `ALLOWED_USER_ID`,
+ * and every session is the operator's). Not meant for multi-tenant or
+ * remote-trust scenarios.
+ *
+ * Read on every check so launchd config changes take effect on bridge
+ * restart without code changes.
+ */
+export function isPersistentAutoApproveEnabled(): boolean {
+  const v = process.env.AUTO_APPROVE_AGENTS;
+  if (typeof v !== "string") return false;
+  const norm = v.trim().toLowerCase();
+  return norm === "1" || norm === "true" || norm === "yes" || norm === "on";
+}
+
 /** Activate single-request auto-approve. */
 export function activateAutoApproveOne(): void {
   cancelAutoApprove();
@@ -44,9 +65,16 @@ export function cancelAutoApprove(): void {
 
 /**
  * Check if a session_start should be auto-approved.
- * Consumes a "one" token if active. Returns true if auto-approved.
+ *
+ * When `AUTO_APPROVE_AGENTS` env is set, returns true unconditionally
+ * without consuming any per-request "one" token — the env override sits
+ * above the per-request and timed modes.
+ *
+ * Otherwise: consumes a "one" token if active, returns true for active
+ * timed mode (expiry-checked), false when no mode is active.
  */
 export function checkAndConsumeAutoApprove(): boolean {
+  if (isPersistentAutoApproveEnabled()) return true;
   if (_state.mode === "none") return false;
   if (_state.mode === "one") {
     cancelAutoApprove();

@@ -5,18 +5,25 @@ import {
   cancelAutoApprove,
   checkAndConsumeAutoApprove,
   getAutoApproveState,
+  isPersistentAutoApproveEnabled,
 } from "./auto-approve.js";
 
 describe("auto-approve", () => {
+  let prevEnv: string | undefined;
+
   beforeEach(() => {
     // Reset state before each test
     cancelAutoApprove();
     vi.useFakeTimers();
+    prevEnv = process.env.AUTO_APPROVE_AGENTS;
+    delete process.env.AUTO_APPROVE_AGENTS;
   });
 
   afterEach(() => {
     cancelAutoApprove();
     vi.useRealTimers();
+    if (prevEnv === undefined) delete process.env.AUTO_APPROVE_AGENTS;
+    else process.env.AUTO_APPROVE_AGENTS = prevEnv;
   });
 
   describe("initial state", () => {
@@ -165,6 +172,62 @@ describe("auto-approve", () => {
       const state = getAutoApproveState();
       expect(state.mode).toBe("timed");
       expect(state.expiresAt).toBeGreaterThanOrEqual(now + 30_000);
+    });
+  });
+
+  describe("AUTO_APPROVE_AGENTS env override", () => {
+    it("isPersistentAutoApproveEnabled returns false when env is unset", () => {
+      delete process.env.AUTO_APPROVE_AGENTS;
+      expect(isPersistentAutoApproveEnabled()).toBe(false);
+    });
+
+    it.each([["1"], ["true"], ["TRUE"], ["yes"], ["on"], ["  true  "]])(
+      "isPersistentAutoApproveEnabled returns true for %j",
+      (value) => {
+        process.env.AUTO_APPROVE_AGENTS = value;
+        expect(isPersistentAutoApproveEnabled()).toBe(true);
+      },
+    );
+
+    it.each([["0"], ["false"], ["no"], ["off"], [""], ["  "]])(
+      "isPersistentAutoApproveEnabled returns false for %j",
+      (value) => {
+        process.env.AUTO_APPROVE_AGENTS = value;
+        expect(isPersistentAutoApproveEnabled()).toBe(false);
+      },
+    );
+
+    it("checkAndConsumeAutoApprove returns true when env is set, even with mode none", () => {
+      process.env.AUTO_APPROVE_AGENTS = "1";
+      expect(getAutoApproveState().mode).toBe("none");
+      expect(checkAndConsumeAutoApprove()).toBe(true);
+    });
+
+    it("env override does NOT consume the per-request 'one' token", () => {
+      process.env.AUTO_APPROVE_AGENTS = "1";
+      activateAutoApproveOne();
+      expect(getAutoApproveState().mode).toBe("one");
+      expect(checkAndConsumeAutoApprove()).toBe(true);
+      // 'one' token should still be intact since the env override took
+      // precedence — operator can disable env later and the token survives.
+      expect(getAutoApproveState().mode).toBe("one");
+    });
+
+    it("env override is read fresh each call (config can be flipped at runtime)", () => {
+      delete process.env.AUTO_APPROVE_AGENTS;
+      expect(checkAndConsumeAutoApprove()).toBe(false);
+      process.env.AUTO_APPROVE_AGENTS = "true";
+      expect(checkAndConsumeAutoApprove()).toBe(true);
+      delete process.env.AUTO_APPROVE_AGENTS;
+      expect(checkAndConsumeAutoApprove()).toBe(false);
+    });
+
+    it("env override survives expiry of a previously-active timed window", () => {
+      process.env.AUTO_APPROVE_AGENTS = "1";
+      activateAutoApproveTimed(1_000);
+      vi.setSystemTime(Date.now() + 2_000);
+      // Timed window has expired, but env override keeps approving.
+      expect(checkAndConsumeAutoApprove()).toBe(true);
     });
   });
 });

@@ -1,4 +1,4 @@
-import { vi, describe, it, expect, beforeEach } from "vitest";
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import type { Update } from "grammy/types";
 
 // ---------------------------------------------------------------------------
@@ -1097,6 +1097,41 @@ describe("built-in-commands", () => {
       const text: string = mocks.sendMessage.mock.calls[0][1];
       expect(text).toContain("🟡 Auto-approve: next request only");
       cancelAutoApprove();
+    });
+
+    describe("AUTO_APPROVE_AGENTS env override", () => {
+      let prevEnv: string | undefined;
+
+      beforeEach(() => {
+        prevEnv = process.env.AUTO_APPROVE_AGENTS;
+        process.env.AUTO_APPROVE_AGENTS = "1";
+      });
+
+      afterEach(() => {
+        if (prevEnv === undefined) delete process.env.AUTO_APPROVE_AGENTS;
+        else process.env.AUTO_APPROVE_AGENTS = prevEnv;
+      });
+
+      it("shows env-locked status when AUTO_APPROVE_AGENTS is set", async () => {
+        mocks.sendMessage.mockResolvedValueOnce({ message_id: 1100 });
+        await handleIfBuiltIn(cmdUpdate("/approve"));
+        const text: string = mocks.sendMessage.mock.calls[0][1];
+        expect(text).toContain("Always on");
+        expect(text).toContain("AUTO_APPROVE_AGENTS");
+      });
+
+      it("hides per-request toggles when env override is on (only delegation + dismiss)", async () => {
+        mocks.sendMessage.mockResolvedValueOnce({ message_id: 1101 });
+        await handleIfBuiltIn(cmdUpdate("/approve"));
+        const opts = mocks.sendMessage.mock.calls[0][2] as Record<string, unknown>;
+        const keyboard = (opts.reply_markup as { inline_keyboard: Array<Array<{ callback_data: string }>> }).inline_keyboard;
+        const allCb = keyboard.flatMap(row => row.map(b => b.callback_data));
+        expect(allCb).not.toContain("approve:one");
+        expect(allCb).not.toContain("approve:timed");
+        expect(allCb).toContain("approve:dismiss");
+        // Either delegate:on or delegate:off should be present
+        expect(allCb.some(cb => cb.startsWith("approve:delegate:"))).toBe(true);
+      });
     });
 
     it("callback approve:one calls activateAutoApproveOne and edits message", async () => {
