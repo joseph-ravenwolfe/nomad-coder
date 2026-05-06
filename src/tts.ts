@@ -172,17 +172,36 @@ const ELEVENLABS_DEFAULT_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"; // Rachel — stable
 const ELEVENLABS_DEFAULT_MODEL_ID = "eleven_multilingual_v2";
 const ELEVENLABS_SPEED_MIN = 0.7;
 const ELEVENLABS_SPEED_MAX = 1.2;
+/**
+ * Default playback speed when neither the per-session profile nor the
+ * function arg specifies one. Configurable via `ELEVENLABS_DEFAULT_SPEED`;
+ * falls back to 1.2 (the upper end of ElevenLabs' supported range) so
+ * voices feel punchy by default rather than slow.
+ */
+const ELEVENLABS_DEFAULT_SPEED = 1.2;
+
+/** Resolves the default speed from env, falling back to the hardcoded value. */
+function resolveElevenDefaultSpeed(): number {
+  const raw = process.env.ELEVENLABS_DEFAULT_SPEED;
+  if (raw === undefined || raw.trim().length === 0) return ELEVENLABS_DEFAULT_SPEED;
+  const parsed = Number.parseFloat(raw);
+  if (!Number.isFinite(parsed)) return ELEVENLABS_DEFAULT_SPEED;
+  // Clamp the configured default into the supported range so a misconfig
+  // never sends an out-of-bounds value to the API.
+  return Math.max(ELEVENLABS_SPEED_MIN, Math.min(ELEVENLABS_SPEED_MAX, parsed));
+}
 
 /** One-time per-process clamp warning to keep stderr quiet. */
 let _elevenSpeedWarned = false;
 
 /**
  * Clamp the user's requested speed to ElevenLabs' supported range [0.7, 1.2].
- * Returns 1.0 if speed is undefined. Logs a one-time stderr warning if a value
- * was clamped so the operator notices but stderr doesn't get spammed.
+ * Returns the configured default (env `ELEVENLABS_DEFAULT_SPEED`, default 1.2)
+ * when speed is undefined. Logs a one-time stderr warning if a value was
+ * clamped so the operator notices but stderr doesn't get spammed.
  */
 function clampElevenSpeed(speed: number | undefined): number {
-  if (speed === undefined) return 1.0;
+  if (speed === undefined) return resolveElevenDefaultSpeed();
   if (speed < ELEVENLABS_SPEED_MIN || speed > ELEVENLABS_SPEED_MAX) {
     if (!_elevenSpeedWarned) {
       _elevenSpeedWarned = true;

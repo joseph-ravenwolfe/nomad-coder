@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { EventEmitter } from "node:events";
 import type { Readable } from "node:stream";
@@ -137,6 +137,90 @@ describe("cc-launch", () => {
         code: "SCRIPT_FAILED",
         message: expect.stringContaining("ENOENT osascript") as unknown as string,
       });
+    });
+  });
+
+  describe("resolveCcTargetDir", () => {
+    it("leaves absolute paths unchanged", async () => {
+      const { resolveCcTargetDir } = await import("./cc-launch.js");
+      expect(resolveCcTargetDir("/Users/me/proj")).toBe("/Users/me/proj");
+      expect(resolveCcTargetDir("/")).toBe("/");
+    });
+
+    it("expands a bare ~ to $HOME", async () => {
+      const { resolveCcTargetDir } = await import("./cc-launch.js");
+      expect(resolveCcTargetDir("~")).toBe(homedir());
+    });
+
+    it("expands ~/foo to $HOME/foo", async () => {
+      const { resolveCcTargetDir } = await import("./cc-launch.js");
+      expect(resolveCcTargetDir("~/Projects/foo")).toBe(join(homedir(), "Projects/foo"));
+    });
+
+    it("anchors a bare relative path at $HOME", async () => {
+      const { resolveCcTargetDir } = await import("./cc-launch.js");
+      expect(resolveCcTargetDir("Projects/foo")).toBe(join(homedir(), "Projects/foo"));
+    });
+
+    it("anchors a single-segment relative path at $HOME", async () => {
+      const { resolveCcTargetDir } = await import("./cc-launch.js");
+      expect(resolveCcTargetDir("Documents")).toBe(join(homedir(), "Documents"));
+    });
+
+    it("trims surrounding whitespace before resolving", async () => {
+      const { resolveCcTargetDir } = await import("./cc-launch.js");
+      expect(resolveCcTargetDir("  Projects/foo  ")).toBe(join(homedir(), "Projects/foo"));
+      expect(resolveCcTargetDir("  /abs/path  ")).toBe("/abs/path");
+    });
+
+    it("returns the empty string when input is empty / whitespace-only", async () => {
+      const { resolveCcTargetDir } = await import("./cc-launch.js");
+      expect(resolveCcTargetDir("")).toBe("");
+      expect(resolveCcTargetDir("   ")).toBe("");
+    });
+  });
+
+  describe("launchCcInGhostty home-dir relative paths", () => {
+    it("launches against $HOME/<rel> when input has no leading slash", async () => {
+      process.env.CC_LAUNCH_SCRIPT = "/launch.applescript";
+      // Create a real subdir of $HOME so the existence check passes.
+      const sub = `cc-launch-test-${Date.now()}`;
+      const abs = join(homedir(), sub);
+      mkdirSync(abs, { recursive: true });
+      try {
+        spawnSpy.mockImplementation(() => makeFakeChild({ exitCode: 0 }));
+        const { launchCcInGhostty } = await import("./cc-launch.js");
+        await launchCcInGhostty(sub);
+        const args = spawnSpy.mock.calls[0]![1] as string[];
+        expect(args[1]).toBe(abs);
+      } finally {
+        rmSync(abs, { recursive: true, force: true });
+      }
+    });
+
+    it("expands ~/sub to $HOME/sub before spawning", async () => {
+      process.env.CC_LAUNCH_SCRIPT = "/launch.applescript";
+      const sub = `cc-launch-test-tilde-${Date.now()}`;
+      const abs = join(homedir(), sub);
+      mkdirSync(abs, { recursive: true });
+      try {
+        spawnSpy.mockImplementation(() => makeFakeChild({ exitCode: 0 }));
+        const { launchCcInGhostty } = await import("./cc-launch.js");
+        await launchCcInGhostty(`~/${sub}`);
+        const args = spawnSpy.mock.calls[0]![1] as string[];
+        expect(args[1]).toBe(abs);
+      } finally {
+        rmSync(abs, { recursive: true, force: true });
+      }
+    });
+
+    it("rejects PATH_NOT_FOUND for a relative path that doesn't exist under $HOME", async () => {
+      process.env.CC_LAUNCH_SCRIPT = "/launch.applescript";
+      const { launchCcInGhostty } = await import("./cc-launch.js");
+      // Use a name that almost certainly doesn't exist under $HOME.
+      await expect(launchCcInGhostty("__definitely-not-a-real-cc-launch-dir__"))
+        .rejects.toMatchObject({ code: "PATH_NOT_FOUND" });
+      expect(spawnSpy).not.toHaveBeenCalled();
     });
   });
 });

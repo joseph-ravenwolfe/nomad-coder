@@ -1,4 +1,7 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { TimelineEvent } from "./message-store.js";
 import {
   createSessionQueue,
@@ -10,10 +13,12 @@ import {
   routeToSession,
   broadcastOutbound,
   notifySessionWaiters,
+  pingSessionsHoldingMessage,
   deliverDirectMessage,
   deliverReminderEvent,
   resetSessionQueuesForTest,
 } from "./session-queue.js";
+import { createSession, resetSessions } from "./session-manager.js";
 import {
   setGovernorSid,
   resetRoutingModeForTest,
@@ -265,6 +270,92 @@ describe("session-queue", () => {
       const batch = q1?.dequeueBatch() ?? [];
       expect(batch).toHaveLength(1);
       expect(batch[0]?.id).toBe(999);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // pingSessionsHoldingMessage — wakes Monitor watchers post-transcription
+  // -------------------------------------------------------------------------
+
+  describe("pingSessionsHoldingMessage", () => {
+    let cacheDir: string;
+    let prevXdg: string | undefined;
+
+    beforeEach(() => {
+      cacheDir = mkdtempSync(join(tmpdir(), "ping-test-"));
+      prevXdg = process.env.XDG_CACHE_HOME;
+      process.env.XDG_CACHE_HOME = cacheDir;
+      resetSessions();
+      resetSessionQueuesForTest();
+    });
+
+    afterEach(() => {
+      if (prevXdg === undefined) delete process.env.XDG_CACHE_HOME;
+      else process.env.XDG_CACHE_HOME = prevXdg;
+      try { rmSync(cacheDir, { recursive: true, force: true }); } catch { /* ignore */ }
+      resetSessions();
+      resetSessionQueuesForTest();
+    });
+
+    it("appends a tick to the watch file of the session holding the message", () => {
+      const s = createSession("Scout");
+      createSessionQueue(s.sid);
+      // Enqueue a voice-shaped event so the queue holds messageId=42.
+      const evt: TimelineEvent = {
+        id: 42,
+        timestamp: new Date().toISOString(),
+        event: "message",
+        from: "user",
+        content: { type: "voice", text: undefined } as TimelineEvent["content"],
+      };
+      routeToSession(evt);
+      const watchFile = s.watchFile!;
+      // Drain whatever the initial enqueue tick wrote.
+      const baselineLen = readFileSync(watchFile, "utf8").length;
+
+      pingSessionsHoldingMessage(42);
+
+      const after = readFileSync(watchFile, "utf8");
+      // A single new "tick\n" should have been appended.
+      expect(after.length).toBe(baselineLen + "tick\n".length);
+      expect(after.endsWith("tick\n")).toBe(true);
+    });
+
+    it("is a no-op when no session queue holds the given message", () => {
+      const s = createSession("Scout");
+      createSessionQueue(s.sid);
+      const watchFile = s.watchFile!;
+      const baseline = readFileSync(watchFile, "utf8");
+
+      // No event was routed for messageId=999 — nothing should be appended.
+      pingSessionsHoldingMessage(999);
+
+      expect(readFileSync(watchFile, "utf8")).toBe(baseline);
+    });
+
+    it("only pings sessions whose queue actually holds the message", () => {
+      const a = createSession("A");
+      const b = createSession("B");
+      createSessionQueue(a.sid);
+      createSessionQueue(b.sid);
+      // Track ownership so routeToSession routes to A specifically (via reply
+      // semantics) — easier to just inject directly.
+      const aQueue = getSessionQueue(a.sid)!;
+      aQueue.enqueue({
+        id: 77,
+        timestamp: new Date().toISOString(),
+        event: "message",
+        from: "user",
+        content: { type: "voice", text: undefined } as TimelineEvent["content"],
+      });
+      const bWatchBefore = readFileSync(b.watchFile!, "utf8");
+      const aWatchBefore = readFileSync(a.watchFile!, "utf8");
+
+      pingSessionsHoldingMessage(77);
+
+      // A got the tick; B did not.
+      expect(readFileSync(a.watchFile!, "utf8").length).toBe(aWatchBefore.length + "tick\n".length);
+      expect(readFileSync(b.watchFile!, "utf8")).toBe(bWatchBefore);
     });
   });
 

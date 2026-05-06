@@ -299,6 +299,35 @@ export function notifySessionWaiters(): void {
 }
 
 /**
+ * Append a heartbeat tick to the watch file of every session queue that
+ * currently holds the given message ID. Used by `patchVoiceText` so that
+ * Monitor-watching agents wake up on transcription completion — without
+ * this, the initial enqueue tick fires while the voice event is still
+ * "not ready" (no text), the agent dequeues nothing, then transcription
+ * lands silently and the message stalls at 😴 until the operator nudges
+ * with another event.
+ *
+ * Why a separate ping (rather than re-using `enqueueAndPing`): the event
+ * is already in the queue. We just need to nudge the watcher.
+ *
+ * Best-effort — write errors are swallowed (cache dir gone, FS full).
+ */
+export function pingSessionsHoldingMessage(messageId: number): void {
+  for (const [sid, q] of _queues.entries()) {
+    if (!q.hasItem(messageId)) continue;
+    const watchFile = getSession(sid)?.watchFile;
+    if (!watchFile) continue;
+    try {
+      appendFileSync(watchFile, "tick\n");
+    } catch (err) {
+      process.stderr.write(
+        `[heartbeat] post-patch write failed sid=${sid} msg=${messageId} err=${(err as Error).message}\n`,
+      );
+    }
+  }
+}
+
+/**
  * Returns true if any session queue has a pending waiter (agent blocked in
  * dequeue). Used by the poller to decide whether to skip setting 😴 —
  * if a session agent is waiting, it will dequeue and set 🫡 itself.

@@ -21,7 +21,7 @@ import type { Update } from "grammy/types";
 import { recordUpdate, recordBotMessage } from "./session-recording.js";
 import { getCallerSid, runInSessionContext } from "./session-context.js";
 import { TemporalQueue } from "./temporal-queue.js";
-import { routeToSession, trackMessageOwner, notifySessionWaiters, sessionQueueCount } from "./session-queue.js";
+import { routeToSession, trackMessageOwner, notifySessionWaiters, pingSessionsHoldingMessage, sessionQueueCount } from "./session-queue.js";
 import { dlog } from "./debug-log.js";
 
 // ---------------------------------------------------------------------------
@@ -864,6 +864,12 @@ export function patchVoiceText(messageId: number, text: string): void {
   current.content.text = text;
   _queue.notifyWaiters();
   notifySessionWaiters();
+  // Wake Monitor-watching agents (v8): the initial enqueue tick fires while
+  // the voice event is still "not ready" (no text), so a non-blocking dequeue
+  // returns nothing. We need to ping again now that the event is ready —
+  // otherwise the message stalls at 😴 until the operator sends a follow-up
+  // event that pings the watch file.
+  pingSessionsHoldingMessage(messageId);
   if (_onTranscriptionLogCallback) {
     try { _onTranscriptionLogCallback(messageId, text); } catch { /* isolate logging failures */ }
   }

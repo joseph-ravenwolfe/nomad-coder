@@ -14,12 +14,40 @@
 
 import { spawn } from "node:child_process";
 import { existsSync, statSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 
 export type CcLaunchError =
   | { code: "NOT_CONFIGURED"; message: string }
   | { code: "PATH_NOT_FOUND"; message: string }
   | { code: "PATH_NOT_DIR"; message: string }
   | { code: "SCRIPT_FAILED"; message: string };
+
+/**
+ * Normalize the operator-supplied path so casual entry "just works":
+ *
+ *   /Users/me/proj  → /Users/me/proj      (absolute — leave as-is)
+ *   ~               → $HOME
+ *   ~/proj          → $HOME/proj
+ *   proj            → $HOME/proj          (bare relative — assume home)
+ *   Projects/foo    → $HOME/Projects/foo  (relative — assume home)
+ *
+ * Whitespace is trimmed first. Empty strings are left untouched (the
+ * caller's existence check will reject them with PATH_NOT_FOUND).
+ *
+ * We do NOT cwd-relative resolve (`process.cwd()`) because the bridge runs
+ * as a launchd-managed daemon — its cwd is `/`, which is rarely what an
+ * operator means by "Projects/foo". Home is the sensible default.
+ */
+export function resolveCcTargetDir(input: string): string {
+  const trimmed = input.trim();
+  if (trimmed.length === 0) return trimmed;
+  if (trimmed.startsWith("/")) return trimmed;
+  if (trimmed === "~") return homedir();
+  if (trimmed.startsWith("~/")) return join(homedir(), trimmed.slice(2));
+  // Bare or relative — anchor at home.
+  return join(homedir(), trimmed);
+}
 
 /** Returns true iff `CC_LAUNCH_SCRIPT` is set in the environment. */
 export function isCcLaunchConfigured(): boolean {
@@ -53,16 +81,16 @@ export async function launchCcInGhostty(targetDir: string): Promise<void> {
     } satisfies CcLaunchError;
   }
 
-  const trimmed = targetDir.trim();
-  if (!existsSync(trimmed)) {
+  const resolved = resolveCcTargetDir(targetDir);
+  if (resolved.length === 0 || !existsSync(resolved)) {
     throw {
       code: "PATH_NOT_FOUND",
-      message: `Path does not exist: ${trimmed}`,
+      message: `Path does not exist: ${resolved || targetDir}`,
     } satisfies CcLaunchError;
   }
   let st;
   try {
-    st = statSync(trimmed);
+    st = statSync(resolved);
   } catch (err) {
     throw {
       code: "PATH_NOT_FOUND",
@@ -72,12 +100,12 @@ export async function launchCcInGhostty(targetDir: string): Promise<void> {
   if (!st.isDirectory()) {
     throw {
       code: "PATH_NOT_DIR",
-      message: `Not a directory: ${trimmed}`,
+      message: `Not a directory: ${resolved}`,
     } satisfies CcLaunchError;
   }
 
   await new Promise<void>((resolve, reject) => {
-    const child = spawn("osascript", [script, trimmed], {
+    const child = spawn("osascript", [script, resolved], {
       stdio: ["ignore", "pipe", "pipe"],
       detached: true,
     });

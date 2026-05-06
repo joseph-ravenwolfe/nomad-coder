@@ -766,6 +766,7 @@ describe("synthesizeToOgg (ElevenLabs provider)", () => {
     delete process.env.ELEVENLABS_API_KEY;
     delete process.env.ELEVENLABS_VOICE_ID;
     delete process.env.ELEVENLABS_MODEL_ID;
+    delete process.env.ELEVENLABS_DEFAULT_SPEED;
     // Make sure no fallback provider env vars leak in either direction
     delete process.env.TTS_HOST;
     delete process.env.OPENAI_API_KEY;
@@ -802,7 +803,8 @@ describe("synthesizeToOgg (ElevenLabs provider)", () => {
     const body = JSON.parse(opts.body);
     expect(body.text).toBe("hello");
     expect(body.model_id).toBe("eleven_multilingual_v2");
-    expect(body.voice_settings.speed).toBe(1.0);
+    // Default ElevenLabs speed is 1.2 (configurable via ELEVENLABS_DEFAULT_SPEED).
+    expect(body.voice_settings.speed).toBe(1.2);
   });
 
   it("uses ELEVENLABS_VOICE_ID when no voice arg is passed", async () => {
@@ -870,6 +872,51 @@ describe("synthesizeToOgg (ElevenLabs provider)", () => {
     expect(clampWarnings).toHaveLength(1);
 
     stderrSpy.mockRestore();
+  });
+
+  it("uses ELEVENLABS_DEFAULT_SPEED env override when speed is not specified", async () => {
+    process.env.ELEVENLABS_API_KEY = "sk_eleven_test";
+    process.env.ELEVENLABS_DEFAULT_SPEED = "0.9";
+
+    const { pcmToOggOpus } = await import("./ogg-opus-encoder.js");
+    vi.mocked(pcmToOggOpus).mockResolvedValue(Buffer.from("ogg"));
+    const mockFetch = vi.fn().mockResolvedValue(fakePcmResponse());
+    vi.stubGlobal("fetch", mockFetch);
+
+    await synthesizeToOgg("hi");
+
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.voice_settings.speed).toBe(0.9);
+  });
+
+  it("clamps an out-of-range ELEVENLABS_DEFAULT_SPEED into the supported window", async () => {
+    process.env.ELEVENLABS_API_KEY = "sk_eleven_test";
+    process.env.ELEVENLABS_DEFAULT_SPEED = "5.0"; // way over 1.2
+
+    const { pcmToOggOpus } = await import("./ogg-opus-encoder.js");
+    vi.mocked(pcmToOggOpus).mockResolvedValue(Buffer.from("ogg"));
+    const mockFetch = vi.fn().mockResolvedValue(fakePcmResponse());
+    vi.stubGlobal("fetch", mockFetch);
+
+    await synthesizeToOgg("hi");
+
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.voice_settings.speed).toBe(1.2);
+  });
+
+  it("ignores a non-numeric ELEVENLABS_DEFAULT_SPEED and falls back to 1.2", async () => {
+    process.env.ELEVENLABS_API_KEY = "sk_eleven_test";
+    process.env.ELEVENLABS_DEFAULT_SPEED = "fast"; // junk
+
+    const { pcmToOggOpus } = await import("./ogg-opus-encoder.js");
+    vi.mocked(pcmToOggOpus).mockResolvedValue(Buffer.from("ogg"));
+    const mockFetch = vi.fn().mockResolvedValue(fakePcmResponse());
+    vi.stubGlobal("fetch", mockFetch);
+
+    await synthesizeToOgg("hi");
+
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.voice_settings.speed).toBe(1.2);
   });
 
   it("converts PCM-16 LE bytes to Float32 [-1, 1] before encoding", async () => {
