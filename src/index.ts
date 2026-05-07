@@ -1,4 +1,8 @@
-import "dotenv/config";
+// Load canonical config before .env so values from
+// ~/.config/nomad-coder/config.json take precedence over a stale
+// repo-local .env. Both honor the existing-process.env-wins rule.
+import { config as dotenvConfig } from "dotenv";
+import { loadCanonicalConfig } from "./config-file.js";
 import { readFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
@@ -34,6 +38,16 @@ import { httpTransports } from "./http-transport-registry.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(join(__dirname, "..", "package.json"), "utf-8")) as { name: string; version: string };
 process.stderr.write(`[info] [${pkg.name}] v${pkg.version} starting...\n`);
+
+// Populate process.env from canonical config (~/.config/nomad-coder/config.json),
+// then from .env. Both honor existing-env-wins, and canonical runs first so it
+// outranks .env. Log applied keys for startup diagnostics (no values — those
+// could be secrets).
+const _cfgResult = loadCanonicalConfig();
+if (_cfgResult.appliedKeys.length > 0) {
+  process.stderr.write(`[info] config: applied ${_cfgResult.appliedKeys.length} key(s) from ${_cfgResult.path} (${_cfgResult.appliedKeys.join(", ")})\n`);
+}
+dotenvConfig();
 
 // Initialize security config early so warnings surface at startup
 getSecurityConfig();

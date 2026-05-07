@@ -31,6 +31,14 @@ error — this command resolves that.
 4. **`~/.claude/hooks/nomad-bootstrap.sh`** — delete. The plugin's
    `hooks/handlers/session-start.sh` replaces it (it was orphaned anyway —
    never wired into a `hooks.json`).
+5. **`.env` → `~/.config/nomad-coder/config.json`** — if `.env` at the repo
+   root contains `BOT_TOKEN`, `ALLOWED_USER_ID`, `CHAT_ID`, or any
+   `ELEVENLABS_*` keys, copy them into the canonical config file. Existing
+   config.json values are preserved (merge, not clobber). The legacy
+   `.env` is left in place for backward compat — `npm run pair` writes
+   both, and the bridge reads canonical first. Operators can delete
+   `.env` after confirming the migration; nothing on this machine relies
+   on it once config.json exists.
 
 ## Behavior
 
@@ -66,6 +74,46 @@ if (j.mcpServers && j.mcpServers.nomad) {
 ```
 
 For `~/.claude/hooks/nomad-bootstrap.sh`: just `rm -f` if it exists.
+
+For the `.env` → `config.json` migration, parse `.env` line-by-line
+(`KEY=VALUE` pairs, ignore comments and blanks), build a partial
+`NomadCoderConfig` mapping known keys into their JSON sections (BOT_TOKEN /
+ALLOWED_USER_ID / CHAT_ID → `telegram`, ELEVENLABS_* → `elevenlabs`), then
+shell out to node to merge into `~/.config/nomad-coder/config.json`:
+
+```bash
+cd "$CLAUDE_PLUGIN_ROOT"
+node -e '
+const fs = require("fs");
+const path = require("path");
+const { writeCanonicalConfig } = require("./dist/config-file.js");
+const envPath = path.join(process.cwd(), ".env");
+if (!fs.existsSync(envPath)) process.exit(0);
+const env = {};
+for (const line of fs.readFileSync(envPath, "utf8").split("\n")) {
+  const m = line.match(/^([A-Z_]+)=(.*)$/);
+  if (m) env[m[1]] = m[2].replace(/^["\x27]|["\x27]$/g, "");
+}
+const partial = {};
+if (env.BOT_TOKEN || env.ALLOWED_USER_ID || env.CHAT_ID) {
+  partial.telegram = {};
+  if (env.BOT_TOKEN) partial.telegram.bot_token = env.BOT_TOKEN;
+  if (env.ALLOWED_USER_ID) partial.telegram.allowed_user_id = Number(env.ALLOWED_USER_ID);
+  if (env.CHAT_ID) partial.telegram.chat_id = Number(env.CHAT_ID);
+}
+if (env.ELEVENLABS_API_KEY || env.ELEVENLABS_VOICE_ID || env.ELEVENLABS_MODEL_ID) {
+  partial.elevenlabs = {};
+  if (env.ELEVENLABS_API_KEY) partial.elevenlabs.api_key = env.ELEVENLABS_API_KEY;
+  if (env.ELEVENLABS_VOICE_ID) partial.elevenlabs.voice_id = env.ELEVENLABS_VOICE_ID;
+  if (env.ELEVENLABS_MODEL_ID) partial.elevenlabs.model_id = env.ELEVENLABS_MODEL_ID;
+}
+const { path: out, merged } = writeCanonicalConfig(partial);
+console.log("Merged " + Object.keys(env).length + " keys from .env into " + out);
+'
+```
+
+This preserves any pre-existing config.json values (merge behavior), so
+running `/nomad-coder:migrate` twice is a no-op on the second pass.
 
 For `~/.zshrc`: read the file, find the `cc()` function block, locate the
 inner `local boot="..."` heredoc-style assignment plus the `"${boot}$*"`

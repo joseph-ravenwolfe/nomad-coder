@@ -19,6 +19,7 @@ import { resolve } from "path";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
 import { randomInt } from "crypto";
+import { writeCanonicalConfig, getCanonicalConfigPath } from "./config-file.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ENV_PATH = resolve(__dirname, "..", ".env");
@@ -160,13 +161,25 @@ async function main() {
         console.log(`    User ID  : ${bold(String(userId))}`);
         console.log("");
 
-        // 6. Write to .env
+        // 6. Write credentials to BOTH .env (legacy / repo-local dev) AND
+        //    the canonical ~/.config/nomad-coder/config.json (production).
+        //    Canonical wins at runtime; .env is kept for backward compat
+        //    with operators who run `npm start` directly from the repo.
         writeEnv({
           BOT_TOKEN: token,
           ALLOWED_USER_ID: String(userId),
         });
 
+        const { path: canonicalPath } = writeCanonicalConfig({
+          telegram: {
+            bot_token: token,
+            allowed_user_id: userId,
+            chat_id: chatId,
+          },
+        });
+
         console.log(green(`  ✓ Written to ${ENV_PATH}`));
+        console.log(green(`  ✓ Written to ${canonicalPath}`));
         console.log("");
         console.log("  " + bold("Next steps:"));
         console.log("    • Add this server to your MCP host config.");
