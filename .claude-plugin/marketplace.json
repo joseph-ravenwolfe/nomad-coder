@@ -1,0 +1,21 @@
+{
+  "name": "nomad-coder",
+  "owner": {
+    "name": "Joseph Ravenwolfe"
+  },
+  "metadata": {
+    "description": "Drive Claude Code from Telegram — long-running session bridge with voice, multi-session, and operator-side controls.",
+    "version": "8.0.0"
+  },
+  "plugins": [
+    {
+      "name": "nomad-coder",
+      "description": "Drive Claude Code from Telegram. Long-running session bridge with voice, multi-session routing, /cc launcher, and operator-side controls. Pairs with a single Telegram bot you control.",
+      "version": "8.0.0",
+      "author": {
+        "name": "Joseph Ravenwolfe"
+      },
+      "source": "."
+    }
+  ]
+}

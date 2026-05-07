@@ -1,0 +1,15 @@
+{
+  "description": "Nomad Coder bootstrap — injects a SYSTEM DIRECTIVE at session start so the agent opens its Telegram session before the user's first turn (when the bridge daemon is reachable).",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/handlers/session-start.sh\""
+          }
+        ]
+      }
+    ]
+  }
+}
