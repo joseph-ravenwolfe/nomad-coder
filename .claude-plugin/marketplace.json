@@ -15,7 +15,7 @@
       "author": {
         "name": "Joseph Ravenwolfe"
       },
-      "source": "."
+      "source": "./plugins/nomad-coder"
     }
   ]
 }

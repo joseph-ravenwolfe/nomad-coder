@@ -22,7 +22,7 @@ lsof -nP -iTCP:3099 -sTCP:LISTEN 2>/dev/null \
   || echo "  port 3099 NOT listening"
 
 # 3. Bridge version (read from package.json since dist/build-info may be stale)
-node -p "require('$CLAUDE_PLUGIN_ROOT/package.json').version" 2>/dev/null
+node -p "require('$CLAUDE_PLUGIN_ROOT/../../package.json').version" 2>/dev/null
 
 # 4. Recent log activity
 echo "--- last 10 stdout lines ---"
@@ -33,12 +33,17 @@ tail -10 "$HOME/Library/Logs/nomad-coder.err.log" 2>/dev/null || echo "(no stder
 # 5. Cache size
 du -sh "$HOME/.cache/nomad-coder" 2>/dev/null || echo "  (no cache dir)"
 
-# 6. Paired user (read from .env without leaking the bot token)
-if [ -f "$CLAUDE_PLUGIN_ROOT/.env" ]; then
-  grep -E "^(ALLOWED_USER_ID|CHAT_ID)=" "$CLAUDE_PLUGIN_ROOT/.env" \
-    || echo "  (no pairing in .env)"
+# 6. Paired user (read from ~/.nomad-coder.json — the canonical config)
+if [ -f "$HOME/.nomad-coder.json" ]; then
+  node -e '
+    const c = JSON.parse(require("fs").readFileSync(process.env.HOME + "/.nomad-coder.json", "utf8"));
+    const t = c.telegram || {};
+    if (t.allowed_user_id) console.log("  ALLOWED_USER_ID=" + t.allowed_user_id);
+    if (t.chat_id)         console.log("  CHAT_ID=" + t.chat_id);
+    if (!t.allowed_user_id && !t.chat_id) console.log("  (no telegram pairing in ~/.nomad-coder.json)");
+  '
 else
-  echo "  (no .env at $CLAUDE_PLUGIN_ROOT)"
+  echo "  (~/.nomad-coder.json missing — run /nomad-coder:pair)"
 fi
 ```
 

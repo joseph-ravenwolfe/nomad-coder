@@ -22,14 +22,20 @@ End-to-end install for the nomad-coder bridge. Runs once on a fresh machine
 
 ## Execution
 
-### 0. Resolve the plugin root
+### 0. Resolve the plugin and bridge roots
 
-The plugin's source lives at `${CLAUDE_PLUGIN_ROOT}` — set by Claude Code
-when this command runs. Use that as `REPO_ROOT` throughout. Confirm by:
+Claude Code sets `${CLAUDE_PLUGIN_ROOT}` to the plugin metadata directory
+(`<marketplace>/plugins/nomad-coder/`). The bridge source — `package.json`,
+`src/`, `dist/`, `scripts/` — lives one level up at the marketplace
+repo root, i.e. `${CLAUDE_PLUGIN_ROOT}/../..`. Throughout this command
+we treat that path as the bridge root.
+
+Confirm by:
 
 ```bash
-echo "$CLAUDE_PLUGIN_ROOT"
-ls "$CLAUDE_PLUGIN_ROOT/scripts/install/install-launchd.sh"
+echo "  plugin root: $CLAUDE_PLUGIN_ROOT"
+echo "  bridge root: $CLAUDE_PLUGIN_ROOT/../.."
+ls "$CLAUDE_PLUGIN_ROOT/../../scripts/install/install-launchd.sh"
 ```
 
 If `CLAUDE_PLUGIN_ROOT` is empty (running outside CC), abort with a clear
@@ -50,14 +56,14 @@ only `/cc` (the in-Telegram session launcher) needs it.
 
 ### 2. Bot pairing
 
-Read `${CLAUDE_PLUGIN_ROOT}/.env` if it exists. If `BOT_TOKEN`,
+Read `${CLAUDE_PLUGIN_ROOT}/../../.env` if it exists. If `BOT_TOKEN`,
 `ALLOWED_USER_ID`, and `CHAT_ID` are all set, ask the user "Reuse existing
 bot credentials? (Y/n)" — if yes, skip pairing.
 
 Otherwise, run the existing pairing flow:
 
 ```bash
-cd "$CLAUDE_PLUGIN_ROOT" && npm install --silent && npm run pair
+cd "$CLAUDE_PLUGIN_ROOT/../.." && npm install --silent && npm run pair
 ```
 
 `src/setup.ts` walks the user through:
@@ -81,19 +87,19 @@ its default rotation).
 ### 4. Build
 
 ```bash
-cd "$CLAUDE_PLUGIN_ROOT" && npm install && npm run build
+cd "$CLAUDE_PLUGIN_ROOT/../.." && npm install && npm run build
 ```
 
 ### 5. Install launchd service
 
 ```bash
-"$CLAUDE_PLUGIN_ROOT/scripts/install/install-launchd.sh"
+"$CLAUDE_PLUGIN_ROOT/../../scripts/install/install-launchd.sh"
 ```
 
 If the user passed `--no-auto-approve`, forward it:
 
 ```bash
-"$CLAUDE_PLUGIN_ROOT/scripts/install/install-launchd.sh" --no-auto-approve
+"$CLAUDE_PLUGIN_ROOT/../../scripts/install/install-launchd.sh" --no-auto-approve
 ```
 
 The script renders the plist template, bootouts any prior service,
@@ -131,7 +137,7 @@ Nomad Coder is online.
   Plist:    ~/Library/LaunchAgents/com.electrified-cortex.nomad-coder.plist
   Logs:     ~/Library/Logs/nomad-coder.{log,err.log}
   Cache:    ~/.cache/nomad-coder/
-  Source:   $CLAUDE_PLUGIN_ROOT
+  Source:   $CLAUDE_PLUGIN_ROOT/../..
 
 Next steps:
   • Open a new shell so the SessionStart hook is in scope.

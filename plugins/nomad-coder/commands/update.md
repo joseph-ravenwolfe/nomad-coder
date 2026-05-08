@@ -13,7 +13,7 @@ Refresh the bridge to the latest commit on the tracking branch.
 
 ```bash
 set -euo pipefail
-cd "$CLAUDE_PLUGIN_ROOT"
+cd "$CLAUDE_PLUGIN_ROOT/../.."
 
 # 1. Pull (skip if --no-pull was passed)
 if [ "${1:-}" != "--no-pull" ]; then
