@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, statSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -19,7 +19,7 @@ describe("config-file", () => {
     "ELEVENLABS_DEFAULT_SPEED",
     "AUTO_APPROVE_AGENTS",
     "CC_LAUNCH_SCRIPT",
-    "XDG_CONFIG_HOME",
+    "HOME",
   ];
 
   let tmpDir: string;
@@ -32,8 +32,10 @@ describe("config-file", () => {
       savedEnv[k] = process.env[k];
       delete process.env[k];
     }
-    // Point the canonical loader at our tmp dir.
-    process.env.XDG_CONFIG_HOME = tmpDir;
+    // Point homedir() at our tmp dir so getCanonicalConfigPath() resolves
+    // to `<tmpDir>/.nomad-coder.json`. Node's os.homedir() reads $HOME on
+    // POSIX, so this redirects all path resolution into the sandbox.
+    process.env.HOME = tmpDir;
   });
 
   afterEach(() => {
@@ -45,20 +47,18 @@ describe("config-file", () => {
   });
 
   describe("getCanonicalConfigPath", () => {
-    it("uses XDG_CONFIG_HOME when set", () => {
-      expect(getCanonicalConfigPath()).toBe(join(tmpDir, "nomad-coder", "config.json"));
+    it("returns ~/.nomad-coder.json under the current HOME", () => {
+      expect(getCanonicalConfigPath()).toBe(join(tmpDir, ".nomad-coder.json"));
     });
 
-    it("falls back to ~/.config when XDG_CONFIG_HOME is unset", () => {
-      delete process.env.XDG_CONFIG_HOME;
-      const path = getCanonicalConfigPath();
-      expect(path).toMatch(/\.config\/nomad-coder\/config\.json$/);
-    });
-
-    it("treats empty XDG_CONFIG_HOME as unset", () => {
-      process.env.XDG_CONFIG_HOME = "";
-      const path = getCanonicalConfigPath();
-      expect(path).toMatch(/\.config\/nomad-coder\/config\.json$/);
+    it("uses a different path when HOME changes", () => {
+      const otherHome = mkdtempSync(join(tmpdir(), "nomad-other-home-"));
+      try {
+        process.env.HOME = otherHome;
+        expect(getCanonicalConfigPath()).toBe(join(otherHome, ".nomad-coder.json"));
+      } finally {
+        rmSync(otherHome, { recursive: true, force: true });
+      }
     });
   });
 
@@ -67,15 +67,13 @@ describe("config-file", () => {
       const result = loadCanonicalConfig();
       expect(result.config).toEqual({});
       expect(result.appliedKeys).toEqual([]);
-      expect(result.path).toBe(join(tmpDir, "nomad-coder", "config.json"));
+      expect(result.path).toBe(join(tmpDir, ".nomad-coder.json"));
     });
   });
 
   describe("loadCanonicalConfig — file present", () => {
     function writeRaw(content: string): void {
-      const dir = join(tmpDir, "nomad-coder");
-      mkdirSync(dir, { recursive: true });
-      writeFileSync(join(dir, "config.json"), content);
+      writeFileSync(join(tmpDir, ".nomad-coder.json"), content);
     }
 
     it("populates process.env from telegram, elevenlabs, and behavior sections", () => {
@@ -147,7 +145,7 @@ describe("config-file", () => {
 
   describe("writeCanonicalConfig", () => {
     it("creates the file when none exists", () => {
-      const path = join(tmpDir, "nomad-coder", "config.json");
+      const path = join(tmpDir, ".nomad-coder.json");
       const { merged } = writeCanonicalConfig({ telegram: { bot_token: "new-tok" } }, { path });
       const onDisk = JSON.parse(readFileSync(path, "utf8")) as { telegram?: { bot_token?: string } };
       expect(onDisk.telegram?.bot_token).toBe("new-tok");
@@ -155,7 +153,7 @@ describe("config-file", () => {
     });
 
     it("merges into existing file rather than clobbering", () => {
-      const path = join(tmpDir, "nomad-coder", "config.json");
+      const path = join(tmpDir, ".nomad-coder.json");
       writeCanonicalConfig({
         telegram: { bot_token: "tok", allowed_user_id: 1 },
         elevenlabs: { api_key: "old-key" },
@@ -173,7 +171,7 @@ describe("config-file", () => {
     });
 
     it("writes file with mode 0o600 (secrets-only)", () => {
-      const path = join(tmpDir, "nomad-coder", "config.json");
+      const path = join(tmpDir, ".nomad-coder.json");
       writeCanonicalConfig({ telegram: { bot_token: "secret" } }, { path });
       const mode = statSync(path).mode & 0o777;
       expect(mode).toBe(0o600);
@@ -186,7 +184,7 @@ describe("config-file", () => {
     });
 
     it("strips empty sections rather than emitting empty objects", () => {
-      const path = join(tmpDir, "nomad-coder", "config.json");
+      const path = join(tmpDir, ".nomad-coder.json");
       writeCanonicalConfig({ telegram: { bot_token: "tok" } }, { path });
       const raw = readFileSync(path, "utf8");
       expect(raw).not.toContain('"elevenlabs"');
@@ -196,7 +194,7 @@ describe("config-file", () => {
 
   describe("end-to-end: write then load", () => {
     it("written config round-trips into process.env on next load", () => {
-      const path = join(tmpDir, "nomad-coder", "config.json");
+      const path = join(tmpDir, ".nomad-coder.json");
       writeCanonicalConfig({
         telegram: { bot_token: "round-trip-tok" },
         behavior: { auto_approve_agents: true },

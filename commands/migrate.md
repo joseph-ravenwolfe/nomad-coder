@@ -1,5 +1,5 @@
 ---
-description: Clean up legacy manual nomad-coder install artifacts (cc() shell function override, ~/.claude.json mcpServers entry, ~/.claude/CLAUDE.md section, ~/.claude/hooks/nomad-bootstrap.sh). Idempotent — safe to re-run.
+description: Clean up legacy manual nomad-coder install artifacts (cc() shell function override, ~/.claude.json mcpServers entry, ~/.claude/CLAUDE.md section, ~/.claude/hooks/nomad-bootstrap.sh) and migrate .env secrets into ~/.nomad-coder.json. Idempotent — safe to re-run.
 argument-hint: "[--dry-run]"
 allowed-tools: [Bash, Read, Edit]
 disable-model-invocation: true
@@ -31,14 +31,14 @@ error — this command resolves that.
 4. **`~/.claude/hooks/nomad-bootstrap.sh`** — delete. The plugin's
    `hooks/handlers/session-start.sh` replaces it (it was orphaned anyway —
    never wired into a `hooks.json`).
-5. **`.env` → `~/.config/nomad-coder/config.json`** — if `.env` at the repo
-   root contains `BOT_TOKEN`, `ALLOWED_USER_ID`, `CHAT_ID`, or any
-   `ELEVENLABS_*` keys, copy them into the canonical config file. Existing
-   config.json values are preserved (merge, not clobber). The legacy
-   `.env` is left in place for backward compat — `npm run pair` writes
-   both, and the bridge reads canonical first. Operators can delete
-   `.env` after confirming the migration; nothing on this machine relies
-   on it once config.json exists.
+5. **`.env` → `~/.nomad-coder.json`** — if `.env` at the repo root
+   contains `BOT_TOKEN`, `ALLOWED_USER_ID`, `CHAT_ID`, or any
+   `ELEVENLABS_*` keys, copy them into the canonical dotfile. Existing
+   `~/.nomad-coder.json` values are preserved (merge, not clobber). The
+   legacy `.env` is left in place for backward compat — `npm run pair`
+   writes both, and the bridge reads canonical first. Operators can
+   delete `.env` after confirming the migration; nothing on this
+   machine relies on it once `~/.nomad-coder.json` exists.
 
 ## Behavior
 
@@ -75,11 +75,11 @@ if (j.mcpServers && j.mcpServers.nomad) {
 
 For `~/.claude/hooks/nomad-bootstrap.sh`: just `rm -f` if it exists.
 
-For the `.env` → `config.json` migration, parse `.env` line-by-line
-(`KEY=VALUE` pairs, ignore comments and blanks), build a partial
-`NomadCoderConfig` mapping known keys into their JSON sections (BOT_TOKEN /
-ALLOWED_USER_ID / CHAT_ID → `telegram`, ELEVENLABS_* → `elevenlabs`), then
-shell out to node to merge into `~/.config/nomad-coder/config.json`:
+For the `.env` → `~/.nomad-coder.json` migration, parse `.env`
+line-by-line (`KEY=VALUE` pairs, ignore comments and blanks), build a
+partial `NomadCoderConfig` mapping known keys into their JSON sections
+(BOT_TOKEN / ALLOWED_USER_ID / CHAT_ID → `telegram`, ELEVENLABS_* →
+`elevenlabs`), then shell out to node to merge into `~/.nomad-coder.json`:
 
 ```bash
 cd "$CLAUDE_PLUGIN_ROOT"
@@ -112,8 +112,9 @@ console.log("Merged " + Object.keys(env).length + " keys from .env into " + out)
 '
 ```
 
-This preserves any pre-existing config.json values (merge behavior), so
-running `/nomad-coder:migrate` twice is a no-op on the second pass.
+This preserves any pre-existing `~/.nomad-coder.json` values (merge
+behavior), so running `/nomad-coder:migrate` twice is a no-op on the
+second pass.
 
 For `~/.zshrc`: read the file, find the `cc()` function block, locate the
 inner `local boot="..."` heredoc-style assignment plus the `"${boot}$*"`

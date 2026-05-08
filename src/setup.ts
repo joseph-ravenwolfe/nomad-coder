@@ -162,9 +162,9 @@ async function main() {
         console.log("");
 
         // 6. Write credentials to BOTH .env (legacy / repo-local dev) AND
-        //    the canonical ~/.config/nomad-coder/config.json (production).
-        //    Canonical wins at runtime; .env is kept for backward compat
-        //    with operators who run `npm start` directly from the repo.
+        //    the canonical ~/.nomad-coder.json (production). Canonical
+        //    wins at runtime; .env is kept for backward compat with
+        //    operators who run `npm start` directly from the repo.
         writeEnv({
           BOT_TOKEN: token,
           ALLOWED_USER_ID: String(userId),

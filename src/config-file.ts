@@ -1,15 +1,14 @@
 /**
  * Canonical configuration file for Nomad Coder.
  *
- * Stored at `$XDG_CONFIG_HOME/nomad-coder/config.json` (default:
- * `~/.config/nomad-coder/config.json`). XDG conventions match our existing
- * cache path under `~/.cache/nomad-coder/`, so a single rule answers "where
- * does this app keep state?" — under `~/.{config,cache}/nomad-coder/`.
+ * Stored at `~/.nomad-coder.json` — a flat dotfile in `$HOME`, same pattern
+ * as `~/.gitconfig` / `~/.npmrc` / `~/.zshrc`. One file, one rule: "settings
+ * for nomad-coder live in the nomad-coder dotfile."
  *
  * Precedence at startup, highest first:
  *   1. `process.env` set by launchd plist or shell — always wins.
- *   2. Values from `config.json` loaded by `loadCanonicalConfig()` — populates
- *      `process.env` for unset keys.
+ *   2. Values from `~/.nomad-coder.json` loaded by `loadCanonicalConfig()` —
+ *      populates `process.env` for unset keys.
  *   3. Values from `.env` loaded by dotenv — populates still-unset keys.
  *
  * `loadCanonicalConfig()` runs at the very top of `src/index.ts`, before the
@@ -51,11 +50,9 @@ const KEY_MAP: ReadonlyArray<readonly [string, readonly string[]]> = [
   ["CC_LAUNCH_SCRIPT", ["behavior", "cc_launch_script"]],
 ];
 
-/** Returns the canonical config path, respecting `XDG_CONFIG_HOME`. */
+/** Returns the canonical config path: `~/.nomad-coder.json`. */
 export function getCanonicalConfigPath(): string {
-  const xdg = process.env.XDG_CONFIG_HOME;
-  const base = xdg && xdg.length > 0 ? xdg : join(homedir(), ".config");
-  return join(base, "nomad-coder", "config.json");
+  return join(homedir(), ".nomad-coder.json");
 }
 
 function readConfigFile(path: string): NomadCoderConfig | undefined {
@@ -64,13 +61,13 @@ function readConfigFile(path: string): NomadCoderConfig | undefined {
   try {
     raw = readFileSync(path, "utf8");
   } catch (err) {
-    process.stderr.write(`[nomad-coder] config.json read failed at ${path}: ${String(err)}\n`);
+    process.stderr.write(`[nomad-coder] read failed at ${path}: ${String(err)}\n`);
     return undefined;
   }
   try {
     return JSON.parse(raw) as NomadCoderConfig;
   } catch {
-    process.stderr.write(`[nomad-coder] config.json at ${path} is malformed JSON — skipping\n`);
+    process.stderr.write(`[nomad-coder] ${path} is malformed JSON — skipping\n`);
     return undefined;
   }
 }
