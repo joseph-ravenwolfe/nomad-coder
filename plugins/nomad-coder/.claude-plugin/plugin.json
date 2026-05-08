@@ -1,18 +1,8 @@
 {
   "name": "nomad-coder",
-  "description": "Drive Claude Code from Telegram. Long-running session bridge with voice, multi-session routing, /cc launcher, and operator-side controls. Pairs with a single Telegram bot you control.",
   "version": "8.0.0",
+  "description": "Drive Claude Code from Telegram — long-running session bridge with voice, multi-session routing, /cc launcher, and operator-side controls.",
   "author": {
     "name": "Joseph Ravenwolfe"
-  },
-  "homepage": "https://github.com/joseph-ravenwolfe/nomad-coder",
-  "keywords": [
-    "telegram",
-    "mcp",
-    "bridge",
-    "claude-code",
-    "voice",
-    "multi-session",
-    "remote-control"
-  ]
+  }
 }
