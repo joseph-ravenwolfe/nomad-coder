@@ -13,7 +13,7 @@ Read-only health check. Does not modify anything.
 
 ```bash
 # 1. launchd job loaded?
-launchctl print "gui/$(id -u)/com.electrified-cortex.nomad-coder" 2>/dev/null \
+launchctl print "gui/$(id -u)/com.joseph-ravenwolfe.nomad-coder" 2>/dev/null \
   | grep -E "^\s*(state|pid|path|runs)\s*=" \
   || echo "  service NOT loaded"
 
@@ -62,6 +62,6 @@ Nomad Coder status:
 ```
 
 If anything is red, suggest the right next command:
-- Service not loaded → `/nomad-coder:setup --reinstall` or `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.electrified-cortex.nomad-coder.plist`
+- Service not loaded → `/nomad-coder:setup --reinstall` or `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.joseph-ravenwolfe.nomad-coder.plist`
 - Port not listening → check `~/Library/Logs/nomad-coder.err.log`, then `/nomad-coder:setup --reinstall`
 - No pairing → `/nomad-coder:pair`

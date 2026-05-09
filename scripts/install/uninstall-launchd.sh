@@ -10,8 +10,10 @@
 
 set -euo pipefail
 
-LABEL="com.electrified-cortex.nomad-coder"
+LABEL="com.joseph-ravenwolfe.nomad-coder"
+LEGACY_LABEL="com.electrified-cortex.nomad-coder"
 PLIST_DEST="$HOME/Library/LaunchAgents/$LABEL.plist"
+LEGACY_PLIST="$HOME/Library/LaunchAgents/$LEGACY_LABEL.plist"
 PURGE=0
 
 for arg in "$@"; do
@@ -22,7 +24,8 @@ for arg in "$@"; do
 done
 
 echo "==> Bootouting service"
-launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
+launchctl bootout "gui/$(id -u)/$LABEL"        2>/dev/null || true
+launchctl bootout "gui/$(id -u)/$LEGACY_LABEL" 2>/dev/null || true
 sleep 2
 
 if [ -f "$PLIST_DEST" ]; then
@@ -30,6 +33,11 @@ if [ -f "$PLIST_DEST" ]; then
   echo "Removed: $PLIST_DEST"
 else
   echo "(no plist at $PLIST_DEST)"
+fi
+
+if [ -f "$LEGACY_PLIST" ]; then
+  rm -f "$LEGACY_PLIST"
+  echo "Removed legacy: $LEGACY_PLIST"
 fi
 
 if [ "$PURGE" = "1" ]; then

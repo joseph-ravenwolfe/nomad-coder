@@ -31,9 +31,36 @@ export interface NomadCoderConfig {
     model_id?: string;
     default_speed?: number;
   };
+  /**
+   * Self-hosted OpenAI-compat TTS server (e.g. Kokoro-FastAPI). The bridge
+   * reads `host` as `TTS_HOST` and posts to `${host}/v1/audio/speech`. Used
+   * when ElevenLabs isn't configured but the operator wants better-than-`say`
+   * voice. See https://github.com/hexgrad/Kokoro-FastAPI for the canonical
+   * server.
+   */
+  kokoro?: {
+    host?: string;
+  };
   behavior?: {
     auto_approve_agents?: boolean | string | number;
+    /**
+     * Absolute path to the AppleScript that launches a `cc` session in the
+     * operator's terminal. Set by `install-launchd.sh` based on the
+     * `--terminal` flag.
+     */
     cc_launch_script?: string;
+    /**
+     * The CLI command the operator uses to start Claude Code in their
+     * terminal — `cc`, `claude`, or any custom alias. Passed to the launch
+     * AppleScript as its second argument. Defaults to `cc` if unset.
+     */
+    cc_cli_command?: string;
+    /**
+     * Which terminal app the launch AppleScript drives. Stored for
+     * diagnostic / status reporting; the actual selection is encoded in
+     * `cc_launch_script`. One of: ghostty, iterm, terminal, wave, warp.
+     */
+    terminal?: string;
   };
 }
 
@@ -46,8 +73,10 @@ const KEY_MAP: ReadonlyArray<readonly [string, readonly string[]]> = [
   ["ELEVENLABS_VOICE_ID", ["elevenlabs", "voice_id"]],
   ["ELEVENLABS_MODEL_ID", ["elevenlabs", "model_id"]],
   ["ELEVENLABS_DEFAULT_SPEED", ["elevenlabs", "default_speed"]],
+  ["TTS_HOST", ["kokoro", "host"]],
   ["AUTO_APPROVE_AGENTS", ["behavior", "auto_approve_agents"]],
   ["CC_LAUNCH_SCRIPT", ["behavior", "cc_launch_script"]],
+  ["CC_CLI_COMMAND", ["behavior", "cc_cli_command"]],
 ];
 
 /** Returns the canonical config path: `~/.nomad-coder.json`. */
@@ -127,6 +156,9 @@ export function writeCanonicalConfig(
 
   const el = { ...existing.elevenlabs, ...partial.elevenlabs };
   if (Object.keys(el).length > 0) merged.elevenlabs = el;
+
+  const kk = { ...existing.kokoro, ...partial.kokoro };
+  if (Object.keys(kk).length > 0) merged.kokoro = kk;
 
   const bh = { ...existing.behavior, ...partial.behavior };
   if (Object.keys(bh).length > 0) merged.behavior = bh;

@@ -62,6 +62,18 @@ export function getCcLaunchScript(): string | undefined {
 }
 
 /**
+ * The CLI command the operator uses to start Claude Code in their terminal
+ * — `cc`, `claude`, or any custom alias they've set up. Read from
+ * `CC_CLI_COMMAND` in the env (set by the launchd plist at install time);
+ * defaults to `cc` if unset. Passed as the second argument to the launch
+ * AppleScript so the script can run `cd <dir> && <cli> <kickstart>`.
+ */
+export function getCcCliCommand(): string {
+  const s = process.env.CC_CLI_COMMAND;
+  return s && s.trim().length > 0 ? s.trim() : "cc";
+}
+
+/**
  * Validates `targetDir` (must exist + be a directory) and runs
  * `osascript $CC_LAUNCH_SCRIPT <targetDir>`. Resolves on script exit code 0,
  * rejects with a `CcLaunchError` otherwise.
@@ -104,8 +116,9 @@ export async function launchCcInGhostty(targetDir: string): Promise<void> {
     } satisfies CcLaunchError;
   }
 
+  const cli = getCcCliCommand();
   await new Promise<void>((resolve, reject) => {
-    const child = spawn("osascript", [script, resolved], {
+    const child = spawn("osascript", [script, resolved, cli], {
       stdio: ["ignore", "pipe", "pipe"],
       detached: true,
     });

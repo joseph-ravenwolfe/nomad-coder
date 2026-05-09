@@ -98,16 +98,28 @@ describe("cc-launch", () => {
       expect(spawnSpy).not.toHaveBeenCalled();
     });
 
-    it("spawns osascript with the script + dir args and resolves on exit code 0", async () => {
+    it("spawns osascript with the script + dir + cli args and resolves on exit code 0", async () => {
       process.env.CC_LAUNCH_SCRIPT = "/launch.applescript";
+      delete process.env.CC_CLI_COMMAND;
       spawnSpy.mockImplementation(() => makeFakeChild({ exitCode: 0 }));
       const { launchCcInGhostty } = await import("./cc-launch.js");
       await expect(launchCcInGhostty(workDir)).resolves.toBeUndefined();
       expect(spawnSpy).toHaveBeenCalledTimes(1);
       const [cmd, args, opts] = spawnSpy.mock.calls[0] as [string, string[], Record<string, unknown>];
       expect(cmd).toBe("osascript");
-      expect(args).toEqual(["/launch.applescript", workDir]);
+      // 3rd arg is the CLI command — defaults to "cc" when CC_CLI_COMMAND is unset.
+      expect(args).toEqual(["/launch.applescript", workDir, "cc"]);
       expect(opts.detached).toBe(true);
+    });
+
+    it("passes CC_CLI_COMMAND through as the 3rd osascript arg when set", async () => {
+      process.env.CC_LAUNCH_SCRIPT = "/launch.applescript";
+      process.env.CC_CLI_COMMAND = "claude";
+      spawnSpy.mockImplementation(() => makeFakeChild({ exitCode: 0 }));
+      const { launchCcInGhostty } = await import("./cc-launch.js");
+      await launchCcInGhostty(workDir);
+      const args = spawnSpy.mock.calls[0]![1] as string[];
+      expect(args[2]).toBe("claude");
     });
 
     it("trims whitespace from the target dir before stat + spawn", async () => {

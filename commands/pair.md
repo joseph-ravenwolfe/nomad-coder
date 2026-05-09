@@ -25,7 +25,7 @@ cd "$CLAUDE_PLUGIN_ROOT" && npm run pair
 After pairing succeeds, kick the daemon so it picks up the new credentials:
 
 ```bash
-launchctl kickstart -k "gui/$(id -u)/com.electrified-cortex.nomad-coder"
+launchctl kickstart -k "gui/$(id -u)/com.joseph-ravenwolfe.nomad-coder"
 sleep 2
 tail -5 "$HOME/Library/Logs/nomad-coder.log"
 ```

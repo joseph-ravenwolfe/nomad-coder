@@ -27,7 +27,7 @@ npm run build
 
 # 3. Kick the daemon so it picks up the new build.
 # `kickstart -k` SIGTERMs the old process and respawns from the (updated) plist.
-launchctl kickstart -k "gui/$(id -u)/com.electrified-cortex.nomad-coder"
+launchctl kickstart -k "gui/$(id -u)/com.joseph-ravenwolfe.nomad-coder"
 
 # 4. Wait for it to come back up.
 echo -n "Waiting for bridge to restart "

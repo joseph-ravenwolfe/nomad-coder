@@ -1,26 +1,27 @@
--- Open a Ghostty tab in a target directory and run `cc`.
+-- Open a Ghostty tab in a target directory and run the configured CLI.
 --
 -- Usage:
---   osascript ghostty-cc-tab.applescript /path/to/dir
+--   osascript ghostty-cc-tab.applescript <target-dir> [<cli-command>]
 --
--- This script is the default reference launcher for the bridge's `/cc`
--- Telegram command. Point the bridge's `CC_LAUNCH_SCRIPT` env var at the
--- absolute path of this file, e.g. in your launchd plist:
+-- Args:
+--   target-dir    absolute path to cd into (required)
+--   cli-command   the binary to launch Claude Code (optional; default "cc")
 --
---   <key>CC_LAUNCH_SCRIPT</key>
---   <string>/Users/<you>/Projects/Telegram-Bridge-MCP/scripts/cc/ghostty-cc-tab.applescript</string>
+-- This script is the Ghostty launcher for the bridge's `/cc` Telegram
+-- command. The bridge sets CC_LAUNCH_SCRIPT to this file and CC_CLI_COMMAND
+-- to whatever the operator chose at install time (e.g. "cc", "claude", or
+-- a custom alias).
 --
--- Other terminals (iTerm2, Warp, Alacritty, etc.) can be supported by
--- dropping a sibling script into this directory and pointing
--- CC_LAUNCH_SCRIPT at it. The contract is: take one positional arg
--- (target dir), exit 0 on success, non-zero on failure.
+-- Sibling scripts in this directory (iterm-, terminal-, wave-, warp-) cover
+-- other terminals. The contract is identical: take (target-dir, cli-command),
+-- exit 0 on success, non-zero on failure.
 --
 -- Behavior:
 --   * If Ghostty already has at least one window, focuses it and opens a NEW TAB
 --     in the frontmost window (Cmd+T).
 --   * If Ghostty is not running (or has no windows), launches it, waits for
 --     its first window, and uses that window's initial tab.
---   * Then types `cd <dir> && cc <kickstart-prompt>` and presses Return.
+--   * Then types `cd <dir> && <cli> <kickstart-prompt>` and presses Return.
 --
 -- The kickstart prompt forces the agent's first turn so the SessionStart
 -- hook's bootstrap directive (injected via additionalContext) actually
@@ -30,11 +31,14 @@
 
 on run argv
 	if (count of argv) < 1 then
-		error "Usage: osascript ghostty-cc-tab.applescript <target-dir>"
+		error "Usage: osascript ghostty-cc-tab.applescript <target-dir> [<cli-command>]"
 	end if
 	set targetDir to item 1 of argv
+	set cliCommand to "cc"
+	if (count of argv) ≥ 2 then set cliCommand to item 2 of argv
+
 	set kickstart to "Run your SessionStart bootstrap directive. Reply with just: Online."
-	set ccCommand to "cd " & quoted form of targetDir & " && cc " & quoted form of kickstart
+	set ccCommand to "cd " & quoted form of targetDir & " && " & cliCommand & " " & quoted form of kickstart
 
 	-- Determine whether Ghostty already has a window before we activate it.
 	set hadWindows to false
