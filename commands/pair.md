@@ -12,7 +12,7 @@ Runs the Telegram bot pairing flow only — no daemon (re)install.
 ## Execution
 
 ```bash
-cd "$CLAUDE_PLUGIN_ROOT/../.." && npm run pair
+cd "$CLAUDE_PLUGIN_ROOT" && npm run pair
 ```
 
 `src/setup.ts` will:

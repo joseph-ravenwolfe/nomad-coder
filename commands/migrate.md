@@ -82,7 +82,7 @@ partial `NomadCoderConfig` mapping known keys into their JSON sections
 `elevenlabs`), then shell out to node to merge into `~/.nomad-coder.json`:
 
 ```bash
-cd "$CLAUDE_PLUGIN_ROOT/../.."
+cd "$CLAUDE_PLUGIN_ROOT"
 node -e '
 const fs = require("fs");
 const path = require("path");

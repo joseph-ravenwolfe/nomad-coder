@@ -22,7 +22,7 @@ lsof -nP -iTCP:3099 -sTCP:LISTEN 2>/dev/null \
   || echo "  port 3099 NOT listening"
 
 # 3. Bridge version (read from package.json since dist/build-info may be stale)
-node -p "require('$CLAUDE_PLUGIN_ROOT/../../package.json').version" 2>/dev/null
+node -p "require('$CLAUDE_PLUGIN_ROOT/package.json').version" 2>/dev/null
 
 # 4. Recent log activity
 echo "--- last 10 stdout lines ---"
