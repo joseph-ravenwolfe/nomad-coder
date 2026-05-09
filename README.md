@@ -1,8 +1,8 @@
 # Nomad Coder
 
-[![CI](https://github.com/electrified-cortex/Telegram-Bridge-MCP/actions/workflows/ci.yml/badge.svg)](https://github.com/electrified-cortex/Telegram-Bridge-MCP/actions/workflows/ci.yml)
-[![Docker](https://github.com/electrified-cortex/Telegram-Bridge-MCP/actions/workflows/publish.yml/badge.svg)](https://github.com/electrified-cortex/Telegram-Bridge-MCP/actions/workflows/publish.yml)
-[![Docker Image](https://img.shields.io/badge/ghcr.io-telegram--bridge--mcp-blue?logo=docker)](https://github.com/electrified-cortex/Telegram-Bridge-MCP/pkgs/container/nomad-coder)
+[![CI](https://github.com/joseph-ravenwolfe/nomad-coder/actions/workflows/ci.yml/badge.svg)](https://github.com/joseph-ravenwolfe/nomad-coder/actions/workflows/ci.yml)
+[![Docker](https://github.com/joseph-ravenwolfe/nomad-coder/actions/workflows/publish.yml/badge.svg)](https://github.com/joseph-ravenwolfe/nomad-coder/actions/workflows/publish.yml)
+[![Docker Image](https://img.shields.io/badge/ghcr.io-nomad--coder-blue?logo=docker)](https://github.com/joseph-ravenwolfe/nomad-coder/pkgs/container/nomad-coder)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 
 <img align="right" src="interaction.jpg" width="320" alt="AI agents coordinating through Nomad Coder" />
@@ -37,22 +37,42 @@
 
 ---
 
-## Quick Start
+## Quick Start (Claude Code, macOS)
 
-> **Tip:** If your AI has web access, paste this to get started (requires web access):
->
-> ```text
-> Set me up: https://github.com/electrified-cortex/Telegram-Bridge-MCP
-> ```
+Three slash commands inside Claude Code:
+
+```text
+/plugin marketplace add joseph-ravenwolfe/nomad-coder
+/plugin install nomad-coder@nomad-coder
+/nomad-coder:setup
+```
+
+`setup` walks you through bot pairing, optional ElevenLabs voice, builds
+the bridge, installs the launchd daemon, and surfaces the AppleScript
+permission prompts up front. Total time: a few minutes.
+
+After install, three more commands keep things running:
+
+| Command | What it does |
+| --- | --- |
+| `/nomad-coder:status` | Daemon health, port, paired user, recent logs |
+| `/nomad-coder:pair` | Re-pair (e.g., to switch bots) |
+| `/nomad-coder:update` | `git pull && build && launchctl kickstart` |
+| `/nomad-coder:migrate` | One-time cleanup if you previously had a manual install |
+
+Configuration lives at `~/.nomad-coder.json` (mode 0600). The bridge listens
+on `http://127.0.0.1:3099/mcp`. The plugin's SessionStart hook auto-injects
+the bootstrap directive into every new `cc` session, so agents come online
+in Telegram on their first turn.
 
 <details>
-<summary><strong>Manual setup (step by step)</strong></summary>
+<summary><strong>From source — for contributors and non-Claude-Code hosts</strong></summary>
 
 ### 1. Clone and build
 
 ```bash
-git clone https://github.com/electrified-cortex/Telegram-Bridge-MCP.git
-cd Telegram-Bridge-MCP
+git clone https://github.com/joseph-ravenwolfe/nomad-coder.git
+cd nomad-coder
 npm install && npm run build
 ```
 
@@ -72,11 +92,14 @@ Copy the token it gives you.
 npm run pair
 ```
 
-The wizard prompts for your bot token and Telegram user ID, writes a `.env` file, and verifies connectivity.
+The wizard prompts for your bot token, generates a one-time pairing code,
+captures your Telegram user/chat IDs when you echo the code back to the bot,
+and writes them to `~/.nomad-coder.json` (canonical) and `.env` (legacy).
 
 ### 4. Configure your MCP host
 
-See [`docs/setup.md`](docs/setup.md) for per-client config snippets (VS Code, Claude Code, Cursor, Docker).
+See [`docs/setup.md`](docs/setup.md) for per-client config snippets
+(VS Code, Cursor, Windsurf, Docker, raw stdio).
 
 </details>
 
@@ -98,7 +121,7 @@ See [`docs/setup.md`](docs/setup.md) for per-client config snippets (VS Code, Cl
 ```json
 {
   "mcpServers": {
-    "telegram": {
+    "nomad": {
       "type": "streamable-http",
       "url": "http://127.0.0.1:3099/mcp"
     }
@@ -111,7 +134,7 @@ See [`docs/setup.md`](docs/setup.md) for per-client config snippets (VS Code, Cl
 ```json
 {
   "servers": {
-    "telegram": {
+    "nomad": {
       "type": "streamable-http",
       "url": "http://127.0.0.1:3099/mcp"
     }
@@ -129,9 +152,9 @@ See [`docs/setup.md`](docs/setup.md) for per-client config snippets (VS Code, Cl
 ```json
 {
   "mcpServers": {
-    "telegram": {
+    "nomad": {
       "command": "node",
-      "args": ["/path/to/Telegram-Bridge-MCP/dist/index.js"],
+      "args": ["/path/to/nomad-coder/dist/index.js"],
       "env": {
         "BOT_TOKEN": "your-token",
         "ALLOWED_USER_ID": "your-user-id"
@@ -146,10 +169,10 @@ See [`docs/setup.md`](docs/setup.md) for per-client config snippets (VS Code, Cl
 ```json
 {
   "servers": {
-    "telegram": {
+    "nomad": {
       "type": "stdio",
       "command": "node",
-      "args": ["/path/to/Telegram-Bridge-MCP/dist/index.js"],
+      "args": ["/path/to/nomad-coder/dist/index.js"],
       "env": {
         "BOT_TOKEN": "your-token",
         "ALLOWED_USER_ID": "your-user-id"
@@ -340,7 +363,7 @@ Five resources are available to any connected client — no tool call required:
 ## Docker
 
 ```text
-ghcr.io/electrified-cortex/nomad-coder:latest
+ghcr.io/joseph-ravenwolfe/nomad-coder:latest
 ```
 
 > **Before running Docker:** Create your `.env` file first by running `npm run pair` on a machine with Node.js, or copy `.env.example` and fill it in manually.
@@ -348,12 +371,12 @@ ghcr.io/electrified-cortex/nomad-coder:latest
 **Streamable HTTP (recommended)** — run as a long-lived service:
 
 ```bash
-docker run -d --name telegram-mcp \
+docker run -d --name nomad-coder \
   --env-file /absolute/path/to/.env \
   -e MCP_PORT=3099 \
   -p 3099:3099 \
-  -v telegram-mcp-cache:/home/node/.cache \
-  ghcr.io/electrified-cortex/nomad-coder:latest
+  -v nomad-coder-cache:/home/node/.cache \
+  ghcr.io/joseph-ravenwolfe/nomad-coder:latest
 ```
 
 Connect MCP hosts to `http://127.0.0.1:3099/mcp`.
@@ -367,8 +390,8 @@ Connect MCP hosts to `http://127.0.0.1:3099/mcp`.
   "args": [
     "run", "--rm", "-i",
     "--env-file", "/absolute/path/to/.env",
-    "-v", "telegram-mcp-cache:/home/node/.cache",
-    "ghcr.io/electrified-cortex/nomad-coder:latest"
+    "-v", "nomad-coder-cache:/home/node/.cache",
+    "ghcr.io/joseph-ravenwolfe/nomad-coder:latest"
   ]
 }
 ```
@@ -393,9 +416,16 @@ npm run pair      # Re-run pairing wizard
 
 ## Agent Setup
 
-To keep agents reliably in the Telegram dequeue loop, install the loop-guard hook for your host. The hook prevents agents from dropping out of the loop on idle or forced stop.
+**Claude Code:** the plugin's `SessionStart` hook auto-injects the bootstrap
+directive into every new `cc` session. No manual setup needed beyond
+`/plugin install nomad-coder@nomad-coder`. The bridge's heartbeat-files
+delivery (v8) replaces the old long-poll `dequeue` loop; agents arm a
+single `Monitor({command: "tail -F <watch_file>"})` task and rest until a
+line arrives.
 
-See [`docs/agent-setup.md`](docs/agent-setup.md) for installation instructions for VS Code (GitHub Copilot Chat) and Claude Code.
+**Other hosts (VS Code, Cursor, etc.):** see
+[`docs/agent-setup.md`](docs/agent-setup.md) for the loop-guard hook that
+keeps agents in the dequeue loop on idle or forced stop.
 
 ---
 
