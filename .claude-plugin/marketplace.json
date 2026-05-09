@@ -16,11 +16,9 @@
         "name": "Joseph Ravenwolfe"
       },
       "source": {
-        "source": "git-subdir",
+        "source": "url",
         "url": "https://github.com/joseph-ravenwolfe/nomad-coder.git",
-        "path": "plugins/nomad-coder",
-        "ref": "main",
-        "sha": "7ea9edd93ecbca083358cb7e4e01628021f1715a"
+        "sha": "c7c4c1b88862e52c0272a3988754301627352ca8"
       }
     }
   ]
