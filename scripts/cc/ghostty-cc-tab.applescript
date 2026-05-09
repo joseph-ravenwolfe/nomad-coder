@@ -20,14 +20,21 @@
 --     in the frontmost window (Cmd+T).
 --   * If Ghostty is not running (or has no windows), launches it, waits for
 --     its first window, and uses that window's initial tab.
---   * Then types `cd <dir> && cc` and presses Return.
+--   * Then types `cd <dir> && cc <kickstart-prompt>` and presses Return.
+--
+-- The kickstart prompt forces the agent's first turn so the SessionStart
+-- hook's bootstrap directive (injected via additionalContext) actually
+-- executes. Without it, an agent launched via /cc-from-Telegram would sit
+-- idle until the operator typed something — defeating the whole point of
+-- launching a session remotely.
 
 on run argv
 	if (count of argv) < 1 then
 		error "Usage: osascript ghostty-cc-tab.applescript <target-dir>"
 	end if
 	set targetDir to item 1 of argv
-	set ccCommand to "cd " & quoted form of targetDir & " && cc"
+	set kickstart to "Run your SessionStart bootstrap directive. Reply with just: Online."
+	set ccCommand to "cd " & quoted form of targetDir & " && cc " & quoted form of kickstart
 
 	-- Determine whether Ghostty already has a window before we activate it.
 	set hadWindows to false
