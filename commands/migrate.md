@@ -131,8 +131,5 @@ heading exists, the migration was already done.
 - All edits are surgical — never `rm` an entire user file.
 - Edit tool requires the file to be Read first; that's automatic backup-by-context.
 - `--dry-run` is the suggested first invocation.
-- The launchd plist (`~/Library/LaunchAgents/com.joseph-ravenwolfe.nomad-coder.plist`,
-  or the legacy `com.electrified-cortex.nomad-coder.plist` from before the
-  rename) is **not** touched here — `/nomad-coder:setup --reinstall` does the
-  swap, since `install-launchd.sh` bootouts both labels and removes the
-  legacy plist file unconditionally.
+- The launchd plist (`~/Library/LaunchAgents/com.joseph-ravenwolfe.nomad-coder.plist`)
+  is **not** touched — `/nomad-coder:setup --reinstall` is the right tool for that.

@@ -251,9 +251,8 @@ If the operator passed `--no-auto-approve`, forward it:
 
 The script renders the plist template (substituting `{{TERMINAL}}` →
 `scripts/cc/<terminal>-cc-tab.applescript` and `{{CC_CLI_COMMAND}}` → the
-CLI choice), bootouts any prior service (current label *or* legacy
-`com.electrified-cortex.nomad-coder`), bootstraps the new one, and verifies
-port 3099 listening within 10s.
+CLI choice), bootouts any prior service with the same label, bootstraps
+the new one, and verifies port 3099 listening within 10s.
 
 ### 6. AppleScript permission probe
 
@@ -321,9 +320,8 @@ or CLI command without redoing everything else.
 - **No `BOT_TOKEN` after pairing:** `~/.nomad-coder.json` is missing
   `telegram.bot_token` → re-run pairing.
 - **launchctl bootstrap returns 5: Input/output error:** typically a stale
-  prior service. Run `launchctl bootout
-  gui/$(id -u)/com.joseph-ravenwolfe.nomad-coder` (and `gui/$(id -u)/com.electrified-cortex.nomad-coder`
-  on machines from before the rename), wait 3s, retry.
+  prior service. Run `launchctl bootout gui/$(id -u)/com.joseph-ravenwolfe.nomad-coder`,
+  wait 3s, retry.
 - **Port 3099 not listening within 10s:** check `~/Library/Logs/nomad-coder.err.log`
   for the actual startup error (usually a missing env var or a Kokoro
   server URL that isn't responding).

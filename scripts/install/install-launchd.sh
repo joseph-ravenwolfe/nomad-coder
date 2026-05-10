@@ -3,9 +3,8 @@
 #
 # Reads the plist template from this directory, substitutes operator-specific
 # paths and choices (HOME, NODE_BIN, REPO_ROOT, PATH, AUTO_APPROVE_AGENTS,
-# TERMINAL, CC_CLI_COMMAND), bootouts any previously-loaded service (current
-# label *and* legacy `com.electrified-cortex.nomad-coder` for migration),
-# then bootstraps the new one.
+# TERMINAL, CC_CLI_COMMAND), bootouts any previously-loaded service with the
+# same label, then bootstraps the new one.
 #
 # Usage:
 #   scripts/install/install-launchd.sh                              # defaults: ghostty + cc
@@ -25,9 +24,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEMPLATE="$SCRIPT_DIR/com.joseph-ravenwolfe.nomad-coder.plist.template"
 LABEL="com.joseph-ravenwolfe.nomad-coder"
-LEGACY_LABEL="com.electrified-cortex.nomad-coder"
 PLIST_DEST="$HOME/Library/LaunchAgents/$LABEL.plist"
-LEGACY_PLIST="$HOME/Library/LaunchAgents/$LEGACY_LABEL.plist"
 
 # Repo root is two levels up from this script (scripts/install/ → repo root).
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -101,20 +98,11 @@ sed \
 
 mkdir -p "$HOME/Library/LaunchAgents"
 
-# Bootout any existing service with the new label OR the legacy label
-# (`com.electrified-cortex.nomad-coder` from before the rename). Ignore
-# "no such process" — just means nothing was loaded, which is fine.
+# Bootout any existing service with the same label. Ignore "no such process"
+# (exit 3) — just means nothing was loaded, which is fine.
 echo "==> Bootouting existing service (if loaded)"
-launchctl bootout "gui/$(id -u)/$LABEL"        2>/dev/null || true
-launchctl bootout "gui/$(id -u)/$LEGACY_LABEL" 2>/dev/null || true
+launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
 sleep 2
-
-# If a legacy plist file is sitting in LaunchAgents, remove it so it doesn't
-# get re-bootstrapped on next login.
-if [ -f "$LEGACY_PLIST" ]; then
-  rm -f "$LEGACY_PLIST"
-  echo "==> Removed legacy plist: $LEGACY_PLIST"
-fi
 
 # Move plist into place + bootstrap.
 mv "$TMP_PLIST" "$PLIST_DEST"

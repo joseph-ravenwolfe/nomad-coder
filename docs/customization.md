@@ -20,8 +20,8 @@ Once configured, this MCP becomes your development assistant for its own codebas
 ### 1. Clone and build
 
 ```bash
-git clone https://github.com/electrified-cortex/Telegram-Bridge-MCP.git
-cd Telegram-Bridge-MCP
+git clone https://github.com/joseph-ravenwolfe/nomad-coder.git
+cd nomad-coder
 npm install
 npm run build
 ```
