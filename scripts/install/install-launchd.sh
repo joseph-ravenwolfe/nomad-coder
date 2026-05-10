@@ -118,12 +118,44 @@ for i in $(seq 1 20); do
     echo "✓"
     PID="$(lsof -nP -iTCP:3099 -sTCP:LISTEN -t | head -n1)"
     echo ""
+    # Resolve the actual node binary the launchd-spawned shim execs into.
+    # Differs from $NODE_BIN when $NODE_BIN is an asdf/nvm/volta shell-script
+    # shim — TCC attributes Accessibility grants to the post-exec binary, so
+    # the operator needs to add THIS path (not just the shim) to Accessibility.
+    NODE_RESOLVED="$("$NODE_BIN" -e 'process.stdout.write(process.execPath)' 2>/dev/null || echo "$NODE_BIN")"
+
     echo "Installed: $PLIST_DEST"
     echo "Running:   PID $PID, http://127.0.0.1:3099/mcp"
     echo "Terminal:  $TERMINAL  (CC_LAUNCH_SCRIPT=$LAUNCH_SCRIPT)"
     echo "CLI:       $CC_CLI_COMMAND"
+    echo "Node bin:  $NODE_BIN"
+    if [ "$NODE_RESOLVED" != "$NODE_BIN" ]; then
+      echo "  → execs:  $NODE_RESOLVED  (add to Accessibility, see below)"
+    fi
     echo "Logs:      $HOME/Library/Logs/nomad-coder.log"
     echo "          $HOME/Library/Logs/nomad-coder.err.log"
+    echo ""
+    echo "============================================================"
+    echo "  ⚠ macOS Accessibility permission required for /cc"
+    echo "============================================================"
+    echo "The daemon synthesizes keystrokes via osascript to drive your"
+    echo "terminal. macOS will silently deny this until you add these"
+    echo "binaries to Accessibility (no modal prompt for launchd jobs):"
+    echo ""
+    echo "    1. /usr/bin/osascript"
+    echo "    2. $NODE_BIN"
+    if [ "$NODE_RESOLVED" != "$NODE_BIN" ]; then
+      echo "    3. $NODE_RESOLVED"
+    fi
+    echo ""
+    echo "Open the panel:  System Settings → Privacy & Security → Accessibility"
+    echo "  (or run: open 'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility')"
+    echo ""
+    echo "Click + and add each path (Cmd+Shift+G in the picker to paste"
+    echo "the full path), then toggle each on. /cc from Telegram will"
+    echo "fail with 'osascript is not allowed assistive access' until"
+    echo "this is done."
+    echo "============================================================"
     exit 0
   fi
   sleep 0.5

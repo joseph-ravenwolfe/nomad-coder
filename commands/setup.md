@@ -297,11 +297,16 @@ The script renders the plist template (substituting `{{TERMINAL}}` →
 CLI choice), bootouts any prior service with the same label, bootstraps
 the new one, and verifies port 3099 listening within 10s.
 
-### 6. AppleScript permission probe
+### 6. macOS permissions — Automation + Accessibility
 
-macOS prompts for "Claude Code wants to control <Terminal>" the first time
-`/cc` runs. Trigger it now so the operator handles all permission dialogs
-at install time. Tailor the second probe to the chosen terminal:
+Two separate permission categories. Both must be granted, and they live
+in two different panels of System Settings → Privacy & Security.
+
+#### 6a. Automation prompts
+
+macOS prompts for "Claude Code wants to control <Terminal>" the first
+time `/cc` runs. Trigger it now so the operator handles all dialogs at
+install time. Tailor the second probe to the chosen terminal:
 
 ```bash
 osascript -e 'tell application "System Events" to tell process "Finder" to get name' >/dev/null 2>&1 || true
@@ -317,6 +322,55 @@ esac
 
 The first call surfaces the System Events automation prompt; the second
 the per-terminal automation prompt.
+
+#### 6b. Accessibility — manual, no prompt for launchd daemons
+
+The launch AppleScript synthesizes keystrokes (`tell process "<Terminal>"
+to keystroke "cd …"`), which requires **Accessibility** permission —
+separate from Automation. macOS doesn't surface a modal prompt for
+launchd-spawned binaries; it posts a Notification Center entry that's
+easy to miss, then silently denies thereafter. The reliable fix is
+manual.
+
+`install-launchd.sh` already prints the exact paths to add at the end of
+its run (Section 5 above). Re-emit them here for clarity, then open the
+Settings pane:
+
+```bash
+NODE_BIN="$(command -v node)"
+NODE_RESOLVED="$("$NODE_BIN" -e 'process.stdout.write(process.execPath)' 2>/dev/null || echo "$NODE_BIN")"
+
+cat <<EOF
+
+⚠ Accessibility permission required for /cc
+
+Open: System Settings → Privacy & Security → Accessibility
+Click + and add each of these binaries (Cmd+Shift+G in the picker
+to paste the full path), then toggle each on:
+
+    1. /usr/bin/osascript
+    2. $NODE_BIN
+EOF
+[ "$NODE_RESOLVED" != "$NODE_BIN" ] && echo "    3. $NODE_RESOLVED"
+echo ""
+echo "Until this is granted, /cc from Telegram will fail with:"
+echo "  'osascript is not allowed assistive access'"
+echo ""
+
+open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility" 2>/dev/null || true
+```
+
+Wait for the operator to confirm they've added the paths and toggled them
+on before continuing. The third path is only relevant when `node` is a
+shell-script shim (asdf, nvm, volta) — TCC attributes the grant to the
+post-exec binary, not the shim, so both paths must be added.
+
+After the operator confirms, kick the daemon so it picks up the fresh TCC
+state:
+
+```bash
+launchctl kickstart -k "gui/$(id -u)/com.joseph-ravenwolfe.nomad-coder"
+```
 
 ### 7. Verify and summarize
 
