@@ -171,10 +171,53 @@ writeCanonicalConfig({ elevenlabs: { api_key: "'"$ELEVENLABS_KEY"'" } });
 '
 ```
 
-Optionally also ask for `ELEVENLABS_VOICE_ID` (default: leave unset → bridge
-picks one). If the operator wants to browse voices first, point them at
-https://elevenlabs.io/app/voice-library and tell them they can switch later
-with the `set_voice` MCP tool inside any `cc` session.
+Then seed the operator's `mcp-config.json` with the curated voice list
+that ships with the plugin (`scripts/install/elevenlabs-defaults.json` —
+20 voices with descriptions and gender, default Riley). This is the same
+voice configuration the maintainer runs locally; it gives new operators
+a sensible default rotation instead of an empty list. The merge preserves
+any pre-existing keys (`sessionLog`, `sessionEmojis`, `debug`, etc.) and
+only refuses to overwrite `voices` / `defaultVoice` if the operator has
+already customized them:
+
+```bash
+node -e '
+const fs = require("fs");
+const path = require("path");
+const root = process.env.CLAUDE_PLUGIN_ROOT;
+const defaultsPath = path.join(root, "scripts/install/elevenlabs-defaults.json");
+const targetPath  = path.join(root, "mcp-config.json");
+const defaults = JSON.parse(fs.readFileSync(defaultsPath, "utf8"));
+let existing = {};
+if (fs.existsSync(targetPath)) {
+  try { existing = JSON.parse(fs.readFileSync(targetPath, "utf8")); } catch { /* corrupted -> overwrite */ }
+}
+const skipVoices = Array.isArray(existing.voices) && existing.voices.length > 0;
+const skipDefault = typeof existing.defaultVoice === "string" && existing.defaultVoice.length > 0;
+const merged = { ...existing };
+if (!skipVoices)  merged.voices = defaults.voices;
+if (!skipDefault) merged.defaultVoice = defaults.defaultVoice;
+fs.writeFileSync(targetPath, JSON.stringify(merged, null, 2) + "\n");
+const acted = [];
+if (!skipVoices)  acted.push("voices(" + defaults.voices.length + ")");
+if (!skipDefault) acted.push("defaultVoice=" + defaults.defaultVoice);
+console.log(acted.length
+  ? "  ✓ wrote " + acted.join(", ") + " to " + targetPath
+  : "  ✓ kept existing voice config in " + targetPath);
+'
+```
+
+The `voice_id` in `~/.nomad-coder.json` (`elevenlabs.voice_id`) is left
+unset — the bridge picks per-session voices from the curated list by
+hashing the session name, falling back to `defaultVoice` when no match.
+Operators can override per-session at any time with the `set_voice` MCP
+tool, or change the default by editing `mcp-config.json`.
+
+If the operator wants to browse voices first, point them at
+https://elevenlabs.io/app/voice-library — adding a voice there makes it
+available to use, but they'd need to add the `voice_id` to their
+`mcp-config.json` `voices` array manually (or via `set_voice` for the
+current session).
 
 #### If 2 — Kokoro
 

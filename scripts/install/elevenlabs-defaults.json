@@ -1,0 +1,25 @@
+{
+  "defaultVoice": "hA4zGnmTwX2NQiTRMt7o",
+  "voices": [
+    { "name": "fATgBRI8wg5KkDFg8vBd", "description": "James", "gender": "male" },
+    { "name": "vDchjyOZZytffNeZXfZK", "description": "Mike", "gender": "male" },
+    { "name": "24EI9FmmGvJruwUi7TJM", "description": "Lowy", "gender": "male" },
+    { "name": "JOUWtlfdRuffI74LLmML", "description": "Jet", "gender": "male" },
+    { "name": "sp6F311QRVXR53QPGIgK", "description": "Luca", "gender": "male" },
+    { "name": "inGcvmoPgbvKUk9uCvHu", "description": "Adam", "gender": "male" },
+    { "name": "6OzrBCQf8cjERkYgzSg8", "description": "Jamal", "gender": "male" },
+    { "name": "3TStB8f3X3To0Uj5R7RK", "description": "Joseff", "gender": "male" },
+    { "name": "4quIIyCzGDA8dBVvcXKl", "description": "Remi", "gender": "male" },
+    { "name": "0S5oIfi8zOZixuSj8K6n", "description": "Ivanna", "gender": "female" },
+    { "name": "RXtWW6etvimS8QJ5nhVk", "description": "Fiona", "gender": "female" },
+    { "name": "hA4zGnmTwX2NQiTRMt7o", "description": "Riley", "gender": "female" },
+    { "name": "VCUa8W1mPO0QcgrSewvs", "description": "Carolina", "gender": "female" },
+    { "name": "86U1Fs5aPKKkDKi9PRxz", "description": "Veronica", "gender": "female" },
+    { "name": "wvk9Caj0nEx4l3I9LaR6", "description": "Liz", "gender": "female" },
+    { "name": "hGQkZQUA5RiOXIw7P9iO", "description": "Kiora", "gender": "female" },
+    { "name": "tMXujoAjiboschVOhAnk", "description": "Clara", "gender": "female" },
+    { "name": "fq1SdXsX6OokE10pJ4Xw", "description": "Roshni", "gender": "female" },
+    { "name": "DbwWo4rVEd5NrejHYUnm", "description": "Jessica G", "gender": "female" },
+    { "name": "56bWURjYFHyYyVf490Dp", "description": "Emma", "gender": "female" }
+  ]
+}
