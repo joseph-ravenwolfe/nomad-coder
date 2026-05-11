@@ -128,14 +128,38 @@ async function _pollLoop(): Promise<void> {
         }
       }
 
-      // Transcribe voice messages in parallel
-      if (voiceUpdates.length > 0) {
-        await Promise.all(
-          voiceUpdates.map((u) => _transcribeAndRecord(u)),
-        );
+      // Transcribe voice messages concurrently with the poll loop.
+      //
+      // Phase 1 (recordInbound) has already enqueued the voice event
+      // synchronously above, so the agent's session queue already holds
+      // a not-ready entry. Phase 2 (transcribe + patchVoiceText) can
+      // run on its own — when it completes it calls notifySessionWaiters
+      // and pingSessionsHoldingMessage to wake the agent.
+      //
+      // Why not await: the first voice message after a fresh start
+      // triggers a one-time whisper-base ONNX model load that can take
+      // 30–60 s on CPU. Awaiting blocks getUpdates(), so any text or
+      // voice the user sends during that window stalls on Telegram's
+      // side until the load finishes — which looks like the bot has
+      // stopped listening. Detaching lets the loop keep polling.
+      //
+      // Crash semantics are unchanged: the per-session queue is
+      // in-memory, so a crash mid-transcription loses the voice event
+      // either way. advanceOffset still runs after the synchronous
+      // phase, which is when Telegram's redelivery window closes.
+      for (const u of voiceUpdates) {
+        void _transcribeAndRecord(u).catch((err: unknown) => {
+          // _transcribeAndRecord already logs + patches a failure
+          // marker on errors; this catch only guards the truly
+          // unexpected (e.g. a throw before the inner try).
+          const msg = err instanceof Error ? err.message : String(err);
+          process.stderr.write(`[poller] unhandled transcribe error: ${msg}\n`);
+        });
       }
 
-      // Advance offset AFTER processing so failed updates aren't lost
+      // Advance offset AFTER recordInbound so failed records aren't lost.
+      // Detached transcriptions don't affect this: phase 1 has already
+      // committed the voice event to the queue.
       advanceOffset(updates);
     } catch (err) {
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- _running is mutated externally by stopPoller()

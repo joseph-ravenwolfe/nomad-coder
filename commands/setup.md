@@ -13,12 +13,15 @@ supported terminals (Ghostty, iTerm2, Terminal.app, Wave, Warp).
 
 ## What this command does
 
-1. Detect Node + ask the operator which terminal and CLI command they use.
-2. Walk the operator through creating a Telegram bot with @BotFather and
+1. Detect Node, install bridge dependencies, and build the TypeScript
+   source. Build runs **before** any step that reads from `dist/` (config
+   writer, pair script, daemon entry point).
+2. Ask the operator which terminal and CLI command they use, then save
+   those to the canonical config.
+3. Walk the operator through creating a Telegram bot with @BotFather and
    capturing the `BOT_TOKEN`, `ALLOWED_USER_ID`, `CHAT_ID`.
-3. Ask which voice provider to use (ElevenLabs / Kokoro / system `say`) and
+4. Ask which voice provider to use (ElevenLabs / Kokoro / system `say`) and
    walk through the install for whichever they pick.
-4. Build the bridge (`npm install && npm run build`).
 5. Render and install the launchd plist via `scripts/install/install-launchd.sh`,
    passing `--terminal <choice> --cli <choice>`.
 6. Trigger the AppleScript automation permission prompt up-front.
@@ -42,7 +45,7 @@ If `CLAUDE_PLUGIN_ROOT` is empty (running outside CC), abort with a clear
 message asking the user to invoke this via the `/nomad-coder:setup` slash
 command.
 
-### 1. Prereq + terminal + CLI questions
+### 1. Prereq check, install dependencies, and build
 
 ```bash
 node --version            # must be >= 18
@@ -52,7 +55,22 @@ which node                # must resolve
 If Node is missing, point at https://nodejs.org or `brew install node` and
 abort.
 
-Then ask **two questions** and remember the answers as `TERMINAL` and
+Now install dependencies and build the TypeScript source. This MUST happen
+before any subsequent step: the canonical config writer
+(`dist/config-file.js`), the pair script (`node dist/setup.js`), and the
+launchd entry point (`dist/index.js`) all live in `dist/` and don't exist
+on a fresh install. Building first means the steps below can rely on them.
+
+```bash
+cd "$CLAUDE_PLUGIN_ROOT" && npm install && npm run build
+```
+
+Takes 1–2 minutes on a fresh install. Subsequent
+`/nomad-coder:setup --reinstall` invocations rebuild incrementally.
+
+### 2. Pick terminal + CLI command
+
+Ask **two questions** and remember the answers as `TERMINAL` and
 `CLI_COMMAND`:
 
 > **Which terminal do you use?**
@@ -87,7 +105,7 @@ writeCanonicalConfig({
 '
 ```
 
-### 2. Telegram bot — get a token, then pair
+### 3. Telegram bot — get a token, then pair
 
 If `~/.nomad-coder.json` already has `telegram.bot_token`,
 `telegram.allowed_user_id`, and `telegram.chat_id`, ask "Reuse existing bot
@@ -127,7 +145,7 @@ and run pairing:
 
 ```bash
 export BOT_TOKEN="<the pasted token>"
-cd "$CLAUDE_PLUGIN_ROOT" && npm install --silent && npm run pair
+cd "$CLAUDE_PLUGIN_ROOT" && npm run pair
 ```
 
 `src/setup.ts` walks the rest:
@@ -142,7 +160,7 @@ cd "$CLAUDE_PLUGIN_ROOT" && npm install --silent && npm run pair
 If the pair script fails (bad token, timeout, 3 wrong attempts), surface
 the error and stop. The operator can retry by re-running `/nomad-coder:pair`.
 
-### 3. Voice — pick a provider
+### 4. Voice — pick a provider
 
 Ask:
 
@@ -265,12 +283,6 @@ neither `ELEVENLABS_API_KEY` nor `TTS_HOST` is set. Print:
 ```
 Voice will use macOS `say`. You can switch later by re-running
 /nomad-coder:setup --reinstall and picking a different option.
-```
-
-### 4. Build
-
-```bash
-cd "$CLAUDE_PLUGIN_ROOT" && npm install && npm run build
 ```
 
 ### 5. Install launchd service
@@ -407,10 +419,10 @@ override, ~/.claude.json mcpServers entry, ~/.claude/CLAUDE.md section).
 
 ## Re-install flow
 
-If the user passed `--reinstall`, do steps 1, 4–7 only (skip pairing and
-voice prompts — they're already captured; just re-confirm terminal + CLI,
-rebuild, and restart). Re-running step 1 lets the operator switch terminals
-or CLI command without redoing everything else.
+If the user passed `--reinstall`, do steps 1–2 and 5–7 only (skip pairing
+and voice prompts — they're already captured; just rebuild, re-confirm
+terminal + CLI, and restart). Re-running step 2 lets the operator switch
+terminals or CLI command without redoing everything else.
 
 ## Failure modes
 
