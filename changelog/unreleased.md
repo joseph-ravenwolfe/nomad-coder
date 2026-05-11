@@ -1,5 +1,12 @@
 # [Unreleased]
 
+## Unreleased
+
+### Fixed
+
+- **Poll loop no longer blocks during voice transcription.** `_pollLoop` previously did `await Promise.all(voiceUpdates.map(_transcribeAndRecord))` inside the loop body, which meant any subsequent `getUpdates` call had to wait for every queued voice's transcription (including the one-time 30–60 s cold-start whisper-base ONNX model load on CPU) before fetching new messages. On a fresh install, this looked exactly like the bot had stopped listening: text and voice messages sent during the model-load window stalled on Telegram's side, then arrived in a burst when the load finished. Transcription is now detached — phase 1 (`recordInbound`) still runs synchronously, so the voice event hits the per-session queue before the loop continues; phase 2 (transcribe + `patchVoiceText`) runs in the background and wakes waiters via `notifySessionWaiters` and `pingSessionsHoldingMessage` as before. The shutdown drain (`drainPendingUpdates`) still awaits all in-flight transcriptions before exit, so no voices are lost on graceful shutdown. Crash semantics are unchanged: the in-memory session queue is wiped on crash either way, so the previous `await` didn't actually protect against mid-transcription crashes.
+- **`/nomad-coder:setup` no longer fails on fresh installs.** Steps 1 and 2 of the slash command previously wrote canonical config via `dist/config-file.js` and ran the pair script via `node dist/setup.js` — both **before** the build step at section 4. On a fresh `/plugin install`, `dist/` does not exist yet, so a literal walkthrough errored on the first config write. Section 1 now does the prereq check followed immediately by `npm install && npm run build`; the terminal/CLI questions and config write are promoted to section 2; the old standalone build section is removed; the redundant `npm install --silent` is dropped from the pair step (deps are already installed by section 1).
+
 ## v8.0.0 — 2026-05-04
 
 ### Breaking
