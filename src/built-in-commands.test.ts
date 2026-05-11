@@ -155,6 +155,17 @@ const ccMocks = vi.hoisted(() => ({
   addRecentPath: vi.fn((..._args: unknown[]) => undefined as void),
   isCcLaunchConfigured: vi.fn((): boolean => true),
   launchCcInGhostty: vi.fn((..._args: unknown[]): Promise<void> => Promise.resolve()),
+  listResumableSessions: vi.fn(
+    (..._args: unknown[]): Promise<unknown[]> => Promise.resolve([]),
+  ),
+  listUniqueCwds: vi.fn((..._args: unknown[]): Promise<string[]> => Promise.resolve([])),
+  // Default: behave as if the target dir isn't a git repo, so the sync line
+  // is omitted from the launch notification. Tests that exercise sync
+  // outcomes override this per-call.
+  syncGitRepoIfSafe: vi.fn(
+    (..._args: unknown[]): Promise<{ outcome: string; detail: string; branch?: string; pulledCommits?: number }> =>
+      Promise.resolve({ outcome: "not-a-repo", detail: "Not a git repo" }),
+  ),
 }));
 
 vi.mock("./recent-paths.js", () => ({
@@ -164,7 +175,20 @@ vi.mock("./recent-paths.js", () => ({
 
 vi.mock("./cc-launch.js", () => ({
   isCcLaunchConfigured: () => ccMocks.isCcLaunchConfigured(),
-  launchCcInGhostty: (path: string) => ccMocks.launchCcInGhostty(path),
+  launchCcInGhostty: (path: string, opts?: unknown) => ccMocks.launchCcInGhostty(path, opts),
+  // Pass-through resolver so the SUT can resolve relative paths the same
+  // way it does at runtime; tests pass absolute paths so the result is
+  // identical to the input.
+  resolveCcTargetDir: (input: string) => input.trim(),
+}));
+
+vi.mock("./cc-sessions.js", () => ({
+  listResumableSessions: (opts?: unknown) => ccMocks.listResumableSessions(opts),
+  listUniqueCwds: (limit?: unknown) => ccMocks.listUniqueCwds(limit),
+}));
+
+vi.mock("./git-sync.js", () => ({
+  syncGitRepoIfSafe: (cwd: string) => ccMocks.syncGitRepoIfSafe(cwd),
 }));
 
 
@@ -1626,6 +1650,14 @@ describe("built-in-commands", () => {
   });
 
   // -- /cc command ----------------------------------------------------------
+  //
+  // The /cc flow is a two-step panel state machine:
+  //   Step 1: pick Resume vs Launch new.
+  //   Step 2a: Resume — pick a session (loaded from cc-sessions).
+  //   Step 2b: Launch new — pick a directory or enter Other.
+  // Each "step 2" panel has a Back button that returns to step 1.
+  //
+  // Inline-arg `/cc /path` still bypasses the panel and launches fresh.
 
   describe("/cc command", () => {
     beforeEach(() => {
@@ -1633,7 +1665,17 @@ describe("built-in-commands", () => {
       ccMocks.addRecentPath.mockReset();
       ccMocks.isCcLaunchConfigured.mockReturnValue(true);
       ccMocks.launchCcInGhostty.mockReset().mockResolvedValue(undefined);
+      ccMocks.listResumableSessions.mockReset().mockResolvedValue([]);
+      ccMocks.listUniqueCwds.mockReset().mockResolvedValue([]);
+      // Sync defaults to no-op (not-a-repo) so existing assertions on
+      // launch-success message text don't break. Per-test overrides exercise
+      // the pulled / dirty / failed branches.
+      ccMocks.syncGitRepoIfSafe.mockReset().mockResolvedValue({
+        outcome: "not-a-repo", detail: "Not a git repo",
+      });
     });
+
+    // ── Configuration ────────────────────────────────────────────────────
 
     it("returns a configuration error when CC_LAUNCH_SCRIPT is not configured", async () => {
       ccMocks.isCcLaunchConfigured.mockReturnValue(false);
@@ -1645,41 +1687,33 @@ describe("built-in-commands", () => {
       expect(ccMocks.launchCcInGhostty).not.toHaveBeenCalled();
     });
 
-    it("with no args + no recents shows panel with 'No recent paths yet' and Other/Dismiss buttons", async () => {
+    // ── Step 1: top panel ────────────────────────────────────────────────
+
+    it("/cc with no args shows the Resume/Launch-new top panel", async () => {
       mocks.sendMessage.mockResolvedValueOnce({ message_id: 700 });
       const result = await handleIfBuiltIn(cmdUpdate("/cc"));
       expect(result).toBe(true);
       const [, text, opts] = mocks.sendMessage.mock.calls[0] as [number, string, Record<string, unknown>];
       expect(text).toContain("Launch Claude Code");
-      expect(text).toContain("No recent paths");
+      expect(text).toContain("Resume");
       const keyboard = (opts.reply_markup as { inline_keyboard: Array<Array<{ callback_data: string }>> }).inline_keyboard;
-      // No recent rows; final row has Other + Dismiss.
-      expect(keyboard).toHaveLength(1);
-      const cbData = keyboard[0].map(b => b.callback_data);
-      expect(cbData).toEqual(["cc:other", "cc:dismiss"]);
+      // Row 1: Resume + Launch new. Row 2: Dismiss.
+      expect(keyboard).toHaveLength(2);
+      expect(keyboard[0].map(b => b.callback_data)).toEqual(["cc:mode:resume", "cc:mode:fresh"]);
+      expect(keyboard[1].map(b => b.callback_data)).toEqual(["cc:dismiss"]);
       expect(ccMocks.launchCcInGhostty).not.toHaveBeenCalled();
     });
 
-    it("with no args + recents lists each recent as a button row in MRU order", async () => {
-      ccMocks.getRecentPaths.mockReturnValue(["/Users/me/projA", "/Users/me/projB"]);
-      mocks.sendMessage.mockResolvedValueOnce({ message_id: 701 });
-      await handleIfBuiltIn(cmdUpdate("/cc"));
-      const opts = mocks.sendMessage.mock.calls[0][2] as Record<string, unknown>;
-      const keyboard = (opts.reply_markup as { inline_keyboard: Array<Array<{ text: string; callback_data: string }>> }).inline_keyboard;
-      expect(keyboard).toHaveLength(3); // 2 recent rows + Other/Dismiss row
-      expect(keyboard[0][0].text).toContain("projA");
-      expect(keyboard[0][0].callback_data).toBe("cc:r:0");
-      expect(keyboard[1][0].text).toContain("projB");
-      expect(keyboard[1][0].callback_data).toBe("cc:r:1");
-      expect(keyboard[2].map(b => b.callback_data)).toEqual(["cc:other", "cc:dismiss"]);
-    });
+    // ── Inline-arg shortcut ──────────────────────────────────────────────
 
-    it("with an inline path arg launches immediately without showing the panel", async () => {
+    it("/cc /path inline-arg launches immediately as a fresh session (no panel)", async () => {
       const result = await handleIfBuiltIn(cmdUpdate("/cc /Users/me/proj"));
       expect(result).toBe(true);
-      expect(ccMocks.launchCcInGhostty).toHaveBeenCalledWith("/Users/me/proj");
-      // Two sendMessage calls expected: success notification only (no panel).
-      // First (and only) call should be the success message.
+      // Called with (path, opts) — opts has no resumeSessionId since this is fresh.
+      expect(ccMocks.launchCcInGhostty).toHaveBeenCalledTimes(1);
+      const [callPath, callOpts] = ccMocks.launchCcInGhostty.mock.calls[0] as [string, { resumeSessionId?: string } | undefined];
+      expect(callPath).toBe("/Users/me/proj");
+      expect(callOpts?.resumeSessionId).toBeUndefined();
       expect(mocks.sendMessage).toHaveBeenCalledTimes(1);
       const text: string = mocks.sendMessage.mock.calls[0][1];
       expect(text).toContain("launched");
@@ -1703,74 +1737,350 @@ describe("built-in-commands", () => {
       expect(text).toContain("Path does not exist");
     });
 
-    it("tapping a recent-path button launches that path", async () => {
-      ccMocks.getRecentPaths.mockReturnValue(["/Users/me/projA", "/Users/me/projB"]);
-      mocks.sendMessage.mockResolvedValueOnce({ message_id: 702 });
+    it("Dismiss closes the panel without launching anything", async () => {
+      mocks.sendMessage.mockResolvedValueOnce({ message_id: 701 });
       await handleIfBuiltIn(cmdUpdate("/cc"));
-      await handleIfBuiltIn(callbackUpdate(702, "cc:r:1"));
-      expect(ccMocks.launchCcInGhostty).toHaveBeenCalledWith("/Users/me/projB");
-      expect(ccMocks.addRecentPath).toHaveBeenCalledWith("/Users/me/projB");
-    });
-
-    it("tapping Dismiss closes the panel without launching anything", async () => {
-      mocks.sendMessage.mockResolvedValueOnce({ message_id: 703 });
-      await handleIfBuiltIn(cmdUpdate("/cc"));
-      await handleIfBuiltIn(callbackUpdate(703, "cc:dismiss"));
+      await handleIfBuiltIn(callbackUpdate(701, "cc:dismiss"));
       expect(ccMocks.launchCcInGhostty).not.toHaveBeenCalled();
       expect(mocks.editMessageText).toHaveBeenCalledWith(
-        123, 703,
+        123, 701,
         expect.stringContaining("Dismissed"),
         expect.any(Object),
       );
     });
 
-    it("tapping Other... edits the panel and arms a pending-input window", async () => {
-      mocks.sendMessage.mockResolvedValueOnce({ message_id: 704 });
+    // ── Step 2b: Launch-new path picker ──────────────────────────────────
+
+    it("Launch new with no recents and no historic cwds shows 'No recent directories yet'", async () => {
+      mocks.sendMessage.mockResolvedValueOnce({ message_id: 710 });
       await handleIfBuiltIn(cmdUpdate("/cc"));
-      await handleIfBuiltIn(callbackUpdate(704, "cc:other"));
-      expect(mocks.editMessageText).toHaveBeenCalledWith(
-        123, 704,
-        expect.stringContaining("Reply with the absolute path"),
-        expect.any(Object),
-      );
-      // Sending a plain-text message right after should be captured as the path.
-      await handleIfBuiltIn(textUpdate("/Users/me/late-bound-path"));
-      expect(ccMocks.launchCcInGhostty).toHaveBeenCalledWith("/Users/me/late-bound-path");
+      await handleIfBuiltIn(callbackUpdate(710, "cc:mode:fresh"));
+      const editCall = mocks.editMessageText.mock.calls.at(-1) as [number, number, string, Record<string, unknown>];
+      expect(editCall[2]).toContain("No recent directories");
+      const kb = (editCall[3].reply_markup as { inline_keyboard: Array<Array<{ callback_data: string }>> }).inline_keyboard;
+      // Only nav row (Other / Back / Dismiss).
+      expect(kb).toHaveLength(1);
+      expect(kb[0].map(b => b.callback_data)).toEqual(["cc:other", "cc:back", "cc:dismiss"]);
     });
 
-    it("a pending-input window cancels itself when the operator types a slash command", async () => {
-      mocks.sendMessage.mockResolvedValueOnce({ message_id: 705 });
+    it("Launch new lists recents first, then unique cwds from session history (deduped, MRU)", async () => {
+      ccMocks.getRecentPaths.mockReturnValue(["/Users/me/projA", "/Users/me/projB"]);
+      ccMocks.listUniqueCwds.mockResolvedValue([
+        "/Users/me/projA", // duplicate of recents — should be skipped
+        "/Users/me/historic-only",
+      ]);
+      mocks.sendMessage.mockResolvedValueOnce({ message_id: 711 });
       await handleIfBuiltIn(cmdUpdate("/cc"));
-      await handleIfBuiltIn(callbackUpdate(705, "cc:other"));
-      // Operator changes their mind and runs another command.
+      await handleIfBuiltIn(callbackUpdate(711, "cc:mode:fresh"));
+      const editCall = mocks.editMessageText.mock.calls.at(-1) as [number, number, string, Record<string, unknown>];
+      const kb = (editCall[3].reply_markup as { inline_keyboard: Array<Array<{ text: string; callback_data: string }>> }).inline_keyboard;
+      // 3 path rows (projA, projB, historic-only) + nav row.
+      expect(kb).toHaveLength(4);
+      expect(kb[0][0].callback_data).toBe("cc:p:0");
+      expect(kb[0][0].text).toContain("projA");
+      expect(kb[1][0].callback_data).toBe("cc:p:1");
+      expect(kb[1][0].text).toContain("projB");
+      expect(kb[2][0].callback_data).toBe("cc:p:2");
+      expect(kb[2][0].text).toContain("historic-only");
+      expect(kb[3].map(b => b.callback_data)).toEqual(["cc:other", "cc:back", "cc:dismiss"]);
+    });
+
+    it("tapping a path button launches that path as a fresh session and records it in recents", async () => {
+      ccMocks.getRecentPaths.mockReturnValue(["/Users/me/projA", "/Users/me/projB"]);
+      mocks.sendMessage.mockResolvedValueOnce({ message_id: 712 });
+      await handleIfBuiltIn(cmdUpdate("/cc"));
+      await handleIfBuiltIn(callbackUpdate(712, "cc:mode:fresh"));
+      await handleIfBuiltIn(callbackUpdate(712, "cc:p:1"));
+      const [callPath, callOpts] = ccMocks.launchCcInGhostty.mock.calls[0] as [string, { resumeSessionId?: string } | undefined];
+      expect(callPath).toBe("/Users/me/projB");
+      expect(callOpts?.resumeSessionId).toBeUndefined();
+      expect(ccMocks.addRecentPath).toHaveBeenCalledWith("/Users/me/projB");
+    });
+
+    it("tapping Other... arms a pending-input window that captures the next plain-text reply", async () => {
+      mocks.sendMessage.mockResolvedValueOnce({ message_id: 713 });
+      await handleIfBuiltIn(cmdUpdate("/cc"));
+      await handleIfBuiltIn(callbackUpdate(713, "cc:mode:fresh"));
+      await handleIfBuiltIn(callbackUpdate(713, "cc:other"));
+      const editArgs = mocks.editMessageText.mock.calls.at(-1) as [number, number, string, Record<string, unknown>];
+      expect(editArgs[2]).toContain("Reply with the absolute path");
+      await handleIfBuiltIn(textUpdate("/Users/me/late-bound-path"));
+      const [callPath] = ccMocks.launchCcInGhostty.mock.calls[0] as [string, unknown];
+      expect(callPath).toBe("/Users/me/late-bound-path");
+    });
+
+    it("pending-input window cancels itself when the operator types another slash command", async () => {
+      mocks.sendMessage.mockResolvedValueOnce({ message_id: 714 });
+      await handleIfBuiltIn(cmdUpdate("/cc"));
+      await handleIfBuiltIn(callbackUpdate(714, "cc:mode:fresh"));
+      await handleIfBuiltIn(callbackUpdate(714, "cc:other"));
       ccMocks.launchCcInGhostty.mockClear();
       const result = await handleIfBuiltIn(cmdUpdate("/version"));
-      expect(result).toBe(true); // /version was handled
+      expect(result).toBe(true);
       expect(ccMocks.launchCcInGhostty).not.toHaveBeenCalled();
-      // Subsequent plain-text messages should NOT be captured anymore.
       const flowsThrough = await handleIfBuiltIn(textUpdate("just chatting"));
       expect(flowsThrough).toBe(false);
       expect(ccMocks.launchCcInGhostty).not.toHaveBeenCalled();
     });
 
-    it("a recently-tapped recent path that no longer exists in the snapshot fails gracefully", async () => {
+    it("an out-of-range path index fails gracefully (no crash, no launch)", async () => {
       ccMocks.getRecentPaths.mockReturnValue(["/a"]);
-      mocks.sendMessage.mockResolvedValueOnce({ message_id: 706 });
+      mocks.sendMessage.mockResolvedValueOnce({ message_id: 715 });
       await handleIfBuiltIn(cmdUpdate("/cc"));
-      // Out-of-range index — should NOT crash, should NOT launch.
-      await handleIfBuiltIn(callbackUpdate(706, "cc:r:99"));
+      await handleIfBuiltIn(callbackUpdate(715, "cc:mode:fresh"));
+      await handleIfBuiltIn(callbackUpdate(715, "cc:p:99"));
       expect(ccMocks.launchCcInGhostty).not.toHaveBeenCalled();
-      expect(mocks.editMessageText).toHaveBeenCalledWith(
-        123, 706,
-        expect.stringContaining("Path not found"),
-        expect.any(Object),
-      );
+      const last = mocks.editMessageText.mock.calls.at(-1) as [number, number, string, Record<string, unknown>];
+      expect(last[2]).toContain("Path not found");
     });
+
+    // ── Step 2a: Resume picker ───────────────────────────────────────────
+
+    function fakeSession(opts: Partial<{
+      sessionId: string; cwd: string; lines: number; mtimeMs: number;
+      pidAlive: boolean; firstPrompt: string; name: string; kind: string;
+    }> = {}): unknown {
+      return {
+        sessionId: opts.sessionId ?? "sid-1",
+        cwd: opts.cwd ?? "/Users/me/proj",
+        gitBranch: "main",
+        lines: opts.lines ?? 10,
+        mtimeMs: opts.mtimeMs ?? Date.now(),
+        name: opts.name ?? "",
+        status: "",
+        pid: 0,
+        pidAlive: opts.pidAlive ?? false,
+        kind: opts.kind ?? "interactive",
+        firstPrompt: opts.firstPrompt ?? "hello",
+      };
+    }
+
+    it("Resume with no on-disk sessions shows 'No resumable sessions found'", async () => {
+      mocks.sendMessage.mockResolvedValueOnce({ message_id: 720 });
+      ccMocks.listResumableSessions.mockResolvedValue([]);
+      await handleIfBuiltIn(cmdUpdate("/cc"));
+      await handleIfBuiltIn(callbackUpdate(720, "cc:mode:resume"));
+      const editCall = mocks.editMessageText.mock.calls.at(-1) as [number, number, string, Record<string, unknown>];
+      expect(editCall[2]).toContain("No resumable sessions");
+      const kb = (editCall[3].reply_markup as { inline_keyboard: Array<Array<{ callback_data: string }>> }).inline_keyboard;
+      expect(kb).toHaveLength(1);
+      expect(kb[0].map(b => b.callback_data)).toEqual(["cc:back", "cc:dismiss"]);
+    });
+
+    it("Resume lists sessions with cwd / age / title labels and a live-prefix indicator", async () => {
+      const now = Date.now();
+      ccMocks.listResumableSessions.mockResolvedValue([
+        fakeSession({ sessionId: "s1", cwd: "/Users/me/projA", mtimeMs: now - 1_000, pidAlive: true, firstPrompt: "Live work in progress" }),
+        fakeSession({ sessionId: "s2", cwd: "/Users/me/projB", mtimeMs: now - 90_000, pidAlive: false, name: "Named session" }),
+      ]);
+      mocks.sendMessage.mockResolvedValueOnce({ message_id: 721 });
+      await handleIfBuiltIn(cmdUpdate("/cc"));
+      await handleIfBuiltIn(callbackUpdate(721, "cc:mode:resume"));
+      const editCall = mocks.editMessageText.mock.calls.at(-1) as [number, number, string, Record<string, unknown>];
+      const kb = (editCall[3].reply_markup as { inline_keyboard: Array<Array<{ text: string; callback_data: string }>> }).inline_keyboard;
+      expect(kb).toHaveLength(3); // 2 session rows + nav
+      expect(kb[0][0].callback_data).toBe("cc:s:0");
+      expect(kb[0][0].text).toContain("🔴"); // pidAlive=true tagged
+      expect(kb[0][0].text).toContain("Live work in progress");
+      expect(kb[1][0].callback_data).toBe("cc:s:1");
+      expect(kb[1][0].text).not.toContain("🔴"); // pidAlive=false
+      expect(kb[1][0].text).toContain("Named session"); // prefers `name` over `firstPrompt`
+      expect(kb[2].map(b => b.callback_data)).toEqual(["cc:back", "cc:dismiss"]);
+    });
+
+    it("Resume passes only `interactive` kind to the enumerator", async () => {
+      mocks.sendMessage.mockResolvedValueOnce({ message_id: 722 });
+      await handleIfBuiltIn(cmdUpdate("/cc"));
+      await handleIfBuiltIn(callbackUpdate(722, "cc:mode:resume"));
+      const opts = ccMocks.listResumableSessions.mock.calls[0][0] as { onlyKind?: string };
+      expect(opts.onlyKind).toBe("interactive");
+    });
+
+    it("tapping a resume button launches with cwd + resumeSessionId, does NOT record in recents", async () => {
+      ccMocks.listResumableSessions.mockResolvedValue([
+        fakeSession({ sessionId: "abc-uuid", cwd: "/Users/me/projZ" }),
+      ]);
+      mocks.sendMessage.mockResolvedValueOnce({ message_id: 723 });
+      await handleIfBuiltIn(cmdUpdate("/cc"));
+      await handleIfBuiltIn(callbackUpdate(723, "cc:mode:resume"));
+      await handleIfBuiltIn(callbackUpdate(723, "cc:s:0"));
+      const [callPath, callOpts] = ccMocks.launchCcInGhostty.mock.calls[0] as [string, { resumeSessionId?: string }];
+      expect(callPath).toBe("/Users/me/projZ");
+      expect(callOpts.resumeSessionId).toBe("abc-uuid");
+      // Resume should NOT promote the cwd in the recents list — operator
+      // may not want to claim this dir as a recently-launched project.
+      expect(ccMocks.addRecentPath).not.toHaveBeenCalled();
+      // Success message labels it as "resumed", not "launched".
+      const msgText: string = mocks.sendMessage.mock.calls.at(-1)![1];
+      expect(msgText).toContain("resumed");
+    });
+
+    it("an out-of-range resume index fails gracefully", async () => {
+      ccMocks.listResumableSessions.mockResolvedValue([
+        fakeSession({ sessionId: "only" }),
+      ]);
+      mocks.sendMessage.mockResolvedValueOnce({ message_id: 724 });
+      await handleIfBuiltIn(cmdUpdate("/cc"));
+      await handleIfBuiltIn(callbackUpdate(724, "cc:mode:resume"));
+      await handleIfBuiltIn(callbackUpdate(724, "cc:s:99"));
+      expect(ccMocks.launchCcInGhostty).not.toHaveBeenCalled();
+      const last = mocks.editMessageText.mock.calls.at(-1) as [number, number, string, Record<string, unknown>];
+      expect(last[2]).toContain("Session not found");
+    });
+
+    // ── Navigation ───────────────────────────────────────────────────────
+
+    it("Back from Resume returns to the top Resume/Launch-new panel", async () => {
+      mocks.sendMessage.mockResolvedValueOnce({ message_id: 730 });
+      await handleIfBuiltIn(cmdUpdate("/cc"));
+      await handleIfBuiltIn(callbackUpdate(730, "cc:mode:resume"));
+      await handleIfBuiltIn(callbackUpdate(730, "cc:back"));
+      const last = mocks.editMessageText.mock.calls.at(-1) as [number, number, string, Record<string, unknown>];
+      const kb = (last[3].reply_markup as { inline_keyboard: Array<Array<{ callback_data: string }>> }).inline_keyboard;
+      // Back to step 1.
+      expect(kb[0].map(b => b.callback_data)).toEqual(["cc:mode:resume", "cc:mode:fresh"]);
+      expect(kb[1].map(b => b.callback_data)).toEqual(["cc:dismiss"]);
+    });
+
+    it("Back from Launch-new returns to the top panel", async () => {
+      mocks.sendMessage.mockResolvedValueOnce({ message_id: 731 });
+      await handleIfBuiltIn(cmdUpdate("/cc"));
+      await handleIfBuiltIn(callbackUpdate(731, "cc:mode:fresh"));
+      await handleIfBuiltIn(callbackUpdate(731, "cc:back"));
+      const last = mocks.editMessageText.mock.calls.at(-1) as [number, number, string, Record<string, unknown>];
+      const kb = (last[3].reply_markup as { inline_keyboard: Array<Array<{ callback_data: string }>> }).inline_keyboard;
+      expect(kb[0].map(b => b.callback_data)).toEqual(["cc:mode:resume", "cc:mode:fresh"]);
+    });
+
+    // ── Resilience ───────────────────────────────────────────────────────
 
     it("plain-text messages are NOT intercepted when there is no pending /cc input", async () => {
       const result = await handleIfBuiltIn(textUpdate("hello"));
       expect(result).toBe(false);
       expect(ccMocks.launchCcInGhostty).not.toHaveBeenCalled();
+    });
+
+    it("a listResumableSessions failure renders an empty picker (does not crash)", async () => {
+      ccMocks.listResumableSessions.mockRejectedValue(new Error("disk corruption"));
+      mocks.sendMessage.mockResolvedValueOnce({ message_id: 740 });
+      await handleIfBuiltIn(cmdUpdate("/cc"));
+      await handleIfBuiltIn(callbackUpdate(740, "cc:mode:resume"));
+      const last = mocks.editMessageText.mock.calls.at(-1) as [number, number, string, Record<string, unknown>];
+      expect(last[2]).toContain("No resumable sessions");
+    });
+
+    // ── Git auto-sync before fresh launches ──────────────────────────────
+
+    it("a fresh launch calls syncGitRepoIfSafe with the target dir before launching", async () => {
+      ccMocks.syncGitRepoIfSafe.mockResolvedValue({
+        outcome: "up-to-date", branch: "main", detail: "Already up to date on `main`.",
+      });
+      await handleIfBuiltIn(cmdUpdate("/cc /Users/me/projA"));
+      expect(ccMocks.syncGitRepoIfSafe).toHaveBeenCalledWith("/Users/me/projA");
+      // Sync ran BEFORE launch (mock call order).
+      const syncOrder = ccMocks.syncGitRepoIfSafe.mock.invocationCallOrder[0];
+      const launchOrder = ccMocks.launchCcInGhostty.mock.invocationCallOrder[0];
+      expect(syncOrder).toBeLessThan(launchOrder);
+    });
+
+    it("a 'pulled' sync result is folded into the launch-success message", async () => {
+      ccMocks.syncGitRepoIfSafe.mockResolvedValue({
+        outcome: "pulled", branch: "main", pulledCommits: 3, detail: "Pulled 3 commits on `main`.",
+      });
+      await handleIfBuiltIn(cmdUpdate("/cc /Users/me/projA"));
+      const text: string = mocks.sendMessage.mock.calls.at(-1)![1];
+      expect(text).toContain("launched");
+      expect(text).toContain("📥");
+      expect(text).toContain("3 commits");
+      expect(text).toContain("main");
+    });
+
+    it("a 'pulled 1 commit' result uses singular wording", async () => {
+      ccMocks.syncGitRepoIfSafe.mockResolvedValue({
+        outcome: "pulled", branch: "main", pulledCommits: 1, detail: "Pulled 1 commit on `main`.",
+      });
+      await handleIfBuiltIn(cmdUpdate("/cc /Users/me/projA"));
+      const text: string = mocks.sendMessage.mock.calls.at(-1)![1];
+      expect(text).toMatch(/Pulled 1 commit\b/);
+      expect(text).not.toMatch(/Pulled 1 commits/);
+    });
+
+    it("an 'up-to-date' sync result shows a checkmark line", async () => {
+      ccMocks.syncGitRepoIfSafe.mockResolvedValue({
+        outcome: "up-to-date", branch: "main", detail: "Already up to date on `main`.",
+      });
+      await handleIfBuiltIn(cmdUpdate("/cc /Users/me/projA"));
+      const text: string = mocks.sendMessage.mock.calls.at(-1)![1];
+      expect(text).toContain("✓ Up to date");
+      expect(text).toContain("main");
+    });
+
+    it("a 'dirty' sync result warns and skips, but still launches", async () => {
+      ccMocks.syncGitRepoIfSafe.mockResolvedValue({
+        outcome: "dirty", detail: "Working tree has uncommitted changes — skipping pull.",
+      });
+      await handleIfBuiltIn(cmdUpdate("/cc /Users/me/projA"));
+      const text: string = mocks.sendMessage.mock.calls.at(-1)![1];
+      expect(text).toContain("⚠️");
+      expect(text).toContain("Working tree dirty");
+      // Launch still happened.
+      expect(ccMocks.launchCcInGhostty).toHaveBeenCalled();
+    });
+
+    it("a 'not-a-repo' sync result is silent — no sync line appended", async () => {
+      ccMocks.syncGitRepoIfSafe.mockResolvedValue({
+        outcome: "not-a-repo", detail: "Not a git repo — skipping pull.",
+      });
+      await handleIfBuiltIn(cmdUpdate("/cc /Users/me/scratch"));
+      const text: string = mocks.sendMessage.mock.calls.at(-1)![1];
+      expect(text).toContain("launched");
+      expect(text).not.toContain("⚠");
+      expect(text).not.toContain("✓");
+      expect(text).not.toContain("📥");
+      expect(text).not.toContain("Not a git repo");
+    });
+
+    it("a 'no-upstream' sync result reports the branch name", async () => {
+      ccMocks.syncGitRepoIfSafe.mockResolvedValue({
+        outcome: "no-upstream", branch: "feature/x", detail: "Branch `feature/x` has no upstream — skipping pull.",
+      });
+      await handleIfBuiltIn(cmdUpdate("/cc /Users/me/projA"));
+      const text: string = mocks.sendMessage.mock.calls.at(-1)![1];
+      expect(text).toContain("no upstream");
+      expect(text).toContain("feature/x");
+    });
+
+    it("a 'fetch-failed' sync result warns but still launches", async () => {
+      ccMocks.syncGitRepoIfSafe.mockResolvedValue({
+        outcome: "fetch-failed", branch: "main", detail: "Fetch failed: network down",
+      });
+      await handleIfBuiltIn(cmdUpdate("/cc /Users/me/projA"));
+      const text: string = mocks.sendMessage.mock.calls.at(-1)![1];
+      expect(text).toContain("⚠️");
+      expect(text).toContain("Fetch failed");
+      expect(ccMocks.launchCcInGhostty).toHaveBeenCalled();
+    });
+
+    it("resume launches SKIP the sync entirely", async () => {
+      ccMocks.listResumableSessions.mockResolvedValue([
+        fakeSession({ sessionId: "abc-uuid", cwd: "/Users/me/projZ" }),
+      ]);
+      mocks.sendMessage.mockResolvedValueOnce({ message_id: 750 });
+      await handleIfBuiltIn(cmdUpdate("/cc"));
+      await handleIfBuiltIn(callbackUpdate(750, "cc:mode:resume"));
+      await handleIfBuiltIn(callbackUpdate(750, "cc:s:0"));
+      expect(ccMocks.syncGitRepoIfSafe).not.toHaveBeenCalled();
+      // Launch still happened.
+      expect(ccMocks.launchCcInGhostty).toHaveBeenCalled();
+    });
+
+    it("a syncGitRepoIfSafe rejection does not block the launch", async () => {
+      ccMocks.syncGitRepoIfSafe.mockRejectedValue(new Error("unexpected"));
+      await handleIfBuiltIn(cmdUpdate("/cc /Users/me/projA"));
+      expect(ccMocks.launchCcInGhostty).toHaveBeenCalled();
+      // Launch message still sent, no sync line.
+      const text: string = mocks.sendMessage.mock.calls.at(-1)![1];
+      expect(text).toContain("launched");
     });
   });
 

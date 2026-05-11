@@ -26,7 +26,9 @@ import { getSessionSpeed } from "./voice-state.js";
 import { activateAutoApproveOne, activateAutoApproveTimed, cancelAutoApprove, getAutoApproveState, isPersistentAutoApproveEnabled } from "./auto-approve.js";
 import { isDelegationEnabled, setDelegationEnabled } from "./agent-approval.js";
 import { getRecentPaths, addRecentPath } from "./recent-paths.js";
-import { isCcLaunchConfigured, launchCcInGhostty, type CcLaunchError } from "./cc-launch.js";
+import { isCcLaunchConfigured, launchCcInGhostty, resolveCcTargetDir, type CcLaunchError } from "./cc-launch.js";
+import { listResumableSessions, listUniqueCwds, type ResumableSession } from "./cc-sessions.js";
+import { syncGitRepoIfSafe, type GitSyncReport } from "./git-sync.js";
 
 
 const require = createRequire(import.meta.url);
@@ -1659,29 +1661,55 @@ export function resetBuiltInCommandsForTest(): void {
   _dumpCursor = 0;
   cancelAutoApprove();
   _pendingCcInputUntilMs = undefined;
-  _ccPanelRecents.clear();
+  _ccPanelSessions.clear();
+  _ccPanelPaths.clear();
 }
 
 // ---------------------------------------------------------------------------
-// /cc — launch a Claude Code session in Ghostty
+// /cc — launch (or resume) a Claude Code session in the operator's terminal
 //
-// Two entry shapes:
-//   1. `/cc /path/to/dir` — direct launch, validates and spawns the script.
-//   2. `/cc` (no args) — opens a panel with recent paths as quick-pick
-//      buttons plus an "Other..." button that captures the next plain-text
-//      message as the path (with a 60s expiry).
+// Entry shapes:
+//   1. `/cc /path/to/dir` — direct fresh launch in the given dir.
+//   2. `/cc` (no args) — opens a two-step panel:
+//        Step 1: "Resume an existing session or launch new?"
+//        Step 2a (Resume): pick from on-disk sessions, sorted by recency.
+//        Step 2b (Launch new): pick from a union of recent-paths (paths the
+//                              operator has launched before via /cc) + unique
+//                              cwds extracted from session history. "Other…"
+//                              still captures a free-form path with a 60s
+//                              expiry.
 //
 // Auth: the bridge already filters all incoming updates by ALLOWED_USER_ID
 // (see filterAllowedUpdates), so any /cc handler call is implicitly
 // operator-only. No additional auth check needed here.
 //
 // Configuration: requires CC_LAUNCH_SCRIPT to point at an absolute-path
-// AppleScript that takes one positional `target-dir` argument. Returns a
-// configuration error otherwise.
+// AppleScript that takes positional `<target-dir> [<cli> [<resume-sid>]]`
+// arguments. Returns a configuration error otherwise.
+//
+// Callback data scheme (all routed via _activePanels = "cc"):
+//   cc:mode:resume     → step 1 → step 2a (Resume picker)
+//   cc:mode:fresh      → step 1 → step 2b (Fresh picker)
+//   cc:back            → any step 2 → back to step 1
+//   cc:s:<idx>         → resume session #idx from the snapshot
+//   cc:p:<idx>         → launch path #idx from the snapshot
+//   cc:other           → arm 60s text-input window for a custom path
+//   cc:dismiss         → close the panel
 // ---------------------------------------------------------------------------
 
 const CC_INPUT_TIMEOUT_MS = 60_000;
+const CC_RESUME_PICKER_LIMIT = 10;
+const CC_PATH_PICKER_LIMIT = 10;
+
 let _pendingCcInputUntilMs: number | undefined = undefined;
+
+/**
+ * Per-panel-message snapshots, captured at panel creation time so callbacks
+ * resolve against the exact list the operator saw — not whatever happens to
+ * be on disk by the time they tap.
+ */
+const _ccPanelSessions = new Map<number, ResumableSession[]>();
+const _ccPanelPaths = new Map<number, string[]>();
 
 async function handleCcCommand(argText: string): Promise<void> {
   const chatId = resolveChat();
@@ -1698,27 +1726,35 @@ async function handleCcCommand(argText: string): Promise<void> {
     return;
   }
 
-  // Inline arg — launch immediately.
+  // Inline arg — launch immediately (fresh).
   if (argText.length > 0) {
     await runCcLaunch(argText);
     return;
   }
 
-  // No arg — show panel.
-  const recents = getRecentPaths();
-  const text = recents.length > 0
-    ? "*Launch Claude Code*\nPick a recent path or tap Other… to enter a new one."
-    : "*Launch Claude Code*\nNo recent paths yet — tap Other… to enter one.";
+  // No arg — open the step-1 (resume / fresh) panel.
+  await sendCcTopPanel(chatId);
+}
 
-  // Recent-path buttons: one per row so long paths don't get truncated.
-  // Callback data is `cc:r:<index>` (resolved against `recents` snapshot
-  // captured in module state at panel creation time — see _ccPanelRecents).
-  const recentRows = recents.map((path, idx) => [
-    { text: truncatePath(path, 60), callback_data: `cc:r:${idx}` },
-  ]);
-  const otherRow = [
-    { text: "📁 Other…", callback_data: "cc:other" },
-    { text: "✖ Dismiss", callback_data: "cc:dismiss" },
+/**
+ * Renders the step-1 panel that asks the operator: resume an existing
+ * session or launch a new one? Stored under panelType "cc" so callback
+ * routing reaches handleCcCallback.
+ */
+async function sendCcTopPanel(chatId: number): Promise<void> {
+  const api = getApi();
+  const text =
+    "*Launch Claude Code*\n" +
+    "Resume an existing session or launch a new one?";
+
+  const keyboard = [
+    [
+      { text: "🔄 Resume a session", callback_data: "cc:mode:resume" },
+      { text: "🆕 Launch new", callback_data: "cc:mode:fresh" },
+    ],
+    [
+      { text: "✖ Dismiss", callback_data: "cc:dismiss" },
+    ],
   ];
 
   let msg: { message_id: number };
@@ -1726,17 +1762,185 @@ async function handleCcCommand(argText: string): Promise<void> {
     msg = await api.sendMessage(chatId, text, {
       parse_mode: "Markdown",
       _skipHeader: true,
-      reply_markup: { inline_keyboard: [...recentRows, otherRow] },
+      reply_markup: { inline_keyboard: keyboard },
     } as Record<string, unknown>);
   } catch { return; }
 
   markInternalMessage(msg.message_id);
   _activePanels.set(msg.message_id, "cc");
-  _ccPanelRecents.set(msg.message_id, recents);
+  // Step 1 has no snapshots — they're built when the user picks a mode.
 }
 
-/** Snapshot of `getRecentPaths()` at panel creation time, keyed by panel msg ID. */
-const _ccPanelRecents = new Map<number, string[]>();
+/**
+ * Format a resume-session button label. Telegram inline-button caption is
+ * loosely limited to ~64 chars; we aim for ≤56 to leave headroom for the
+ * 🔴 live-prefix and any operator-set name. Returns a one-line label.
+ */
+function formatSessionButtonLabel(s: ResumableSession): string {
+  const livePrefix = s.pidAlive ? "🔴 " : "";
+  // Title: prefer operator-set name → first prompt → "(no prompt)".
+  const title = s.name && s.name.length > 0
+    ? s.name
+    : (s.firstPrompt.length > 0 ? s.firstPrompt : "(no prompt)");
+  const cwdTail = shortenCwd(s.cwd, 24);
+  const age = formatAge(Date.now() - s.mtimeMs);
+  // Layout: `<live> <cwd-tail> · <age> · <title>` truncated to ~56.
+  const base = `${livePrefix}${cwdTail} · ${age} · ${title}`;
+  return truncatePath(base, 56);
+}
+
+/** Format a duration as a compact "5s/3m/2h/4d" age. */
+function formatAge(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  const d = Math.floor(h / 24);
+  return `${d}d`;
+}
+
+/** Shorten a cwd for display: replace $HOME with `~`, then truncate from the front. */
+function shortenCwd(cwd: string, max: number): string {
+  const home = process.env.HOME;
+  let s = cwd;
+  if (home && home.length > 0 && (s === home || s.startsWith(home + "/"))) {
+    s = "~" + s.slice(home.length);
+  }
+  if (s.length <= max) return s;
+  return "…" + s.slice(-(max - 1));
+}
+
+/** Render the step-2a Resume picker by editing the existing panel message. */
+async function showResumePicker(chatId: number, panelMsgId: number): Promise<void> {
+  const api = getApi();
+
+  // Enumerate interactive sessions. We don't know the caller's own
+  // sessionId (the bridge has no awareness of which session pressed the
+  // button — Telegram is one operator with many CC processes), so we don't
+  // filter by excludeSessionId here. The operator can avoid resuming a
+  // live session if they don't want to fork.
+  let sessions: ResumableSession[];
+  try {
+    sessions = await listResumableSessions({ onlyKind: "interactive" });
+  } catch {
+    sessions = [];
+  }
+
+  // Cap to the picker limit so the keyboard stays manageable. Older
+  // sessions are still resumable via the CLI's own /resume picker — this
+  // panel just surfaces the most recently active ones.
+  const top = sessions.slice(0, CC_RESUME_PICKER_LIMIT);
+  _ccPanelSessions.set(panelMsgId, top);
+
+  let text = "*Launch Claude Code → Resume*\n";
+  if (top.length === 0) {
+    text += "_No resumable sessions found on this machine._";
+  } else {
+    text += "Pick a session to resume.";
+    if (sessions.length > top.length) {
+      text += `\n_(Showing top ${top.length} of ${sessions.length} — older sessions are reachable via \`cc --resume\` directly.)_`;
+    }
+  }
+
+  const sessionRows = top.map((s, idx) => [
+    { text: formatSessionButtonLabel(s), callback_data: `cc:s:${idx}` },
+  ]);
+  const navRow = [
+    { text: "← Back", callback_data: "cc:back" },
+    { text: "✖ Dismiss", callback_data: "cc:dismiss" },
+  ];
+
+  await api.editMessageText(chatId, panelMsgId, text, {
+    parse_mode: "Markdown",
+    _skipHeader: true,
+    reply_markup: { inline_keyboard: [...sessionRows, navRow] },
+  } as Record<string, unknown>).catch(() => { /* non-fatal */ });
+}
+
+/**
+ * Build the path picker's source list: union of `recent-paths` (paths the
+ * operator has launched via /cc) and unique cwds from session history.
+ * Recent paths come first (MRU), then any additional cwds not in recents.
+ * De-dupes case-sensitively (macOS default).
+ */
+async function buildPathPickerList(): Promise<string[]> {
+  const recents = getRecentPaths();
+  let cwds: string[] = [];
+  try {
+    cwds = await listUniqueCwds(40);
+  } catch {
+    // Best-effort — if cwd enumeration fails we still have recents.
+  }
+  const seen = new Set(recents);
+  const merged = [...recents];
+  for (const c of cwds) {
+    if (!seen.has(c)) {
+      merged.push(c);
+      seen.add(c);
+    }
+  }
+  return merged.slice(0, CC_PATH_PICKER_LIMIT);
+}
+
+/** Render the step-2b Fresh-launch path picker by editing the existing panel message. */
+async function showPathPicker(chatId: number, panelMsgId: number): Promise<void> {
+  const api = getApi();
+  const paths = await buildPathPickerList();
+  _ccPanelPaths.set(panelMsgId, paths);
+
+  const text = paths.length > 0
+    ? "*Launch Claude Code → New*\nPick a project directory or tap Other… to enter a path."
+    : "*Launch Claude Code → New*\nNo recent directories yet — tap Other… to enter one.";
+
+  const pathRows = paths.map((p, idx) => [
+    { text: truncatePath(shortenCwd(p, 56), 60), callback_data: `cc:p:${idx}` },
+  ]);
+  const navRow = [
+    { text: "📁 Other…", callback_data: "cc:other" },
+    { text: "← Back", callback_data: "cc:back" },
+    { text: "✖ Dismiss", callback_data: "cc:dismiss" },
+  ];
+
+  await api.editMessageText(chatId, panelMsgId, text, {
+    parse_mode: "Markdown",
+    _skipHeader: true,
+    reply_markup: { inline_keyboard: [...pathRows, navRow] },
+  } as Record<string, unknown>).catch(() => { /* non-fatal */ });
+}
+
+/** Reset the panel back to step 1 (used by the Back button). */
+async function showTopPanel(chatId: number, panelMsgId: number): Promise<void> {
+  const api = getApi();
+  _ccPanelSessions.delete(panelMsgId);
+  _ccPanelPaths.delete(panelMsgId);
+
+  const text =
+    "*Launch Claude Code*\n" +
+    "Resume an existing session or launch a new one?";
+  const keyboard = [
+    [
+      { text: "🔄 Resume a session", callback_data: "cc:mode:resume" },
+      { text: "🆕 Launch new", callback_data: "cc:mode:fresh" },
+    ],
+    [
+      { text: "✖ Dismiss", callback_data: "cc:dismiss" },
+    ],
+  ];
+  await api.editMessageText(chatId, panelMsgId, text, {
+    parse_mode: "Markdown",
+    _skipHeader: true,
+    reply_markup: { inline_keyboard: keyboard },
+  } as Record<string, unknown>).catch(() => { /* non-fatal */ });
+}
+
+/** Clear snapshots + active-panel mark; used on any terminal callback. */
+function clearCcPanelState(panelMsgId: number): void {
+  _activePanels.delete(panelMsgId);
+  _ccPanelSessions.delete(panelMsgId);
+  _ccPanelPaths.delete(panelMsgId);
+}
 
 async function handleCcCallback(
   callbackQueryId: string,
@@ -1749,9 +1953,23 @@ async function handleCcCallback(
 
   try { await api.answerCallbackQuery(callbackQueryId); } catch { /* ignore */ }
 
+  // ── Step-1 mode selection ──────────────────────────────────────────────
+  if (data === "cc:mode:resume") {
+    await showResumePicker(chatId, panelMsgId);
+    return;
+  }
+  if (data === "cc:mode:fresh") {
+    await showPathPicker(chatId, panelMsgId);
+    return;
+  }
+
+  // ── Navigation ─────────────────────────────────────────────────────────
+  if (data === "cc:back") {
+    await showTopPanel(chatId, panelMsgId);
+    return;
+  }
   if (data === "cc:dismiss") {
-    _activePanels.delete(panelMsgId);
-    _ccPanelRecents.delete(panelMsgId);
+    clearCcPanelState(panelMsgId);
     await api.editMessageText(chatId, panelMsgId,
       "*Launch Claude Code → Dismissed*",
       { parse_mode: "Markdown", _skipHeader: true, reply_markup: { inline_keyboard: [] } } as Record<string, unknown>,
@@ -1759,9 +1977,9 @@ async function handleCcCallback(
     return;
   }
 
+  // ── Fresh-launch path picker ───────────────────────────────────────────
   if (data === "cc:other") {
-    _activePanels.delete(panelMsgId);
-    _ccPanelRecents.delete(panelMsgId);
+    clearCcPanelState(panelMsgId);
     _pendingCcInputUntilMs = Date.now() + CC_INPUT_TIMEOUT_MS;
     await api.editMessageText(chatId, panelMsgId,
       "*Launch Claude Code → Other…*\nReply with the absolute path to launch.\n_(Times out in 60s — send a slash-command to cancel.)_",
@@ -1770,12 +1988,11 @@ async function handleCcCallback(
     return;
   }
 
-  if (data.startsWith("cc:r:")) {
-    const idx = Number.parseInt(data.slice("cc:r:".length), 10);
-    const recents = _ccPanelRecents.get(panelMsgId) ?? [];
-    const path = Number.isFinite(idx) ? recents[idx] : undefined;
-    _activePanels.delete(panelMsgId);
-    _ccPanelRecents.delete(panelMsgId);
+  if (data.startsWith("cc:p:")) {
+    const idx = Number.parseInt(data.slice("cc:p:".length), 10);
+    const paths = _ccPanelPaths.get(panelMsgId) ?? [];
+    const path = Number.isFinite(idx) ? paths[idx] : undefined;
+    clearCcPanelState(panelMsgId);
 
     if (!path) {
       await api.editMessageText(chatId, panelMsgId,
@@ -1792,22 +2009,80 @@ async function handleCcCallback(
     await runCcLaunch(path);
     return;
   }
+
+  // ── Resume picker ──────────────────────────────────────────────────────
+  if (data.startsWith("cc:s:")) {
+    const idx = Number.parseInt(data.slice("cc:s:".length), 10);
+    const sessions = _ccPanelSessions.get(panelMsgId) ?? [];
+    const sess = Number.isFinite(idx) ? sessions[idx] : undefined;
+    clearCcPanelState(panelMsgId);
+
+    if (!sess) {
+      await api.editMessageText(chatId, panelMsgId,
+        "*Launch Claude Code → Session not found*",
+        { parse_mode: "Markdown", _skipHeader: true, reply_markup: { inline_keyboard: [] } } as Record<string, unknown>,
+      ).catch(() => {/* non-fatal */});
+      return;
+    }
+
+    const cwdLabel = shortenCwd(sess.cwd, 48);
+    await api.editMessageText(chatId, panelMsgId,
+      `*Launch Claude Code → Resuming* \`${escapeMarkdownV1(cwdLabel)}\``,
+      { parse_mode: "Markdown", _skipHeader: true, reply_markup: { inline_keyboard: [] } } as Record<string, unknown>,
+    ).catch(() => {/* non-fatal */});
+    await runCcLaunch(sess.cwd, { resumeSessionId: sess.sessionId });
+    return;
+  }
 }
 
 /**
  * Validates + spawns the launch script, then sends a success or failure
- * notification to chat. Records successful paths in the recent-paths store.
+ * notification to chat. Records successful paths in the recent-paths store
+ * (only on fresh launches — resuming a session shouldn't reorder the
+ * recent-paths list, since the operator may have only intended to pick up
+ * a thread, not to "claim" the dir as a recent project to revisit).
+ *
+ * For fresh launches we first run `syncGitRepoIfSafe` on the target dir so
+ * the operator picks up whatever has been merged on their tracking branch
+ * since their last session. Resumed sessions skip the sync — the operator
+ * may have stashed work or be mid-rebase, and a surprise pull would be
+ * hostile. The sync result is folded into the launch notification so the
+ * operator sees one Telegram message, not two.
  */
-async function runCcLaunch(path: string): Promise<void> {
+async function runCcLaunch(
+  path: string,
+  opts: { resumeSessionId?: string } = {},
+): Promise<void> {
   const chatId = resolveChat();
   if (typeof chatId !== "number") return;
   const api = getApi();
 
+  // Resolve to an absolute path once so the git sync and the launch see the
+  // same target. `launchCcInGhostty` re-validates internally, so passing the
+  // already-resolved path is safe; it's a no-op for already-absolute paths.
+  const resolved = resolveCcTargetDir(path);
+
+  let syncReport: GitSyncReport | undefined;
+  if (!opts.resumeSessionId && resolved.length > 0) {
+    try {
+      syncReport = await syncGitRepoIfSafe(resolved);
+    } catch {
+      // Defensive — syncGitRepoIfSafe shouldn't throw, but if it does we
+      // proceed with the launch silently rather than block /cc.
+      syncReport = undefined;
+    }
+  }
+
   try {
-    await launchCcInGhostty(path);
-    addRecentPath(path);
-    await api.sendMessage(chatId,
-      `🚀 *cc launched* in Ghostty\n\`${escapeMarkdownV1(path)}\``,
+    await launchCcInGhostty(path, opts);
+    if (!opts.resumeSessionId) {
+      addRecentPath(path);
+    }
+    const action = opts.resumeSessionId ? "resumed" : "launched";
+    let text = `🚀 *cc ${action}* in Ghostty\n\`${escapeMarkdownV1(path)}\``;
+    const syncLine = formatGitSyncLine(syncReport);
+    if (syncLine) text += `\n${syncLine}`;
+    await api.sendMessage(chatId, text,
       { parse_mode: "Markdown", _skipHeader: true } as Record<string, unknown>,
     ).catch(() => {/* non-fatal */});
   } catch (err) {
@@ -1816,6 +2091,38 @@ async function runCcLaunch(path: string): Promise<void> {
       `❌ *cc launch failed*\n\`${escapeMarkdownV1(e.message)}\``,
       { parse_mode: "Markdown", _skipHeader: true } as Record<string, unknown>,
     ).catch(() => {/* non-fatal */});
+  }
+}
+
+/**
+ * Turn a GitSyncReport into a one-line Telegram suffix. Returns undefined
+ * when there's nothing worth saying (non-git target dirs) so we don't add
+ * noise to launches in non-repo paths.
+ */
+function formatGitSyncLine(report: GitSyncReport | undefined): string | undefined {
+  if (!report) return undefined;
+  switch (report.outcome) {
+    case "not-a-repo":
+      // Common case for scratch dirs — stay quiet.
+      return undefined;
+    case "up-to-date":
+      return `✓ Up to date on \`${escapeMarkdownV1(report.branch ?? "?")}\``;
+    case "pulled": {
+      const n = report.pulledCommits ?? 0;
+      return `📥 Pulled ${n} commit${n === 1 ? "" : "s"} on \`${escapeMarkdownV1(report.branch ?? "?")}\``;
+    }
+    case "dirty":
+      return "⚠️ Working tree dirty — skipped pull";
+    case "detached":
+      return "⚠️ Detached HEAD — skipped pull";
+    case "no-upstream":
+      return `⚠️ \`${escapeMarkdownV1(report.branch ?? "?")}\` has no upstream — skipped pull`;
+    case "fetch-failed":
+      return "⚠️ Fetch failed — skipped pull";
+    case "pull-failed":
+      return "⚠️ Not a fast-forward — skipped pull";
+    default:
+      return undefined;
   }
 }
 

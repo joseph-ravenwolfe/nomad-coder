@@ -150,6 +150,25 @@ describe("cc-launch", () => {
         message: expect.stringContaining("ENOENT osascript") as unknown as string,
       });
     });
+
+    it("forwards resumeSessionId as the 4th positional osascript arg", async () => {
+      process.env.CC_LAUNCH_SCRIPT = "/launch.applescript";
+      delete process.env.CC_CLI_COMMAND;
+      spawnSpy.mockImplementation(() => makeFakeChild({ exitCode: 0 }));
+      const { launchCcInGhostty } = await import("./cc-launch.js");
+      await launchCcInGhostty(workDir, { resumeSessionId: "abc-123" });
+      const args = spawnSpy.mock.calls[0]![1] as string[];
+      expect(args).toEqual(["/launch.applescript", workDir, "cc", "abc-123"]);
+    });
+
+    it("omits the 4th arg when resumeSessionId is empty / whitespace (preserves two-arg contract)", async () => {
+      process.env.CC_LAUNCH_SCRIPT = "/launch.applescript";
+      spawnSpy.mockImplementation(() => makeFakeChild({ exitCode: 0 }));
+      const { launchCcInGhostty } = await import("./cc-launch.js");
+      await launchCcInGhostty(workDir, { resumeSessionId: "   " });
+      const args = spawnSpy.mock.calls[0]![1] as string[];
+      expect(args).toHaveLength(3);
+    });
   });
 
   describe("resolveCcTargetDir", () => {

@@ -73,16 +73,37 @@ export function getCcCliCommand(): string {
   return s && s.trim().length > 0 ? s.trim() : "cc";
 }
 
+/** Options for `launchCcInGhostty`. */
+export interface LaunchCcOptions {
+  /**
+   * If set, the bundled AppleScript will invoke `cc --resume <sessionId>`
+   * instead of `cc "<kickstart-prompt>"`. The session ID is the UUID found
+   * in `~/.claude/sessions/*.json` and as the basename of the transcript
+   * files under `~/.claude/projects/`. Forwarded to the launch script as
+   * its third positional argument; scripts updated 2026-05 accept it,
+   * older operator-supplied scripts will silently ignore the extra arg
+   * (degrading to a fresh launch).
+   */
+  resumeSessionId?: string;
+}
+
 /**
  * Validates `targetDir` (must exist + be a directory) and runs
- * `osascript $CC_LAUNCH_SCRIPT <targetDir>`. Resolves on script exit code 0,
- * rejects with a `CcLaunchError` otherwise.
+ * `osascript $CC_LAUNCH_SCRIPT <targetDir> <cli> [<resume-session-id>]`.
+ * Resolves on script exit code 0, rejects with a `CcLaunchError` otherwise.
  *
  * The spawn is NOT awaited for completion in the path-validation step —
  * we only block on stat. The AppleScript itself runs detached so the bridge
  * doesn't get tied to its lifetime; it just needs to launch successfully.
+ *
+ * Backwards-compat: the `resumeSessionId` argument is appended only when
+ * present, so operator-supplied launch scripts written against the original
+ * two-arg contract continue to work for fresh launches.
  */
-export async function launchCcInGhostty(targetDir: string): Promise<void> {
+export async function launchCcInGhostty(
+  targetDir: string,
+  opts: LaunchCcOptions = {},
+): Promise<void> {
   const script = getCcLaunchScript();
   if (!script) {
     throw {
@@ -117,8 +138,16 @@ export async function launchCcInGhostty(targetDir: string): Promise<void> {
   }
 
   const cli = getCcCliCommand();
+  // Build the positional arg list: <target> <cli> [<resume-sid>].
+  // The session ID is only forwarded when set; this keeps two-arg-only
+  // operator scripts working for fresh launches.
+  const argv = [script, resolved, cli];
+  const sid = opts.resumeSessionId?.trim();
+  if (sid && sid.length > 0) {
+    argv.push(sid);
+  }
   await new Promise<void>((resolve, reject) => {
-    const child = spawn("osascript", [script, resolved, cli], {
+    const child = spawn("osascript", argv, {
       stdio: ["ignore", "pipe", "pipe"],
       detached: true,
     });

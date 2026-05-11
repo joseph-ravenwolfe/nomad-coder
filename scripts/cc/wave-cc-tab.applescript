@@ -1,7 +1,11 @@
 -- Open a Wave terminal tab in a target directory and run the configured CLI.
 --
 -- Usage:
---   osascript wave-cc-tab.applescript <target-dir> [<cli-command>]
+--   osascript wave-cc-tab.applescript <target-dir> [<cli-command> [<resume-session-id>]]
+--
+-- When resume-session-id is provided, runs `<cli> --resume <sid>` instead
+-- of the kickstart-prompt fresh-launch — used by the bridge's /cc "Resume"
+-- picker.
 --
 -- Wave (https://www.waveterm.dev/) is an Electron-based terminal. As of this
 -- writing it has no AppleScript dictionary, so this script uses System
@@ -14,14 +18,20 @@
 
 on run argv
 	if (count of argv) < 1 then
-		error "Usage: osascript wave-cc-tab.applescript <target-dir> [<cli-command>]"
+		error "Usage: osascript wave-cc-tab.applescript <target-dir> [<cli-command> [<resume-session-id>]]"
 	end if
 	set targetDir to item 1 of argv
 	set cliCommand to "cc"
 	if (count of argv) ≥ 2 then set cliCommand to item 2 of argv
+	set resumeSid to ""
+	if (count of argv) ≥ 3 then set resumeSid to item 3 of argv
 
-	set kickstart to "Run your SessionStart bootstrap directive. Reply with just: Online."
-	set ccCommand to "cd " & quoted form of targetDir & " && " & cliCommand & " " & quoted form of kickstart
+	if resumeSid is not "" then
+		set ccCommand to "cd " & quoted form of targetDir & " && " & cliCommand & " --resume " & quoted form of resumeSid
+	else
+		set kickstart to "Run your SessionStart bootstrap directive. Reply with just: Online."
+		set ccCommand to "cd " & quoted form of targetDir & " && " & cliCommand & " " & quoted form of kickstart
+	end if
 
 	-- Did Wave have a window before activate?
 	set hadWindows to false

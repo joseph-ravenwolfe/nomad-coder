@@ -2,7 +2,11 @@
 -- CLI.
 --
 -- Usage:
---   osascript terminal-cc-tab.applescript <target-dir> [<cli-command>]
+--   osascript terminal-cc-tab.applescript <target-dir> [<cli-command> [<resume-session-id>]]
+--
+-- When resume-session-id is provided, runs `<cli> --resume <sid>` instead
+-- of the kickstart-prompt fresh-launch — used by the bridge's /cc "Resume"
+-- picker.
 --
 -- Uses Terminal.app's native `do script` dictionary entry. With no `in
 -- window` clause, `do script` opens a new Terminal window. To get a new
@@ -12,14 +16,20 @@
 
 on run argv
 	if (count of argv) < 1 then
-		error "Usage: osascript terminal-cc-tab.applescript <target-dir> [<cli-command>]"
+		error "Usage: osascript terminal-cc-tab.applescript <target-dir> [<cli-command> [<resume-session-id>]]"
 	end if
 	set targetDir to item 1 of argv
 	set cliCommand to "cc"
 	if (count of argv) ≥ 2 then set cliCommand to item 2 of argv
+	set resumeSid to ""
+	if (count of argv) ≥ 3 then set resumeSid to item 3 of argv
 
-	set kickstart to "Run your SessionStart bootstrap directive. Reply with just: Online."
-	set ccCommand to "cd " & quoted form of targetDir & " && " & cliCommand & " " & quoted form of kickstart
+	if resumeSid is not "" then
+		set ccCommand to "cd " & quoted form of targetDir & " && " & cliCommand & " --resume " & quoted form of resumeSid
+	else
+		set kickstart to "Run your SessionStart bootstrap directive. Reply with just: Online."
+		set ccCommand to "cd " & quoted form of targetDir & " && " & cliCommand & " " & quoted form of kickstart
+	end if
 
 	-- Did Terminal have a window before we activated it?
 	set hadWindows to false

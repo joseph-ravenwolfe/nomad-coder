@@ -1,11 +1,16 @@
 -- Open a Ghostty tab in a target directory and run the configured CLI.
 --
 -- Usage:
---   osascript ghostty-cc-tab.applescript <target-dir> [<cli-command>]
+--   osascript ghostty-cc-tab.applescript <target-dir> [<cli-command> [<resume-session-id>]]
 --
 -- Args:
---   target-dir    absolute path to cd into (required)
---   cli-command   the binary to launch Claude Code (optional; default "cc")
+--   target-dir          absolute path to cd into (required)
+--   cli-command         the binary to launch Claude Code (optional; default "cc")
+--   resume-session-id   UUID of a session to resume via `<cli> --resume <sid>`
+--                       (optional). When provided, the kickstart prompt is
+--                       skipped — `--resume` rehydrates the existing session
+--                       so we want it to pick up where it left off, not to
+--                       re-run the SessionStart bootstrap directive.
 --
 -- This script is the Ghostty launcher for the bridge's `/cc` Telegram
 -- command. The bridge sets CC_LAUNCH_SCRIPT to this file and CC_CLI_COMMAND
@@ -13,15 +18,18 @@
 -- a custom alias).
 --
 -- Sibling scripts in this directory (iterm-, terminal-, wave-, warp-) cover
--- other terminals. The contract is identical: take (target-dir, cli-command),
--- exit 0 on success, non-zero on failure.
+-- other terminals. The contract is identical: take (target-dir, cli-command,
+-- [resume-session-id]), exit 0 on success, non-zero on failure.
 --
 -- Behavior:
 --   * If Ghostty already has at least one window, focuses it and opens a NEW TAB
 --     in the frontmost window (Cmd+T).
 --   * If Ghostty is not running (or has no windows), launches it, waits for
 --     its first window, and uses that window's initial tab.
---   * Then types `cd <dir> && <cli> <kickstart-prompt>` and presses Return.
+--   * Then types either:
+--       `cd <dir> && <cli> <kickstart-prompt>`        (fresh)
+--       `cd <dir> && <cli> --resume <session-id>`    (resume)
+--     and presses Return.
 --
 -- The kickstart prompt forces the agent's first turn so the SessionStart
 -- hook's bootstrap directive (injected via additionalContext) actually
@@ -31,14 +39,21 @@
 
 on run argv
 	if (count of argv) < 1 then
-		error "Usage: osascript ghostty-cc-tab.applescript <target-dir> [<cli-command>]"
+		error "Usage: osascript ghostty-cc-tab.applescript <target-dir> [<cli-command> [<resume-session-id>]]"
 	end if
 	set targetDir to item 1 of argv
 	set cliCommand to "cc"
 	if (count of argv) ≥ 2 then set cliCommand to item 2 of argv
+	set resumeSid to ""
+	if (count of argv) ≥ 3 then set resumeSid to item 3 of argv
 
-	set kickstart to "Run your SessionStart bootstrap directive. Reply with just: Online."
-	set ccCommand to "cd " & quoted form of targetDir & " && " & cliCommand & " " & quoted form of kickstart
+	if resumeSid is not "" then
+		-- Resume mode: rehydrate the existing session; do not inject a kickstart.
+		set ccCommand to "cd " & quoted form of targetDir & " && " & cliCommand & " --resume " & quoted form of resumeSid
+	else
+		set kickstart to "Run your SessionStart bootstrap directive. Reply with just: Online."
+		set ccCommand to "cd " & quoted form of targetDir & " && " & cliCommand & " " & quoted form of kickstart
+	end if
 
 	-- Determine whether Ghostty already has a window before we activate it.
 	set hadWindows to false
