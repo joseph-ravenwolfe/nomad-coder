@@ -4,7 +4,13 @@ import type { TimelineEvent } from "./message-store.js";
 // ── Hoisted mocks ─────────────────────────────────────────
 
 const mocks = vi.hoisted(() => ({
+  /** Warn-tier unhealthy list (HEALTH_THRESHOLD_MS quiet). */
   getUnhealthySessions: vi.fn((_threshold?: number) => [] as { sid: number; name: string; createdAt: string }[]),
+  /** Close-tier unhealthy list (CLOSE_THRESHOLD_MS quiet). Defaults to empty so
+   *  existing tests that only configure the warn-tier list don't accidentally
+   *  trip the close-escalation path. Set explicitly via
+   *  `mocks.unhealthyAtCloseTier.mockReturnValue([...])`. */
+  unhealthyAtCloseTier: vi.fn((_threshold?: number) => [] as { sid: number; name: string; createdAt: string }[]),
   markUnhealthy: vi.fn(),
   getSession: vi.fn(),
   getGovernorSid: vi.fn(() => 0),
@@ -25,13 +31,31 @@ const mocks = vi.hoisted(() => ({
   getCallerSid: vi.fn(() => 1),
   registerOnceOnSend: vi.fn(),
   clearOnceOnSend: vi.fn(),
+  closeSessionById: vi.fn((sid: number) => ({ closed: true, sid })),
 }));
 
 vi.mock("./session-manager.js", () => ({
-  getUnhealthySessions: (threshold?: number) => mocks.getUnhealthySessions(threshold),
+  // Dispatch by threshold value so a single `_runHealthCheckNow()` call
+  // hits two distinct mocks: the close-tier (higher) and warn-tier (lower).
+  // `getUnhealthySessions` retains the original API for the warn tier so
+  // existing `.mockReturnValue([...])` calls keep working unchanged.
+  getUnhealthySessions: (threshold?: number) => {
+    const isCloseTier = (threshold ?? 0) > 300_000;
+    return isCloseTier
+      ? mocks.unhealthyAtCloseTier(threshold)
+      : mocks.getUnhealthySessions(threshold);
+  },
   markUnhealthy: mocks.markUnhealthy,
   getSession: mocks.getSession,
   listSessions: () => mocks.listSessions(),
+}));
+
+vi.mock("./session-teardown.js", () => ({
+  closeSessionById: (sid: number) => mocks.closeSessionById(sid),
+}));
+
+vi.mock("./animation-state.js", () => ({
+  hasActiveAnimation: vi.fn(() => false),
 }));
 
 vi.mock("./routing-mode.js", () => ({
@@ -121,6 +145,8 @@ describe("health-check", () => {
     mocks.deliverServiceMessage.mockReturnValue(true);
     mocks.getGovernorSid.mockReturnValue(0);
     mocks.getUnhealthySessions.mockReturnValue([]);
+    mocks.unhealthyAtCloseTier.mockReturnValue([]);
+    mocks.closeSessionById.mockClear();
     mocks.listSessions.mockReturnValue([]);
   });
 
@@ -714,6 +740,74 @@ describe("health-check", () => {
       mocks.sendServiceMessage.mockResolvedValue(undefined);
       await _runHealthCheckNow();
       expect(mocks.sendServiceMessage).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // ── Close-escalation (CLOSE_THRESHOLD_MS) ────────────────────────────
+
+  describe("close-escalation tier", () => {
+    it("calls closeSessionById for every session past the close threshold", async () => {
+      const a = makeSession(2, "Worker A");
+      const b = makeSession(3, "Worker B");
+      mocks.unhealthyAtCloseTier.mockReturnValue([a, b]);
+      await _runHealthCheckNow();
+      expect(mocks.closeSessionById).toHaveBeenCalledWith(2);
+      expect(mocks.closeSessionById).toHaveBeenCalledWith(3);
+      expect(mocks.closeSessionById).toHaveBeenCalledTimes(2);
+    });
+
+    it("does NOT call closeSessionById when no sessions are past the close threshold (only warn-tier hits)", async () => {
+      const s = makeSession(2, "Worker");
+      mocks.getUnhealthySessions.mockReturnValue([s]); // warn-tier only
+      mocks.unhealthyAtCloseTier.mockReturnValue([]);  // nothing at close-tier
+      mocks.getGovernorSid.mockReturnValue(1);
+      await _runHealthCheckNow();
+      expect(mocks.closeSessionById).not.toHaveBeenCalled();
+      // The warn-tier path still posts the "appears unresponsive" notification.
+      expect(mocks.sendServiceMessage).toHaveBeenCalledWith(
+        expect.stringContaining("Worker"),
+      );
+    });
+
+    it("does NOT close a session that has an active animation (proof of life)", async () => {
+      const s = makeSession(2, "Animating Worker");
+      mocks.unhealthyAtCloseTier.mockReturnValue([s]);
+      // animation-state mock is already in place via the module-level mocks;
+      // override hasActiveAnimation to return true for this session.
+      const { hasActiveAnimation } = await import("./animation-state.js");
+      vi.mocked(hasActiveAnimation).mockReturnValueOnce(true);
+      await _runHealthCheckNow();
+      expect(mocks.closeSessionById).not.toHaveBeenCalled();
+    });
+
+    it("survives a closeSessionById throw without crashing the tick", async () => {
+      const s = makeSession(2, "Worker");
+      mocks.unhealthyAtCloseTier.mockReturnValue([s]);
+      mocks.closeSessionById.mockImplementationOnce(() => {
+        throw new Error("boom");
+      });
+      // Should not reject.
+      await expect(_runHealthCheckNow()).resolves.toBeUndefined();
+    });
+
+    it("close-tier runs BEFORE warn-tier in the same tick", async () => {
+      // A session that's past the close threshold is also past the warn
+      // threshold. We don't want to post "appears unresponsive" and then
+      // immediately also post "disconnected" — the close path should win
+      // and the warn path should see the session as already-closed.
+      const s = makeSession(2, "Worker");
+      mocks.unhealthyAtCloseTier.mockReturnValue([s]);
+      // Don't put it in the warn-tier list — simulating that
+      // getUnhealthySessions, called after closeSessionById fires, no
+      // longer returns this SID.
+      mocks.getUnhealthySessions.mockReturnValue([]);
+      mocks.getGovernorSid.mockReturnValue(1);
+      await _runHealthCheckNow();
+      expect(mocks.closeSessionById).toHaveBeenCalledWith(2);
+      // No "appears unresponsive" message — we went straight to close.
+      expect(mocks.sendServiceMessage).not.toHaveBeenCalledWith(
+        expect.stringContaining("appears unresponsive"),
+      );
     });
   });
 });

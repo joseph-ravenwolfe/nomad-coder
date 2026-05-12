@@ -27,6 +27,7 @@ import { markdownToV2 } from "./markdown.js";
 import { dlog } from "./debug-log.js";
 import { hasActiveAnimation } from "./animation-state.js";
 import { registerOnceOnSend, clearOnceOnSend } from "./outbound-proxy.js";
+import { closeSessionById } from "./session-teardown.js";
 
 // ── Constants ──────────────────────────────────────────────
 
@@ -34,14 +35,36 @@ import { registerOnceOnSend, clearOnceOnSend } from "./outbound-proxy.js";
 export const CHECK_INTERVAL_MS = 60_000;
 
 /**
- * How long a session can go without any tool activity before it is considered
- * unhealthy. Bumped to 24 hours in v8 — agents using the Monitor + heartbeat
- * pattern legitimately sit idle indefinitely (no long-poll cadence). The
- * primary "agent gone" signal is now the streamable-http transport's
- * `onclose` (handled in `index.ts`); this threshold is a long-tail safety
- * net for stuck connections that don't surface a TCP close.
+ * How long a session can go without any tool activity before it is treated
+ * as unresponsive and an operator notification ("🟡 …appears unresponsive")
+ * is posted.
+ *
+ * **Sized against the liveness pinger.** Server-side liveness ticks
+ * (see `session-liveness.ts`) wake every quiet session every
+ * `LIVENESS_PING_INTERVAL_MS` (90 s) — a healthy agent's `lastPollAt`
+ * never drifts past ~2 minutes. Setting the threshold at 4 min gives the
+ * pinger two-plus chances to refresh before a false positive can fire.
+ *
+ * Was 24 h in early v8, which was so generous that operators went hours
+ * (or days) without learning a worker had quietly disconnected. The
+ * upstream onclose path turned out to be unreliable enough that this
+ * threshold needs to be the primary tier-1 signal again.
  */
-export const HEALTH_THRESHOLD_MS = 86_400_000;
+export const HEALTH_THRESHOLD_MS = 240_000;
+
+/**
+ * How long an already-unresponsive session is given to come back before the
+ * health check escalates to `closeSessionById` — which posts the canonical
+ * "💻 …has disconnected" service message and frees the session's slot.
+ *
+ * Pre-fix, the health check only ever flagged sessions; nothing in the v8
+ * path actually closed a session whose HTTP transport had stayed alive
+ * (or whose `onclose` got swallowed). So an offline agent could linger
+ * indefinitely in the "appears unresponsive" state with no terminal
+ * disconnect announcement. This threshold (8 minutes total quiet) closes
+ * the loop.
+ */
+export const CLOSE_THRESHOLD_MS = 480_000;
 
 const CB_REROUTE_NOW  = "hc_reroute_now";
 const CB_MAKE_PRIMARY = "hc_make_primary";
@@ -155,10 +178,34 @@ async function sendGovernorPrompt(
 
 // ── Health check tick ─────────────────────────────────────
 
-async function runHealthCheck(thresholdMs: number): Promise<void> {
+async function runHealthCheck(
+  thresholdMs: number,
+  closeThresholdMs: number,
+): Promise<void> {
   if (_isRunning) return;
   _isRunning = true;
   try {
+    // ── Escalate to close ─────────────────────────────────
+    // Sessions that have been quiet past `closeThresholdMs` are
+    // considered gone — call `closeSessionById`, which posts the
+    // canonical "💻 …has disconnected" service message and frees
+    // the slot. Iterate over a snapshot of the unhealthy list at the
+    // close threshold so concurrent recovery in the same tick is
+    // tolerated (a session that touched between snapshot and close
+    // would have been excluded by `getUnhealthySessions`).
+    const closeCandidates = getUnhealthySessions(closeThresholdMs);
+    for (const session of closeCandidates) {
+      if (hasActiveAnimation(session.sid)) continue; // proof of life
+      dlog("health", `escalating to close sid=${session.sid} name=${session.name}`);
+      try {
+        closeSessionById(session.sid);
+      } catch (err) {
+        process.stderr.write(
+          `[health-check] close failed sid=${session.sid} err=${(err as Error).message}\n`,
+        );
+      }
+    }
+
     const unhealthy = getUnhealthySessions(thresholdMs);
     const unhealthySids = new Set(unhealthy.map(s => s.sid));
     const governorSid   = getGovernorSid();
@@ -273,12 +320,13 @@ async function runHealthCheck(thresholdMs: number): Promise<void> {
  * Safe to call multiple times — a second call replaces the existing timer.
  */
 export function startHealthCheck(
-  intervalMs  = CHECK_INTERVAL_MS,
-  thresholdMs = HEALTH_THRESHOLD_MS,
+  intervalMs       = CHECK_INTERVAL_MS,
+  thresholdMs      = HEALTH_THRESHOLD_MS,
+  closeThresholdMs = CLOSE_THRESHOLD_MS,
 ): void {
   stopHealthCheck();
   _intervalHandle = setInterval(() => {
-    void runHealthCheck(thresholdMs);
+    void runHealthCheck(thresholdMs, closeThresholdMs);
   }, intervalMs);
 }
 
@@ -296,6 +344,9 @@ export function stopHealthCheck(): void {
 }
 
 /** Exposed for tests — directly run one health check tick. */
-export function _runHealthCheckNow(thresholdMs = HEALTH_THRESHOLD_MS): Promise<void> {
-  return runHealthCheck(thresholdMs);
+export function _runHealthCheckNow(
+  thresholdMs      = HEALTH_THRESHOLD_MS,
+  closeThresholdMs = CLOSE_THRESHOLD_MS,
+): Promise<void> {
+  return runHealthCheck(thresholdMs, closeThresholdMs);
 }
