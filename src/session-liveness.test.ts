@@ -33,6 +33,7 @@ import {
   _isLivenessPingerRunning,
   LIVENESS_PING_AFTER_QUIET_MS,
 } from "./session-liveness.js";
+import { HEARTBEAT_PAYLOAD } from "./session-queue.js";
 
 describe("session-liveness", () => {
   let scratchDir: string;
@@ -57,7 +58,7 @@ describe("session-liveness", () => {
 
   // ── runLivenessPingNow ─────────────────────────────────────
 
-  it("writes a tick to a session whose lastPollAt is past the quiet cutoff", () => {
+  it("writes a heartbeat to a session whose lastPollAt is past the quiet cutoff", () => {
     const watchFile = makeWatchFile("a.events");
     const now = Date.now();
     sessionMocks.listSessions.mockReturnValue([
@@ -72,7 +73,7 @@ describe("session-liveness", () => {
       };
     });
     runLivenessPingNow(now);
-    expect(readFileSync(watchFile, "utf8")).toBe("tick\n");
+    expect(readFileSync(watchFile, "utf8")).toBe(HEARTBEAT_PAYLOAD);
   });
 
   it("does NOT write a tick to a session that recently dequeued (lastPollAt fresh)", () => {
@@ -103,7 +104,7 @@ describe("session-liveness", () => {
     }));
     runLivenessPingNow(now);
     // Created 5 min ago, never polled → past quiet cutoff → tick written.
-    expect(readFileSync(watchFile, "utf8")).toBe("tick\n");
+    expect(readFileSync(watchFile, "utf8")).toBe(HEARTBEAT_PAYLOAD);
   });
 
   it("does NOT tick a just-created session (createdAt fallback within cutoff)", () => {
@@ -157,7 +158,7 @@ describe("session-liveness", () => {
       return undefined;
     });
     runLivenessPingNow(now);
-    expect(readFileSync(stale, "utf8")).toBe("tick\n");
+    expect(readFileSync(stale, "utf8")).toBe(HEARTBEAT_PAYLOAD);
     expect(statSync(fresh).size).toBe(0);
   });
 
@@ -173,7 +174,7 @@ describe("session-liveness", () => {
       watchFile, lastPollAt: now - 5 * 60_000,
     }));
     runLivenessPingNow(now);
-    expect(readFileSync(watchFile, "utf8")).toBe("existing\ntick\n");
+    expect(readFileSync(watchFile, "utf8")).toBe("existing\n" + HEARTBEAT_PAYLOAD);
   });
 
   it("survives a write failure (e.g. permission denied) without crashing", () => {

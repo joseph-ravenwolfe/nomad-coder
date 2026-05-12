@@ -41,6 +41,7 @@
 
 import { appendFileSync } from "node:fs";
 import { listSessions, getSession } from "./session-manager.js";
+import { HEARTBEAT_PAYLOAD } from "./session-queue.js";
 
 /** How often the liveness pinger runs. */
 export const LIVENESS_PING_INTERVAL_MS = 90_000;
@@ -55,10 +56,15 @@ export const LIVENESS_PING_AFTER_QUIET_MS = 90_000;
 
 let _intervalHandle: ReturnType<typeof setInterval> | undefined;
 
-/** Append a single `tick\n` to a session's watch file. Best-effort. */
+/**
+ * Append the shared heartbeat payload to a session's watch file. Best-effort.
+ * Uses the same `HEARTBEAT_PAYLOAD` as event-delivery heartbeats so the two
+ * cases are indistinguishable on the wire — see the comment on
+ * `HEARTBEAT_PAYLOAD` in session-queue.ts for the rationale.
+ */
 function writeLivenessByte(watchFile: string, sid: number): void {
   try {
-    appendFileSync(watchFile, "tick\n");
+    appendFileSync(watchFile, HEARTBEAT_PAYLOAD);
   } catch (err) {
     process.stderr.write(
       `[liveness] write failed sid=${sid} file=${watchFile} err=${(err as Error).message}\n`,

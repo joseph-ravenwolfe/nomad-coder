@@ -17,6 +17,7 @@ import {
   deliverDirectMessage,
   deliverReminderEvent,
   resetSessionQueuesForTest,
+  HEARTBEAT_PAYLOAD,
 } from "./session-queue.js";
 import { createSession, resetSessions } from "./session-manager.js";
 import {
@@ -306,7 +307,7 @@ describe("session-queue", () => {
         timestamp: new Date().toISOString(),
         event: "message",
         from: "user",
-        content: { type: "voice", text: undefined } as TimelineEvent["content"],
+        content: { type: "voice", text: undefined },
       };
       routeToSession(evt);
       const watchFile = s.watchFile!;
@@ -316,9 +317,9 @@ describe("session-queue", () => {
       pingSessionsHoldingMessage(42);
 
       const after = readFileSync(watchFile, "utf8");
-      // A single new "tick\n" should have been appended.
-      expect(after.length).toBe(baselineLen + "tick\n".length);
-      expect(after.endsWith("tick\n")).toBe(true);
+      // A single heartbeat line should have been appended.
+      expect(after.length).toBe(baselineLen + HEARTBEAT_PAYLOAD.length);
+      expect(after.endsWith(HEARTBEAT_PAYLOAD)).toBe(true);
     });
 
     it("is a no-op when no session queue holds the given message", () => {
@@ -346,15 +347,15 @@ describe("session-queue", () => {
         timestamp: new Date().toISOString(),
         event: "message",
         from: "user",
-        content: { type: "voice", text: undefined } as TimelineEvent["content"],
+        content: { type: "voice", text: undefined },
       });
       const bWatchBefore = readFileSync(b.watchFile!, "utf8");
       const aWatchBefore = readFileSync(a.watchFile!, "utf8");
 
       pingSessionsHoldingMessage(77);
 
-      // A got the tick; B did not.
-      expect(readFileSync(a.watchFile!, "utf8").length).toBe(aWatchBefore.length + "tick\n".length);
+      // A got the heartbeat; B did not.
+      expect(readFileSync(a.watchFile!, "utf8").length).toBe(aWatchBefore.length + HEARTBEAT_PAYLOAD.length);
       expect(readFileSync(b.watchFile!, "utf8")).toBe(bWatchBefore);
     });
   });
@@ -569,10 +570,10 @@ describe("session-queue", () => {
 
   // ── v8 heartbeat side-effect ────────────────────────────────
   describe("heartbeat write", () => {
-    it("appends a 'tick\\n' heartbeat line to the session's watch file on each enqueue", async () => {
+    it("appends a heartbeat line to the session's watch file on each enqueue", async () => {
       const { createSession, unlinkWatchFile, getSession } = await import("./session-manager.js");
       const { statSync, existsSync, readFileSync } = await import("node:fs");
-      const HEARTBEAT = "tick\n";
+      const HEARTBEAT = HEARTBEAT_PAYLOAD;
       const session = createSession("Worker");
       try {
         createSessionQueue(session.sid);

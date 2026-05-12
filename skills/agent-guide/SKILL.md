@@ -44,13 +44,26 @@ parallel surface to the terminal, not a replacement.
 
 ## Handling Monitor notifications
 
-Each line written to `watch_file` becomes one Monitor notification. On every
-notification:
+Each line written to `watch_file` becomes one Monitor notification. The
+bridge writes a heartbeat line — currently `nomad: drain queue` — every
+time an event is enqueued AND, in the background, every ~90 s for any
+quiet session so silent zombies get detected fast.
+
+On every notification, regardless of content:
 
 1. Drain: `dequeue({ token, max_wait: 0 })` in a tight loop until `empty: true`.
 2. Handle each event in order (messages, callbacks, voice, reminders, etc.).
 3. Reply via `send`, `action`, or whatever is appropriate.
 4. Done — the Monitor task continues watching for the next event.
+
+**Do not filter heartbeat lines** (e.g. by piping `tail -F` through
+`grep -v`). They are the *only* signal the bridge gives that something
+has happened. A liveness-ping heartbeat (no events queued) and an
+event-delivery heartbeat (events waiting) are deliberately
+indistinguishable on the wire — the agent must dequeue on every line to
+both pick up real events and refresh its `lastPollAt` server-side. If
+you filter the heartbeat, the bridge's health check will see the
+session go silent and post a disconnected notification on Telegram.
 
 Heartbeat lines may batch (multiple events arrive between drains), so always
 loop the drain until empty rather than draining once per notification.

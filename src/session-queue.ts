@@ -22,16 +22,42 @@ import { dlog } from "./debug-log.js";
 import type { ReminderEvent } from "./reminder-state.js";
 
 /**
+ * The watch-file heartbeat payload — the literal line written every time
+ * the bridge wants an agent's Monitor to wake.
+ *
+ * **Why this exact string.** The watch file is tailed by an agent's
+ * `Monitor` tool, which surfaces each line to the agent as a notification.
+ * An agent reading a notification body of just `tick` (the historical
+ * placeholder) tended to interpret it as noise — a clock-tick metaphor
+ * rather than an instruction — and in pathological cases would mute
+ * future notifications or add a `grep -v` filter that suppressed all
+ * real wakeups. The current payload is self-documenting:
+ *
+ *   - `nomad:` namespaces it so it's obvious which subsystem wrote it.
+ *   - `drain queue` mirrors the verb the agent guide uses ("Drain via
+ *     `dequeue`") so a model reading the line lands on the right action
+ *     even if the agent-guide skill wasn't loaded this turn.
+ *
+ * Heartbeats are sent on both event delivery (`enqueueAndPing` below) and
+ * server-driven liveness pings (`session-liveness.ts`). The agent should
+ * call `dequeue({max_wait: 0})` on *any* heartbeat; the two cases are
+ * deliberately indistinguishable on the wire — a liveness ping that
+ * arrives just before a real event would otherwise let the agent stall
+ * for a tick interval.
+ *
+ * The content is non-empty so it survives any line filter the agent's
+ * watcher might apply (Monitor and friends commonly drop empty lines).
+ * POSIX appendFileSync is atomic well below PIPE_BUF (4 KB), so two
+ * concurrent heartbeat writes interleave at line boundaries, not within
+ * a line.
+ */
+export const HEARTBEAT_PAYLOAD = "nomad: drain queue\n";
+
+/**
  * Enqueue an event to the given session's queue and append a heartbeat
  * line to its watch file. The heartbeat is what wakes Monitor-watching
  * agents — without it, an agent has no way to know a new event arrived
  * short of long-polling dequeue.
- *
- * Heartbeat content is `"tick\n"` (5 bytes) — non-empty so it survives
- * any line filter the agent's watcher might apply (Monitor and friends
- * commonly drop empty lines). The exact text doesn't matter; agents
- * react to *any* line by calling dequeue({max_wait: 0}). The atomicity
- * guarantee on POSIX appendFileSync holds well below PIPE_BUF (4 KB).
  *
  * The append is best-effort: file-write errors must NOT block event
  * delivery. The event is in the queue regardless. Errors are logged and
@@ -47,7 +73,7 @@ function enqueueAndPing(
   const watchFile = getSession(sid)?.watchFile;
   if (watchFile) {
     try {
-      appendFileSync(watchFile, "tick\n");
+      appendFileSync(watchFile, HEARTBEAT_PAYLOAD);
     } catch (err) {
       process.stderr.write(
         `[heartbeat] write failed sid=${sid} file=${watchFile} err=${(err as Error).message}\n`,
@@ -318,7 +344,7 @@ export function pingSessionsHoldingMessage(messageId: number): void {
     const watchFile = getSession(sid)?.watchFile;
     if (!watchFile) continue;
     try {
-      appendFileSync(watchFile, "tick\n");
+      appendFileSync(watchFile, HEARTBEAT_PAYLOAD);
     } catch (err) {
       process.stderr.write(
         `[heartbeat] post-patch write failed sid=${sid} msg=${messageId} err=${(err as Error).message}\n`,
