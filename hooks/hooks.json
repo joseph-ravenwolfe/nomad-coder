@@ -1,5 +1,5 @@
 {
-  "description": "Nomad Coder bootstrap — injects a SYSTEM DIRECTIVE at session start so the agent opens its Telegram session before the user's first turn (when the bridge daemon is reachable).",
+  "description": "Nomad Coder bootstrap and teardown. SessionStart injects the bridge directive (when the daemon is reachable) and forwards Claude Code's session_id so the bridge can remember it. SessionEnd fires the matching session-close on a clean CC exit, replacing the v8 server-driven liveness pinger.",
   "hooks": {
     "SessionStart": [
       {
@@ -7,6 +7,16 @@
           {
             "type": "command",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/handlers/session-start.sh\""
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/handlers/session-end.sh\""
           }
         ]
       }

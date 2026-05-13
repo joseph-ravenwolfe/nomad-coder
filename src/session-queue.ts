@@ -38,12 +38,15 @@ import type { ReminderEvent } from "./reminder-state.js";
  *     `dequeue`") so a model reading the line lands on the right action
  *     even if the agent-guide skill wasn't loaded this turn.
  *
- * Heartbeats are sent on both event delivery (`enqueueAndPing` below) and
- * server-driven liveness pings (`session-liveness.ts`). The agent should
- * call `dequeue({max_wait: 0})` on *any* heartbeat; the two cases are
- * deliberately indistinguishable on the wire — a liveness ping that
- * arrives just before a real event would otherwise let the agent stall
- * for a tick interval.
+ * In v8.1 heartbeats fire **only** on real event delivery (via
+ * `enqueueAndPing` and the message-fanout helper below) — the
+ * server-driven liveness pinger that lived briefly in v8.0 was removed
+ * because the watch-file write itself was the operator complaint. Silent-
+ * zombie detection is now handled by the SessionEnd Claude Code hook for
+ * clean exits and by the long-tail health check for dirty ones. The
+ * agent should still call `dequeue({max_wait: 0})` on any heartbeat; the
+ * payload's "drain queue" wording is preserved for backward compat with
+ * older agent-guide skill versions.
  *
  * The content is non-empty so it survives any line filter the agent's
  * watcher might apply (Monitor and friends commonly drop empty lines).

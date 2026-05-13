@@ -40,7 +40,9 @@ vi.mock("./session-manager.js", () => ({
   // `getUnhealthySessions` retains the original API for the warn tier so
   // existing `.mockReturnValue([...])` calls keep working unchanged.
   getUnhealthySessions: (threshold?: number) => {
-    const isCloseTier = (threshold ?? 0) > 300_000;
+    // Warn tier in production = 1 h, close tier = 2 h. Split at 1.5 h so
+    // each tier's mock can be set independently.
+    const isCloseTier = (threshold ?? 0) > 5_400_000;
     return isCloseTier
       ? mocks.unhealthyAtCloseTier(threshold)
       : mocks.getUnhealthySessions(threshold);

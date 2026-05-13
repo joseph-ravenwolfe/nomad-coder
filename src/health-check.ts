@@ -39,32 +39,28 @@ export const CHECK_INTERVAL_MS = 60_000;
  * as unresponsive and an operator notification ("🟡 …appears unresponsive")
  * is posted.
  *
- * **Sized against the liveness pinger.** Server-side liveness ticks
- * (see `session-liveness.ts`) wake every quiet session every
- * `LIVENESS_PING_INTERVAL_MS` (90 s) — a healthy agent's `lastPollAt`
- * never drifts past ~2 minutes. Setting the threshold at 4 min gives the
- * pinger two-plus chances to refresh before a false positive can fire.
+ * **Long-tail safety net only.** In v8.1 the primary disconnect signals
+ * are (a) the MCP HTTP transport's `onclose` and (b) the SessionEnd hook
+ * — both fire on clean Claude Code exits and trigger an immediate
+ * `closeSessionById`. This threshold only matters for **dirty exits**
+ * (segfault, OOM kill, kill -9, power loss) where neither signal fires.
  *
- * Was 24 h in early v8, which was so generous that operators went hours
- * (or days) without learning a worker had quietly disconnected. The
- * upstream onclose path turned out to be unreliable enough that this
- * threshold needs to be the primary tier-1 signal again.
+ * 1 hour balances "tell the operator before they wander off" against
+ * "don't false-positive a legitimately quiet idle session." We previously
+ * shipped 4 min paired with a 90-s liveness pinger, which created
+ * watch-file noise the operator complained about; rolling both back.
  */
-export const HEALTH_THRESHOLD_MS = 240_000;
+export const HEALTH_THRESHOLD_MS = 60 * 60_000;
 
 /**
  * How long an already-unresponsive session is given to come back before the
  * health check escalates to `closeSessionById` — which posts the canonical
  * "💻 …has disconnected" service message and frees the session's slot.
  *
- * Pre-fix, the health check only ever flagged sessions; nothing in the v8
- * path actually closed a session whose HTTP transport had stayed alive
- * (or whose `onclose` got swallowed). So an offline agent could linger
- * indefinitely in the "appears unresponsive" state with no terminal
- * disconnect announcement. This threshold (8 minutes total quiet) closes
- * the loop.
+ * Set ~2 h after the warn tier. Most dirty exits resolve via OS socket
+ * teardown well before this fires; this is purely the last-line backstop.
  */
-export const CLOSE_THRESHOLD_MS = 480_000;
+export const CLOSE_THRESHOLD_MS = 2 * 60 * 60_000;
 
 const CB_REROUTE_NOW  = "hc_reroute_now";
 const CB_MAKE_PRIMARY = "hc_make_primary";

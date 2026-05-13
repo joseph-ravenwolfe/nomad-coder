@@ -19,7 +19,6 @@ import { BUILT_IN_COMMANDS, applySessionLogConfig, doTimelineDump } from "./buil
 import { startPoller, stopPoller, drainPendingUpdates, waitForPollerExit } from "./poller.js";
 import { startSilenceDetector } from "./silence-detector.js";
 import { startHealthCheck } from "./health-check.js";
-import { startLivenessPings } from "./session-liveness.js";
 import { setAuthHook } from "./session-gate.js";
 import { touchSession, findSessionsByHttpId } from "./session-manager.js";
 import { closeSessionById } from "./session-teardown.js";
@@ -299,7 +298,6 @@ startPoller();
 startSilenceDetector();
 
 startHealthCheck();
-startLivenessPings();
 setAuthHook((sid: number) => {
   touchSession(sid);
 });

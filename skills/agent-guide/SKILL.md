@@ -12,9 +12,14 @@ parallel surface to the terminal, not a replacement.
 
 ## On session start (do this immediately, before anything else)
 
-1. Call `action({ type: "session/start", name: "<NAME>" })` where `<NAME>`
-   is derived from the current working directory's basename (alphanumeric +
-   spaces only; strip everything else; if the result is empty, use `Worker`).
+1. Call `action({ type: "session/start", name: "<NAME>", cc_session_id: "<CC_UUID>" })`
+   where `<NAME>` is derived from the current working directory's basename
+   (alphanumeric + spaces only; strip everything else; if the result is
+   empty, use `Worker`). `<CC_UUID>` is Claude Code's session id —
+   typically pre-supplied via the SessionStart hook directive, so this is
+   automatic in normal use; omit if you don't have it. The bridge stores
+   it so the matching SessionEnd hook can deterministically close the
+   bridge session when Claude Code exits.
    First session may pass no name; second+ must pass one.
    - **NAME_CONFLICT (different agent owns the name):** retry with
      `<NAME>2`, then `<NAME>3`, etc. Each retry is a fresh session/start.
@@ -46,8 +51,8 @@ parallel surface to the terminal, not a replacement.
 
 Each line written to `watch_file` becomes one Monitor notification. The
 bridge writes a heartbeat line — currently `nomad: drain queue` — every
-time an event is enqueued AND, in the background, every ~90 s for any
-quiet session so silent zombies get detected fast.
+time an event is enqueued for this session. Idle sessions are silent by
+design (no periodic ticks).
 
 On every notification, regardless of content:
 
@@ -57,16 +62,10 @@ On every notification, regardless of content:
 4. Done — the Monitor task continues watching for the next event.
 
 **Do not filter heartbeat lines** (e.g. by piping `tail -F` through
-`grep -v`). They are the *only* signal the bridge gives that something
-has happened. A liveness-ping heartbeat (no events queued) and an
-event-delivery heartbeat (events waiting) are deliberately
-indistinguishable on the wire — the agent must dequeue on every line to
-both pick up real events and refresh its `lastPollAt` server-side. If
-you filter the heartbeat, the bridge's health check will see the
-session go silent and post a disconnected notification on Telegram.
-
-Heartbeat lines may batch (multiple events arrive between drains), so always
-loop the drain until empty rather than draining once per notification.
+`grep -v`). Each line corresponds to one or more queued events; filtering
+them silently drops real work. Heartbeat lines may also batch (multiple
+events arrive between drains), so always loop the drain until empty
+rather than draining once per notification.
 
 ## Communication policy — Loud mode
 

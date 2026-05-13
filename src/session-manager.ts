@@ -99,6 +99,14 @@ export interface Session {
    * and closes them automatically. See `closeSessionsByHttpId`.
    */
   httpSessionId?: string;
+  /**
+   * Claude Code's own session UUID, as supplied by the SessionStart hook
+   * and forwarded by the agent's bootstrap. Lets the SessionEnd hook close
+   * the matching bridge session deterministically (via the no-auth
+   * `session/close-by-cc-id` action) even when the MCP HTTP transport's
+   * `onclose` event fires late or not at all on a forced agent exit.
+   */
+  ccSessionId?: string;
 }
 
 /** Public view returned by `listSessions` — no token suffix. */
@@ -209,6 +217,7 @@ export function createSession(
   colorHint?: string,
   forceColor = false,
   httpSessionId?: string,
+  ccSessionId?: string,
 ): SessionCreateResult {
   const sid = _nextId++;
   const usedSuffixes = new Set([..._sessions.values()].map((s) => s.suffix));
@@ -253,6 +262,7 @@ export function createSession(
     connectionToken,
     watchFile,
     httpSessionId,
+    ccSessionId,
   };
   _sessions.set(sid, session);
 
@@ -306,6 +316,19 @@ export function unlinkWatchFile(watchFile: string | undefined): void {
 export function findSessionsByHttpId(httpSessionId: string): number[] {
   return [..._sessions.values()]
     .filter(s => s.httpSessionId === httpSessionId)
+    .map(s => s.sid);
+}
+
+/**
+ * Return the SIDs of every session bound to a given Claude Code session
+ * UUID. Used by the `session/close-by-cc-id` action handler, which the
+ * SessionEnd hook calls to close the matching bridge session when Claude
+ * Code exits — without needing the bridge token, which is held only in
+ * the agent's MCP runtime context.
+ */
+export function findSessionsByCcId(ccSessionId: string): number[] {
+  return [..._sessions.values()]
+    .filter(s => s.ccSessionId === ccSessionId)
     .map(s => s.sid);
 }
 

@@ -156,7 +156,7 @@ const DESCRIPTION =
   "Returns { token, sid, suffix, sessions_active, action, pending }. " +
   "Call help() first to load the API guide, then call action(type: 'session/start', ...) to join.";
 
-export async function handleSessionStart({ name, color }: { name: string; color?: string }) {
+export async function handleSessionStart({ name, color, cc_session_id }: { name: string; color?: string; cc_session_id?: string }) {
       const chatId = resolveChat();
       if (typeof chatId !== "number") return toError(chatId);
 
@@ -212,6 +212,10 @@ export async function handleSessionStart({ name, color }: { name: string; color?
             existing.httpSessionId === currentHttpId
           ) {
             // (a) Same-transport idempotent recovery.
+            // Refresh the CC session ID — Claude Code may have rotated it
+            // across compaction, and we need the latest value for the
+            // SessionEnd hook to find the right bridge session to close.
+            if (cc_session_id !== undefined) existing.ccSessionId = cc_session_id;
             const queue = getSessionQueue(existing.sid);
             const pending = queue?.pendingCount() ?? 0;
             const recoveredToken = existing.sid * 1_000_000 + existing.suffix;
@@ -269,7 +273,7 @@ export async function handleSessionStart({ name, color }: { name: string; color?
       // httpSessionId binds the bridge session to the current MCP HTTP transport so
       // the streamable-http onclose handler can auto-clean up when Claude Code exits.
       const httpSessionId = getCurrentHttpSessionId();
-      const session = createSession(effectiveName, chosenColor, decision?.forceColor ?? false, httpSessionId);
+      const session = createSession(effectiveName, chosenColor, decision?.forceColor ?? false, httpSessionId, cc_session_id);
       createSessionQueue(session.sid);
       setActiveSession(session.sid);
       if (!isPollerRunning()) startPoller();

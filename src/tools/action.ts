@@ -61,6 +61,7 @@ import { handleApproveAgent } from "./approve/agent.js";
 import { handleShutdown } from "./shutdown/handler.js";
 import { handleNotifyShutdownWarning } from "./shutdown/warn.js";
 import { handleCloseSessionSignal } from "./session/close-signal.js";
+import { handleCloseSessionByCcId } from "./session/close-by-cc-id.js";
 import { handleTranscribeVoice } from "./transcribe/voice.js";
 import { handleDownloadFile } from "./download/file.js";
 import { handleUpdateChecklist } from "./checklist/update.js";
@@ -100,6 +101,10 @@ export function setupActionRegistry(): void {
   registerAction("session/start", toActionHandler(handleSessionStart));
   registerAction("session/close", toActionHandler(handleCloseSession));
   registerAction("session/close/signal", toActionHandler(handleCloseSessionSignal), { governor: true });
+  // No-auth close path used by the SessionEnd Claude Code hook. Authenticated
+  // by knowledge of the CC `session_id` (per-process secret) — handler itself
+  // intentionally skips requireAuth.
+  registerAction("session/close-by-cc-id", toActionHandler(handleCloseSessionByCcId));
   registerAction("session/list", toActionHandler(handleListSessions));
   registerAction("session/idle", toActionHandler(handleSessionIdle));
   registerAction("session/rename", toActionHandler(handleRenameSession));
@@ -240,6 +245,10 @@ export function register(server: McpServer): void {
           .string()
           .optional()
           .describe("session/start: Preferred color square emoji hint. session/rename: Color to apply (must be a valid palette emoji)."),
+        cc_session_id: z
+          .string()
+          .optional()
+          .describe("session/start, session/close-by-cc-id: Claude Code's own session UUID. Lets the SessionEnd hook deterministically close the matching bridge session on a clean CC exit."),
         // session/rename params
         new_name: z
           .string()
