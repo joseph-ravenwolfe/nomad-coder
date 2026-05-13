@@ -199,73 +199,107 @@ describe("rename_session tool", () => {
 
   // =========================================================================
   // Operator approval gate
+  //
+  // Self-rename (no target_sid) skips approval entirely — agents renaming
+  // their own session is routine. Governor-targeted rename (target_sid set)
+  // still goes through the approval prompt, since it's a cross-session
+  // action with higher blast radius.
   // =========================================================================
 
-  it("requests operator approval before renaming", async () => {
+  it("self-rename SKIPS the operator approval prompt", async () => {
     mocks.listSessions.mockReturnValue([{ sid: 1, name: "Primary" }]);
     mocks.renameSession.mockReturnValue({ old_name: "Primary", new_name: "Scout" });
 
-    await call({ token: 1111111, new_name: "Scout" });
+    const result = parseResult(await call({ token: 1111111, new_name: "Scout" }));
+
+    expect(mocks.requestOperatorApproval).not.toHaveBeenCalled();
+    expect(mocks.renameSession).toHaveBeenCalledWith(1, "Scout");
+    expect(result.new_name).toBe("Scout");
+  });
+
+  it("governor-targeted rename requests operator approval", async () => {
+    mocks.getGovernorSid.mockReturnValue(1);
+    mocks.listSessions.mockReturnValue([
+      { sid: 1, name: "Governor" },
+      { sid: 2, name: "Worker" },
+    ]);
+    mocks.renameSession.mockReturnValue({ old_name: "Worker", new_name: "Scout" });
+
+    await call({ token: 1111111, new_name: "Scout", target_sid: 2 });
 
     expect(mocks.requestOperatorApproval).toHaveBeenCalledOnce();
   });
 
-  it("returns APPROVAL_DENIED when operator denies", async () => {
-    mocks.listSessions.mockReturnValue([{ sid: 1, name: "Primary" }]);
+  it("governor-targeted rename returns APPROVAL_DENIED when operator denies", async () => {
+    mocks.getGovernorSid.mockReturnValue(1);
+    mocks.listSessions.mockReturnValue([
+      { sid: 1, name: "Governor" },
+      { sid: 2, name: "Worker" },
+    ]);
     mocks.requestOperatorApproval.mockResolvedValue("denied");
 
-    const result = await call({ token: 1111111, new_name: "Scout" });
+    const result = await call({ token: 1111111, new_name: "Scout", target_sid: 2 });
 
     expect(isError(result)).toBe(true);
     expect(JSON.stringify(result)).toContain("APPROVAL_DENIED");
     expect(mocks.renameSession).not.toHaveBeenCalled();
   });
 
-  it("returns APPROVAL_TIMEOUT when operator does not respond", async () => {
-    mocks.listSessions.mockReturnValue([{ sid: 1, name: "Primary" }]);
+  it("governor-targeted rename returns APPROVAL_TIMEOUT when operator doesn't respond", async () => {
+    mocks.getGovernorSid.mockReturnValue(1);
+    mocks.listSessions.mockReturnValue([
+      { sid: 1, name: "Governor" },
+      { sid: 2, name: "Worker" },
+    ]);
     mocks.requestOperatorApproval.mockResolvedValue("timed_out");
 
-    const result = await call({ token: 1111111, new_name: "Scout" });
+    const result = await call({ token: 1111111, new_name: "Scout", target_sid: 2 });
 
     expect(isError(result)).toBe(true);
     expect(JSON.stringify(result)).toContain("APPROVAL_TIMEOUT");
     expect(mocks.renameSession).not.toHaveBeenCalled();
   });
 
-  it("returns APPROVAL_DENIED when approval prompt fails to send", async () => {
-    mocks.listSessions.mockReturnValue([{ sid: 1, name: "Primary" }]);
+  it("governor-targeted rename returns APPROVAL_DENIED on send_failed", async () => {
+    mocks.getGovernorSid.mockReturnValue(1);
+    mocks.listSessions.mockReturnValue([
+      { sid: 1, name: "Governor" },
+      { sid: 2, name: "Worker" },
+    ]);
     mocks.requestOperatorApproval.mockResolvedValue("send_failed");
 
-    const result = await call({ token: 1111111, new_name: "Scout" });
+    const result = await call({ token: 1111111, new_name: "Scout", target_sid: 2 });
 
     expect(isError(result)).toBe(true);
     expect(JSON.stringify(result)).toContain("APPROVAL_DENIED");
     expect(mocks.renameSession).not.toHaveBeenCalled();
   });
 
-  it("does not request approval for invalid names (approval not reached)", async () => {
-    const result = await call({ token: 1111111, new_name: "" });
+  it("does not request approval for invalid names (approval not reached, governor path)", async () => {
+    const result = await call({ token: 1111111, new_name: "", target_sid: 2 });
 
     expect(isError(result)).toBe(true);
     expect(mocks.requestOperatorApproval).not.toHaveBeenCalled();
   });
 
-  it("does not request approval when auth fails", async () => {
+  it("does not request approval when auth fails (governor path)", async () => {
     mocks.validateSession.mockReturnValue(false);
 
-    const result = await call({ token: 1999999, new_name: "Scout" });
+    const result = await call({ token: 1999999, new_name: "Scout", target_sid: 2 });
 
     expect(isError(result)).toBe(true);
     expect(mocks.requestOperatorApproval).not.toHaveBeenCalled();
   });
 
-  it("does not request approval when name collides", async () => {
+  it("does not request approval when name collides (governor path)", async () => {
+    mocks.getGovernorSid.mockReturnValue(1);
     mocks.listSessions.mockReturnValue([
-      { sid: 1, name: "Primary" },
-      { sid: 2, name: "Scout" },
+      { sid: 1, name: "Governor" },
+      { sid: 2, name: "Worker" },
+      { sid: 3, name: "Scout" },
     ]);
 
-    const result = await call({ token: 1111111, new_name: "Scout" });
+    const result = await call({ token: 1111111, new_name: "Scout", target_sid: 2 });
 
     expect(isError(result)).toBe(true);
     expect(JSON.stringify(result)).toContain("NAME_CONFLICT");

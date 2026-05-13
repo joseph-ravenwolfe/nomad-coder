@@ -12,9 +12,11 @@ const VALID_NAME_RE = /^[a-zA-Z0-9 ]+$/;
 const DESCRIPTION =
   "Rename the current session (or another session if governor). " +
   "The new name must not be taken by another active session (checked " +
-  "case-insensitively). Requires operator approval via Telegram button before " +
-  "taking effect. Optionally applies a color change in the same action. " +
-  "Governor can target other sessions via target_sid. " +
+  "case-insensitively). Self-rename applies immediately (no operator " +
+  "approval). Governor-targeted rename (target_sid set) still requires " +
+  "operator approval via Telegram button before taking effect — that path " +
+  "is cross-session and gets the same friction as governor close. " +
+  "Optionally applies a color change in the same action. " +
   "Returns { sid, old_name, new_name, color? }. Requires session credentials.";
 
 export async function handleRenameSession({ token, new_name, color, target_sid }: {
@@ -92,26 +94,32 @@ export async function handleRenameSession({ token, new_name, color, target_sid }
     });
   }
 
-  const currentName = current.name;
-  const colorNote = color ? ` and color to ${color}` : "";
-  const targetNote = target_sid !== undefined ? ` (governor renaming SID ${sid})` : "";
-  const decision = await requestOperatorApproval(
-    `🔒 *Session Rename Request*\n\nSession *${currentName}* (SID ${sid}) wants to rename itself to *${trimmed}*${colorNote}.${targetNote}\n\nApprove?`,
-  );
+  // Approval gate: only the governor-renames-another-session path
+  // (target_sid set) gets the operator-approval prompt. Self-rename
+  // (target_sid omitted — agent renaming its own session) is treated as
+  // routine maintenance and applies immediately. The operator can always
+  // veto a self-rename after the fact via the chat history / /rename.
+  if (target_sid !== undefined) {
+    const currentName = current.name;
+    const colorNote = color ? ` and color to ${color}` : "";
+    const decision = await requestOperatorApproval(
+      `🔒 *Session Rename Request*\n\nSession *${currentName}* (SID ${sid}) wants to rename itself to *${trimmed}*${colorNote}. (governor renaming SID ${sid})\n\nApprove?`,
+    );
 
-  if (decision === "denied" || decision === "send_failed") {
-    return toError({
-      code: "APPROVAL_DENIED",
-      message: decision === "send_failed"
-        ? "Failed to send the approval prompt to the operator."
-        : "The operator denied the rename request.",
-    });
-  }
-  if (decision === "timed_out") {
-    return toError({
-      code: "APPROVAL_TIMEOUT",
-      message: "The rename request timed out waiting for operator approval.",
-    });
+    if (decision === "denied" || decision === "send_failed") {
+      return toError({
+        code: "APPROVAL_DENIED",
+        message: decision === "send_failed"
+          ? "Failed to send the approval prompt to the operator."
+          : "The operator denied the rename request.",
+      });
+    }
+    if (decision === "timed_out") {
+      return toError({
+        code: "APPROVAL_TIMEOUT",
+        message: "The rename request timed out waiting for operator approval.",
+      });
+    }
   }
 
   const result = renameSession(sid, trimmed);
